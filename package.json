@@ -1,0 +1,17 @@
+{
+	"name": "makemelucky",
+	"version": "2.0.33",
+	"author" : "Joseph Maynard",
+	"private" : true,
+	"devDependencies": {
+		"grunt": "~0.4.5",
+		"grunt-contrib-jshint": "~0.10.0",
+		"grunt-contrib-qunit": "*",
+		"grunt-contrib-uglify": "*",
+		"grunt-contrib-watch": "*",
+		"grunt-contrib-concat": "*",
+		"grunt-contrib-cssmin": "*",
+		"grunt-contrib-imagemin": "*",
+		"grunt-contrib-htmlmin": "*"
+	}
+}

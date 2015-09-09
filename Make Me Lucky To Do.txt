@@ -1,0 +1,85 @@
+Make Me Lucky To Do:
+
+	Make Grunt File?
+	Put JS into moduals?
+
+	Button Hold Animation?
+	Fix long tap issues
+	Create Button Hold Time Charms?
+
+	Finish Power Streams Animation
+
+	//Write Display Text
+	//Resize text depending on message length
+	Create sentence constructor and splitter
+	Animate Text In 
+
+	Create new text system
+
+	Vertical Positioning Breakpoints
+
+	Create Days Visited Charms
+	//Notification Pop Up
+
+	Rewrite text
+	Style inner pages
+
+	// App Icons
+	Apple Loading Screen
+	// Android 5.0 Colour Bar & Icon
+
+	// Social Media - Incentivised Sharing?
+	// WhatsApp Share Button
+	// Facebook Share Picture
+
+	Pre-load images
+	AppCache Manifest
+	AppCache checking for updates
+
+	// Change leather texture?
+	// Change loading screen rings to images
+
+	Google Analytics Events
+
+	Stats Section
+
+	//Change Leather Texture
+
+
+
+MINIMUM VIABLE PRODUCT
+	
+	//Disable Button While Animation Running
+	//Facebook Share Picture
+	//Change loading screen rings to images
+	//Award Social Media Charms
+	//Randomise Effects Order
+	//Google Analytics Events
+	//Finish Power Streams Animation
+	//Switch to local fonts
+	//Google AdWords wrong sizes
+	//Sound effects
+	//Vibration API
+	//Web Service Worker
+	//Change leather on Facebook picture
+	//Firefox zooming problem
+	//Web App Manifest JSON
+	//Check total presses event 
+	//Fix Mute button
+	//Title bar background
+	//Move mute and page down under effects - make page down overlay button like mute
+	//Inside Title
+
+
+	Create sentence constructor and splitter
+	Footer & Credits
+
+ 
+
+	AppCache Manifest
+
+	Minify Scripts & CSS - Get Grunt working...
+
+	James' AdBlock problem - Reddit Button?
+
+	Splash Screen?
