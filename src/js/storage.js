@@ -58,6 +58,13 @@ if(luckyVariables.localStorageAvailable){
 				luckyVariables.luckStore.version = luckyVariables.ver;
 			}
 
+			//create array of names of chars already earned
+			var charmsAlreadyEarned = [];
+
+			for(var i = 0; i < luckyVariables.luckStore.charms.length; i++){
+				charmsAlreadyEarned.push(luckyVariables.luckStore.charms[i].title);
+			}
+
 			//luckyVariables.luckStore.firstUse = new Date(Date.parse(luckyVariables.luckStore.firstUse));
 			luckyVariables.luckStore.lastVisit = new Date(Date.parse(luckyVariables.luckStore.lastVisit));
 			
@@ -78,7 +85,7 @@ if(luckyVariables.localStorageAvailable){
 			if(luckyVariables.currentTime - luckyVariables.luckStore.lastVisit < 172800000 && luckyVariables.currentTime.getDate() - 1 == luckyVariables.luckStore.lastVisit.getDate()){
 				luckyVariables.luckStore.daysInRow++;
 				for(var x in luckyCharms.daysInRow){
-					if(luckyCharms.daysInRow[x].amount == luckyVariables.luckStore.daysInRow){
+					if(luckyCharms.daysInRow[x].amount == luckyVariables.luckStore.daysInRow && charmsAlreadyEarned.indexOf(luckyCharms.daysInRow[x].title) === -1){
 						//Award Charm
 						console.log('You have earned the ' + luckyCharms.daysInRow[x].title + ' Lucky Charm!');
 						awardLuckyCharm(luckyCharms.daysInRow[x]);

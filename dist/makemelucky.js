@@ -1449,7 +1449,7 @@
 			amount: 88
 		},
 		eternalLuck:{
-			title:"Eternal Luckyness!",
+			title:"Eternal Luckiness!",
 			description:"Press the Make Me Lucky button 99 times.",
 			id:"eternalLuck",
 			x:"76",
@@ -1482,7 +1482,7 @@
 			amount: 168
 		},
 		bargainLuck:{
-			title:"Bargain Luckyness!",
+			title:"Bargain Luckiness!",
 			description:"Press the Make Me Lucky button 241 times.",
 			id:"bargainLuck",
 			x:"0",
@@ -1507,7 +1507,7 @@
 		},
 		wealthyx3:{
 			title:"Wealthy Wealthy Wealthy!",
-			description:"Three times the prosperity, press the Make Me Lucky button 888 tiimes.",
+			description:"Three times the prosperity, press the Make Me Lucky button 888 times.",
 			id:"wealthyx3",
 			x:"21",
 			y:"7",
@@ -1547,15 +1547,135 @@
 			y:"69",
 			amount: 7
 		},
+		xVisits:{
+			title:"X Visits Luck!",
+			description:"Visit Make Me Lucky 10 times.",
+			id:"xVisits",
+			x:"21",
+			y:"69",
+			amount: 10
+		}
 	},
 	daysInRow: {
-		week:{
-			title:"The Week of Luck!!",
-			description:"Visit Make Me Lucky every day for a week.",
-			id:"week",
+		doveLuck:{
+			title:"The Dove of Luck!",
+			description:"Visit Make Me Lucky two days in a row.",
+			id:"doveLuck",
 			x:"0",
 			y:"83",
+			amount: 2
+		},
+		frenchLuck:{
+			title:"French Luck!",
+			description:"Visit Make Me Lucky three days in a row. Oh là là, très bien!",
+			id:"frenchLuck",
+			x:"7",
+			y:"83",
+			amount: 3
+		},
+		birdsLuck:{
+			title:"The Birds Of Luck!",
+			description:"Visit Make Me Lucky four days in a row.",
+			id:"birdsLuck",
+			x:"14",
+			y:"83",
+			amount: 4
+		},
+		goldenRings:{
+			title:"The Golden Rings Of Luck!",
+			description:"Visit Make Me Lucky five days in a row.",
+			id:"goldenRings",
+			x:"21",
+			y:"83",
+			amount: 5
+		},
+		 geeseLuck:{
+			title:" The Geese Of Luck!",
+			description:"Visit Make Me Lucky six days in a row.",
+			id:"geeseLuck",
+			x:"28",
+			y:"83",
+			amount: 6
+		},
+		swans:{
+			title:"The Swans of Luck!!",
+			description:"Visit Make Me Lucky every day for a week.",
+			id:"swans",
+			x:"35",
+			y:"83",
 			amount: 7
+		},
+		milkMaidsLuck:{
+			title:"Milk Maids Of Luck!",
+			description:"Visit Make Me Lucky four days in a row.",
+			id:"milkMaidsLuck",
+			x:"42",
+			y:"83",
+			amount: 8
+		},
+		dancingLadiesLuck:{
+			title:"Luck Be A Lady Tonight!",
+			description:"Visit Make Me Lucky nine days in a row.",
+			id:"milkMaidsLuck",
+			x:"49",
+			y:"83",
+			amount: 9
+		},
+		lordsLuck:{
+			title:"The Lords Of Luck!",
+			description:"Visit Make Me Lucky ten days in a row.",
+			id:"lordsLuck",
+			x:"56",
+			y:"83",
+			amount: 10
+		},
+		pipersLuck:{
+			title:"Pipers At the Gates Of Luck!",
+			description:"Visit Make Me Lucky eleven days in a row.",
+			id:"pipersLuck",
+			x:"63",
+			y:"83",
+			amount: 11
+		},
+		drummersLuck:{
+			title:"The Drummers Of Luck!",
+			description:"Visit Make Me Lucky twelve days in a row.",
+			id:"drummersLuck",
+			x:"70",
+			y:"83",
+			amount: 12
+		},
+		fortKnight:{
+			title:"Fort Knight's Luck!",
+			description:"Visit Make Me Lucky fourteen days in a row.",
+			id:"drummersLuck",
+			x:"77",
+			y:"83",
+			amount: 14
+		},
+		lunaCycle:{
+			title:"Luna Cycle Luck!",
+			description:"Visit Make Me Lucky 28 days in a row.",
+			id:"lunaCycle",
+			x:"84",
+			y:"83",
+			amount: 28
+		},
+		monthOfLuck:{
+			title:"Month Of Luck!",
+			description:"Visit Make Me Lucky 31 days in a row.",
+			id:"monthOfLuck",
+			x:"84",
+			y:"83",
+			amount: 31
+		},
+		yearOfLuck:{
+			title:"Month Of Luck!",
+			description:"Visit Make Me Lucky 365 days in a row. Luckiest Year Ever!",
+			id:"yearOfLuck",
+			x:"91",
+			y:"83",
+			amount: 365
 		}
 	},
 	social:{
@@ -1568,7 +1688,7 @@
 		},
 		twitter:{
 			title:"Tweets of Luck!",
-			description:"A little bird told us you Tweeded Make Me Lucky.",
+			description:"A little bird told us you Tweet ed Make Me Lucky.",
 			id:"twitter",
 			x:"7",
 			y:"100",
@@ -1635,6 +1755,13 @@
 			id:"hacker",
 			x:"70",
 			y:"100",
+		},
+		impossible:{
+			title:"Impossible Luck!",
+			description:"Achieve The Impossible! You must be VERY lucky indeed!",
+			id:"impossible",
+			x:"77",
+			y:"100",
 		}
 	}
 }
@@ -1688,7 +1815,7 @@ function createCharmsArrays(){
 		}
 	}
 };var luckyVariables = {
-	ver: 0.41,
+	ver: 0.42,
 	luckyPresses: 0,
 	currentTime: new Date(),
 	localStorageAvailable: testLocalStorage(),
@@ -1700,7 +1827,7 @@ function createCharmsArrays(){
 		luckyness:0,
 		visits:1,
 		longestPress:0,
-		daysInRow:0, 
+		daysInRow:1, 
 		version: this.ver,
 		charms: [],
 		specialCharms: {},
@@ -1733,20 +1860,26 @@ if(luckyVariables.localStorageAvailable){
 			localStorage.clear();
 			createLuckStore();
 		} else {	
-			luckyVariables.firstUse = new Date(Date.parse(luckyVariables.luckStore.firstUse));
 
 			//Update version
 			if(luckyVariables.luckStore.version != luckyVariables.ver){
 				//Update function
+				if(luckyVariables.luckStore.version < 0.41){
+					luckyVariables.luckStore.showModal = true;
+					luckyVariables.luckStore.lastVisit = new Date().toISOString();
+				}
+				if(luckyVariables.luckStore.version < 0.42){
+					luckyVariables.lastVisit = new Date();
+				}
 				luckyVariables.luckStore.version = luckyVariables.ver;
-				luckyVariables.luckStore.showModal = true;
-				luckyVariables.luckStore.lastVisit = new Date().toISOString();
 			}
 
+			//luckyVariables.luckStore.firstUse = new Date(Date.parse(luckyVariables.luckStore.firstUse));
+			luckyVariables.luckStore.lastVisit = new Date(Date.parse(luckyVariables.luckStore.lastVisit));
 			
 
 			//Calculate Visits
-			if(luckyVariables.currentTime - luckyVariables.firstUse > 3600000){
+			if(luckyVariables.currentTime - luckyVariables.luckStore.lastVisit > 3600000){
 				luckyVariables.luckStore.visits = luckyVariables.luckStore.visits + 1;
 				for(var x in luckyCharms.visits){
 					if(luckyCharms.visits[x].amount == luckyVariables.luckStore.visits){
@@ -1756,6 +1889,22 @@ if(luckyVariables.localStorageAvailable){
 					}
 				}
 			}
+
+			//Calculate Days In Row Visited
+			if(luckyVariables.currentTime - luckyVariables.luckStore.lastVisit < 172800000 && luckyVariables.currentTime.getDate() - 1 == luckyVariables.luckStore.lastVisit.getDate()){
+				luckyVariables.luckStore.daysInRow++;
+				for(var x in luckyCharms.daysInRow){
+					if(luckyCharms.daysInRow[x].amount == luckyVariables.luckStore.daysInRow){
+						//Award Charm
+						console.log('You have earned the ' + luckyCharms.daysInRow[x].title + ' Lucky Charm!');
+						awardLuckyCharm(luckyCharms.daysInRow[x]);
+					}
+				}
+			} else {
+				luckyVariables.luckStore.daysInRow = 1;
+			}
+
+			luckyVariables.luckStore.lastVisit = new Date().toISOString()
 
 			//Add Charms to page
 			if(luckyVariables.luckStore.charms.length > 0){
@@ -1778,7 +1927,7 @@ function createLuckStore(){
 		luckyness:0,
 		visits:1,
 		longestPress:0,
-		daysInRow:0,
+		daysInRow:1,
 		version: this.ver,
 		charms: [],
 		specialCharms: {},
