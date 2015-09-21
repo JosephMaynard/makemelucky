@@ -56,8 +56,8 @@ body{
 	padding-top: 4%;
 }
 .adUnitInner{
-	width: 336px;
-	height: 280px;
+	width: 300px;
+	height: 250px;
 	margin: 0 auto;
 }
 #loading{
@@ -1465,12 +1465,12 @@ body{
 		height: 60px;
 	}
 }
-@media screen and (max-width: 346px) {
+/*@media screen and (max-width: 346px) {
 	.adUnitInner{
 		width: 300px;
 		height: 250px;
 	}
-}
+}*/
 @media screen and (min-width: 468px) {
 	#adStrip{
 		height: 60px;
