@@ -3196,16 +3196,20 @@ $('#muteOverlay').click(function(){
 	}
 	storeTheLuck();
 });;function resizeWindow(){
+	console.log('Resize')
 	$('#mainArea').height(window.innerHeight);
 	if( $('.luckBox').outerHeight() < window.innerHeight - $('#adStrip').outerHeight() ){
+		//Center Luck Box vertically
 		$('.luckBox').css('top', Math.round(window.innerHeight - $('.luckBox').outerHeight() - $('#adStrip').outerHeight()) / 2 + $('#adStrip').outerHeight() + 'px');
 		$('.luckyAreaContainer').css('width', '100%');
 		$('#screen').css('font-size','1em')
 	} else if( ($('.luckBox').outerHeight() * 0.75) < window.innerHeight - $('#adStrip').outerHeight() ){
+		//Make Luck Box Smaller to fit on screen
 		$('.luckBox').css('top', ($('#adStrip').outerHeight() - 5) + 'px');
 		$('.luckyAreaContainer').css('width', Math.round((window.innerHeight - $('#adStrip').outerHeight()) / 1.2) + 'px');
-		$('#screen').css('font-size', Math.round((window.innerHeight - $('#adStrip').outerHeight()) / 1.2) / 550 + 'em')
+		$('#screen').css('font-size', Math.round((window.innerHeight - $('#adStrip').outerHeight()) / 1.2) / 600 + 'em')
 	} else {
+		//Reset to standard CSS sizes
 		$('.luckBox').css('top', ($('#adStrip').outerHeight() - 5) + 'px');
 		$('.luckyAreaContainer').css('width', '100%');
 		$('#screen').css('font-size','1em')
@@ -3233,7 +3237,8 @@ function hideLoadingScreen(){
 
 
 $(window).resize(function(){
-	resizeWindow();
+	setTimeout(resizeWindow, 10);
+	
 });
 
 var imageList = ['loading_ring_back.png', 'loading_ring_front.png', 'clouds.png', 'rim_top.png', 'rim_right.png', 'rim_bottom.png', 'rim_left.png', 'lucky_symbol.png', 'rim_light.png', 'cloud_tunnel.png', 'outer_light.png', 'power_stream.png', 'rim_glow.png', 'magic_swirl.png', 'screen.png', 'luckyStar.png', 'shootingStar.png', 'downButton.png', 'vignette.png', 'leather_texture.jpg', 'outer_rim.png', 'clamps.png', 'cog.png', 'spacer.png', 'rim.png', 'button.png', 'rim_spinning.png', 'glow_closed.png', 'glow_open.png', 'button_glowing.png', 'spark1.png', 'spark2.png', 'spark3.png', 'spark4.png', 'social_media_icons.png', 'power_ring.png', 'muteButton.png', 'inside_mech_bkg.jpg', 'leather_texture_brown.jpg', 'screen_inner.png', 'page_up.png'];
