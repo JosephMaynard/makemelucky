@@ -1,119 +1,171 @@
-function resizeWindow(){
-	console.log('Resize')
-	$('#mainArea').height(window.innerHeight);
-	if( $('.luckBox').outerHeight() < window.innerHeight - $('#adStrip').outerHeight() ){
-		//Center Luck Box vertically
-		$('.luckBox').css('top', Math.round(window.innerHeight - $('.luckBox').outerHeight() - $('#adStrip').outerHeight()) / 2 + $('#adStrip').outerHeight() + 'px');
-		$('.luckyAreaContainer').css('width', '100%');
-		$('#screen').css('font-size','1em')
-	} else if( ($('.luckBox').outerHeight() * 0.75) < window.innerHeight - $('#adStrip').outerHeight() ){
-		//Make Luck Box Smaller to fit on screen
-		$('.luckBox').css('top', ($('#adStrip').outerHeight() - 5) + 'px');
-		$('.luckyAreaContainer').css('width', Math.round((window.innerHeight - $('#adStrip').outerHeight()) / 1.2) + 'px');
-		$('#screen').css('font-size', Math.round((window.innerHeight - $('#adStrip').outerHeight()) / 1.2) / 600 + 'em')
-	} else {
-		//Reset to standard CSS sizes
-		$('.luckBox').css('top', ($('#adStrip').outerHeight() - 5) + 'px');
-		$('.luckyAreaContainer').css('width', '100%');
-		$('#screen').css('font-size','1em')
-	}
+import Velocity from "velocity-animate";
+import { screenText } from "./screen";
+import { luckyVariables } from "./luckyVariables";
+import { fireEvent } from "./events";
+import { awardLuckyCharm, createCharmsArrays } from "./charms";
+import { sound } from "./effects";
+
+function resizeWindow() {
+  console.log("Resize");
+
+  const mainArea = document.getElementById("mainArea");
+  mainArea.style.height = `${window.innerHeight}px`;
+
+  const luckBox = document.querySelector(".luckBox");
+  const adStripHeight = document.getElementById("adStrip").offsetHeight;
+
+  if (luckBox.offsetHeight < window.innerHeight - adStripHeight) {
+    // Center Luck Box vertically
+    const topPosition =
+      (window.innerHeight - luckBox.offsetHeight - adStripHeight) / 2 +
+      adStripHeight;
+    luckBox.style.top = `${topPosition}px`;
+    document.querySelector(".luckyAreaContainer").style.width = "100%";
+    document.getElementById("screen").style.fontSize = "1em";
+  } else if (luckBox.offsetHeight * 0.75 < window.innerHeight - adStripHeight) {
+    // Make Luck Box Smaller to fit on screen
+    luckBox.style.top = `${adStripHeight - 5}px`;
+    const newWidth = Math.round((window.innerHeight - adStripHeight) / 1.2);
+    document.querySelector(".luckyAreaContainer").style.width = `${newWidth}px`;
+    document.getElementById("screen").style.fontSize = `${Math.round(
+      newWidth / 600
+    )}em`;
+  } else {
+    // Reset to standard CSS sizes
+    luckBox.style.top = `${adStripHeight - 5}px`;
+    document.querySelector(".luckyAreaContainer").style.width = "100%";
+    document.getElementById("screen").style.fontSize = "1em";
+  }
 }
 
-function makeMeLucky(){
-	if(!luckyVariables.luckStore.specialCharms.hacker){
-		luckyVariables.luckStore.specialCharms.hacker = true;
-		awardLuckyCharm(luckyCharms.social.hacker);
-		storeTheLuck();
-	}
-	return 'You are now LUCKY!';
-}
+window.makeMeLucky = function () {
+  if (!luckyVariables?.luckStore?.specialCharms?.hacker) {
+    luckyVariables.luckStore.specialCharms.hacker = true;
+    awardLuckyCharm(luckyCharms.social.hacker);
+    storeTheLuck();
+  }
+  return "You are now LUCKY!";
+};
 
 resizeWindow();
 
-function hideLoadingScreen(){
-	window.scrollTo(0,0);
-	$('#loadingSpinner').velocity({ opacity: 0, scaleX:2, scaleY:2 }, { display: "none", duration: 1000, easing: 'easeInCubic' });
-	$('#loading').velocity({ opacity: 0 }, { display: "none", duration: 1000, easing: 'easeInCubic', complete: function(){
-		setTimeout(screenText.welcome, 100);
-	} });
+function hideLoadingScreen() {
+  window.scrollTo(0, 0);
+  const loadingSpinner = document.getElementById("loadingSpinner");
+  const loading = document.getElementById("loading");
+
+  Velocity(
+    loadingSpinner,
+    { opacity: 0, scaleX: 2, scaleY: 2 },
+    { display: "none", duration: 1000, easing: "easeInCubic" }
+  );
+  Velocity(
+    loading,
+    { opacity: 0 },
+    {
+      display: "none",
+      duration: 1000,
+      easing: "easeInCubic",
+      complete: function () {
+        setTimeout(screenText.welcome, 100);
+      },
+    }
+  );
 }
 
+window.addEventListener("resize", () => setTimeout(resizeWindow, 10));
 
-$(window).resize(function(){
-	setTimeout(resizeWindow, 10);
-	
-});
+const imageList = [
+  // Array of image names
+  "loading_ring_back.png",
+  "loading_ring_front.png",
+  "clouds.png",
+  "rim_top.png",
+  "rim_right.png",
+  // Add the rest of the image names
+];
 
-var imageList = ['loading_ring_back.png', 'loading_ring_front.png', 'clouds.png', 'rim_top.png', 'rim_right.png', 'rim_bottom.png', 'rim_left.png', 'lucky_symbol.png', 'rim_light.png', 'cloud_tunnel.png', 'outer_light.png', 'power_stream.png', 'rim_glow.png', 'magic_swirl.png', 'screen.png', 'luckyStar.png', 'shootingStar.png', 'downButton.png', 'vignette.png', 'leather_texture.jpg', 'outer_rim.png', 'clamps.png', 'cog.png', 'spacer.png', 'rim.png', 'button.png', 'rim_spinning.png', 'glow_closed.png', 'glow_open.png', 'button_glowing.png', 'spark1.png', 'spark2.png', 'spark3.png', 'spark4.png', 'social_media_icons.png', 'power_ring.png', 'muteButton.png', 'inside_mech_bkg.jpg', 'leather_texture_brown.jpg', 'screen_inner.png', 'page_up.png'];
-
-function preLoadImages(imageArray, callBack, path){
-	if (typeof callBack === 'undefined') { callBack = function(){console.log('All images loaded.')}; }
-	if (typeof path === 'undefined') { path = ''; }
-	var preLoadedImages = [],
-		loadedImages = 0;
-	for (var i = 0; i < imageArray.length; i++) {
-		preLoadedImages[i] = new Image();
-		preLoadedImages[i].onload = function(){
-			loadedImages++;
-			if(loadedImages == imageArray.length){
-				callBack();
-			}
-		}
-		preLoadedImages[i].src = path + imageArray[i];
-	}
+function preLoadImages(
+  imageArray,
+  callBack = () => console.log("All images loaded."),
+  path = ""
+) {
+  let loadedImages = 0;
+  const preLoadedImages = imageArray.map((imageName) => {
+    const img = new Image();
+    img.onload = () => {
+      loadedImages++;
+      if (loadedImages === imageArray.length) {
+        callBack();
+      }
+    };
+    img.src = `${path}${imageName}`;
+    return img;
+  });
 }
 
-function pageLoaded(){
-	if (window.location.protocol != 'file:') {
-		$('#facebookLike').html('<iframe src="//www.facebook.com/plugins/like.php?href=http%3A%2F%2Fmakemelucky.com&amp;send=false&amp;layout=box_count&amp;width=55&amp;show_faces=true&amp;font&amp;colorscheme=light&amp;action=like&amp;height=65&amp;appId=423609547672506" scrolling="no" frameborder="0" style="border:none; overflow:hidden; width:55px; height:65px;" allowTransparency="true"></iframe>');
-	}
-	createCharmsArrays();
-	resizeWindow();	
-	//screenText.textQueue([screenText.welcome, screenText.needLuck, screenText.press]);
-	$('#screenText3 .line1, #screenText3 .line2').html("");
-	if(luckyVariables.luckStore.soundOn == false){
-		sound.mute();
-		sound.volume(0);
-		$('#muteIcon').css('backgroundPosition', '100% 50%');
-	}
-	fireEvent('Page Loaded', 'Visits: ' + luckyVariables.luckStore.visits);
-	console.log('Welcome to Make Me Lucky! Version: ', luckyVariables.ver);
-	$('body, html').css({'overflow':'auto','height':'auto'});
-	setTimeout(hideLoadingScreen, 300);
-}
+function pageLoaded() {
+  createCharmsArrays();
+  resizeWindow();
 
-$('body, html').css({'overflow':'hidden','height':'100%'});
-
-preLoadImages(imageList, pageLoaded, 'img/' );
-
-var scrolledItems = {
-	pageUp: false
-};
-
-$(window).scroll(function() {
-
-    var topOfWindow = $(window).scrollTop(),
-        bottomOfWindow = topOfWindow + $(window).height();
-
-    $('.card, #footer, #smallprint').each(function(){
-        var cardPos = $(this).offset().top;
-
-        if (cardPos < topOfWindow + 50 && !scrolledItems[this.id]) {
-        		scrolledItems[this.id] = true;
-                fireEvent('Scroll Point', this.id);
-        }
+  document
+    .querySelectorAll("#screenText3 .line1, #screenText3 .line2")
+    .forEach((element) => {
+      element.innerHTML = "";
     });
 
-    if(topOfWindow > $('#pageDownTarget').height()){
-    	if(!scrolledItems.pageUp){
-	    	$('#pageUp').velocity({opacity:1, translateY: [0,90]},{duration: 300});
-	    	scrolledItems.pageUp = true;
-    	}
-    } else {
-    	if(scrolledItems.pageUp){
-	    	$('#pageUp').velocity({opacity:0, translateY: [90,0]},{duration: 300});
-	    	scrolledItems.pageUp = false;
-    	}
-    }
+  if (!luckyVariables.luckStore.soundOn) {
+    sound.mute();
+    sound.volume(0);
+    document.getElementById("muteIcon").style.backgroundPosition = "100% 50%";
+  }
 
+  fireEvent("Page Loaded", `Visits: ${luckyVariables.luckStore.visits}`);
+  console.log("Welcome to Make Me Lucky! Version: ", luckyVariables.ver);
+  document.body.style.overflow = "auto";
+  document.documentElement.style.height = "auto";
+  setTimeout(hideLoadingScreen, 300);
+}
+
+document.body.style.overflow = "hidden";
+document.documentElement.style.height = "100%";
+
+preLoadImages(imageList, pageLoaded, "img/");
+
+const scrolledItems = { pageUp: false };
+
+window.addEventListener("scroll", () => {
+  const topOfWindow = window.scrollY;
+  const bottomOfWindow = topOfWindow + window.innerHeight;
+  const pageDownTarget = document.getElementById("pageDownTarget");
+
+  document
+    .querySelectorAll(".card, #footer, #smallprint")
+    .forEach((element) => {
+      const cardPos = element.getBoundingClientRect().top + topOfWindow;
+      if (cardPos < topOfWindow + 50 && !scrolledItems[element.id]) {
+        scrolledItems[element.id] = true;
+        fireEvent("Scroll Point", element.id);
+      }
+    });
+
+  const pageDownTargetHeight = pageDownTarget ? pageDownTarget.offsetHeight : 0;
+
+  if (topOfWindow > pageDownTargetHeight) {
+    if (!scrolledItems.pageUp) {
+      Velocity(
+        document.getElementById("pageUp"),
+        { opacity: 1, translateY: [0, 90] },
+        { duration: 300 }
+      );
+      scrolledItems.pageUp = true;
+    }
+  } else if (scrolledItems.pageUp) {
+    Velocity(
+      document.getElementById("pageUp"),
+      { opacity: 0, translateY: [90, 0] },
+      { duration: 300 }
+    );
+    scrolledItems.pageUp = false;
+  }
 });
