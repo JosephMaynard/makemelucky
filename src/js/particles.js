@@ -29,6 +29,7 @@ export const particles = {
     );
   },
   explosion: function () {
+    console.log("generated", generated);
     const particleDistance =
       (window.innerWidth -
         document.getElementById("luckyButtonContainer").offsetWidth) /

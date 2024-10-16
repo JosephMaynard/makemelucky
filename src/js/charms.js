@@ -1,6 +1,7 @@
 import { luckyVariables } from "./luckyVariables";
+import { fireEvent } from "./events";
 
-var luckyCharms = {
+export const luckyCharms = {
   presses: {
     beginnersLuck: {
       title: "Beginner's luck!",
@@ -431,61 +432,56 @@ export function awardLuckyCharm(charm) {
 }
 
 export function appendCharm(charm) {
-  var date = new Date(Date.parse(charm.date)),
-    minutes = "undefined",
-    monthNames = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ],
-    suffix = "th";
-  if (date.getMinutes() < 10) {
-    minutes = "0" + date.getMinutes();
-  } else {
-    minutes = date.getMinutes();
-  }
-  if (date.getDate() == 1 || date.getDate() == 21 || date.getDate() == 31) {
+  const date = new Date(Date.parse(charm.date));
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+
+  let minutes =
+    date.getMinutes() < 10 ? `0${date.getMinutes()}` : date.getMinutes();
+  let suffix = "th";
+
+  // Determine the correct suffix for the day of the month
+  const day = date.getDate();
+  if (day === 1 || day === 21 || day === 31) {
     suffix = "st";
-  }
-  if (date.getDate() == 2 || date.getDate() == 22) {
+  } else if (day === 2 || day === 22) {
     suffix = "nd";
-  }
-  if (date.getDate() == 3 || date.getDate() == 23) {
+  } else if (day === 3 || day === 23) {
     suffix = "rd";
   }
-  $("#luckyCharmsContainer").append(
-    '<div class="charm"><div class="charmIcon" style="background-position:' +
-      charm.x +
-      "% " +
-      charm.y +
-      '%"></div><p><span>' +
-      charm.title +
-      "</span><br/>" +
-      charm.description +
-      "<br/>" +
-      "<b>Awarded:</b> " +
-      date.getDate() +
-      "<sup>" +
-      suffix +
-      "</sup> " +
-      monthNames[date.getMonth()] +
-      " " +
-      date.getFullYear() +
-      " - " +
-      date.getHours() +
-      ":" +
-      minutes +
-      "</p></div>"
-  );
+
+  // Create the charm element
+  const charmElement = document.createElement("div");
+  charmElement.classList.add("charm");
+
+  charmElement.innerHTML = `
+    <div class="charmIcon" style="background-position: ${charm.x}% ${
+    charm.y
+  }%"></div>
+    <p>
+      <span>${charm.title}</span><br/>
+      ${charm.description}<br/>
+      <b>Awarded:</b> ${day}<sup>${suffix}</sup> ${
+    monthNames[date.getMonth()]
+  } ${date.getFullYear()} - ${date.getHours()}:${minutes}
+    </p>
+  `;
+
+  // Append the new charm element to the container
+  const charmsContainer = document.getElementById("luckyCharmsContainer");
+  charmsContainer.appendChild(charmElement);
 }
 
 export function createCharmsArrays() {

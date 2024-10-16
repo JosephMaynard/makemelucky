@@ -1,4 +1,5 @@
-import { luckyVariables } from "./luckyVariables";
+import { luckyVariables, ver } from "./luckyVariables";
+import { awardLuckyCharm, appendCharm } from "./charms";
 
 if (luckyVariables.localStorageAvailable) {
   if (window.localStorage.getItem("luckStore")) {

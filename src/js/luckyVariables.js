@@ -1,4 +1,4 @@
-const ver = 0.42;
+export const ver = 0.42;
 
 function testLocalStorage() {
   var test = "test";
@@ -35,4 +35,4 @@ export const luckyVariables = {
     firstUse: new Date().toISOString(),
   },
   charmAwarded: false,
-}
+};

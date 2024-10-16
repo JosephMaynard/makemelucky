@@ -4,6 +4,7 @@ import { sound, vibrate } from "./effects";
 import { luckyEffects, effects } from "./effects";
 import { storeTheLuck } from "./storage";
 import { screenText } from "./screen";
+import { luckyCharms, awardLuckyCharm } from "./charms";
 
 // Replace button element based on platform
 const button = document.getElementById("button");
@@ -103,11 +104,14 @@ function buttonReleaseHandler(event) {
               luckyVariables.luckStore.luckyness
             ) !== -1
           ) {
-            for (const charm of luckyCharms.presses) {
-              if (charm.amount === luckyVariables.luckStore.luckyness) {
-                awardLuckyCharm(charm);
+            Object.keys(luckyCharms.presses).forEach((charm) => {
+              if (
+                luckyCharms.presses[charm].amount ===
+                luckyVariables.luckStore.luckyness
+              ) {
+                awardLuckyCharm(luckyCharms.presses[charm]);
               }
-            }
+            });
           }
           storeTheLuck();
         },

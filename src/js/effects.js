@@ -575,6 +575,9 @@ function powerStreams() {
   }, 2000);
 }
 
+let olCount = 1,
+  olLoops = 1;
+
 function outerLightSpin(delay, loops) {
   olLoops = loops;
 
