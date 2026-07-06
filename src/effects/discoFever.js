@@ -5,11 +5,11 @@ import * as THREE from 'three';
 import { tween, delay } from '../core/anim.js';
 import { dimLights } from './helpers.js';
 
-export const sound = 'charmAward';
-export const duration = 10000;
+export const sound = 'luckyNowDisco';
+export const duration = 10400;
 
 export async function play(ctx) {
-	const { scene, machine, particles, sprites, haptics } = ctx;
+	const { scene, machine, particles, sprites, haptics, audio } = ctx;
 
 	const restore = dimLights(scene, 0.12, 900);
 
@@ -76,7 +76,7 @@ export async function play(ctx) {
 	let lastBeat = -1;
 	const stopParty = scene.addUpdatable((dt, t) => {
 		ball.rotation.y += dt * 1.6;
-		bpmPhase += dt * 2.1; // ~126 bpm
+		bpmPhase += dt * (118 / 60); // locked to the tune's 118 bpm
 		const beat = Math.floor(bpmPhase);
 		const pulse = 1 - (bpmPhase - beat);
 		if (beat !== lastBeat) {
@@ -115,7 +115,7 @@ export async function play(ctx) {
 		colors: [0xffffff, 0xff9ad0, 0x9adfff, 0xffe9a0]
 	});
 
-	await delay(6200);
+	await delay(6600); // dance until the tune's last chorus (~10.3s track)
 
 	// last chorus — big flash, ball ascends
 	glitter.stop();
@@ -135,6 +135,8 @@ export async function play(ctx) {
 		ballSpot.intensity = 4 * (1 - v);
 		machine.setInnerGlow(0.5 * (1 - v));
 	});
+	// fade the tune out with the lights, however long the MP3 actually ran
+	audio.stopTrack('luckyNowDisco', 900);
 	await tween(1000, 'inQuad', (v) => {
 		ballGroup.position.y = 1.05 + v * 3.55;
 	});

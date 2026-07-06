@@ -14,15 +14,45 @@ const SPRITE = {
 	lucky: [61000, 4000]
 };
 
+// Standalone tunes that live outside the licensed sprite. Each gets its own Howl,
+// created lazily the first time it's played.
+const TRACKS = {
+	luckyNowDisco: { src: '/soundfx/lucky-now-disco.mp3', volume: 0.9 }
+};
+
 export class AudioService {
 	constructor() {
 		this.howl = new Howl({ src: ['/soundfx/makemelucky.mp3'], sprite: SPRITE, preload: true });
 		this.muted = false;
+		this.tracks = {}; // lazily-built Howls, keyed by TRACKS name
 	}
 
 	play(name) {
-		if (!name || this.muted || !SPRITE[name]) return;
-		this.howl.play(name);
+		if (!name || this.muted) return;
+		if (SPRITE[name]) {
+			this.howl.play(name);
+		} else if (TRACKS[name]) {
+			this.playTrack(name);
+		}
+	}
+
+	playTrack(name) {
+		let track = this.tracks[name];
+		if (!track) {
+			const def = TRACKS[name];
+			track = new Howl({ src: [def.src], volume: def.volume, preload: true });
+			this.tracks[name] = track;
+		}
+		track.stop(); // never let a track overlap itself
+		track.volume(TRACKS[name].volume);
+		track.play();
+	}
+
+	stopTrack(name, fadeMs = 600) {
+		const track = this.tracks[name];
+		if (!track || !track.playing()) return;
+		track.fade(track.volume(), 0, fadeMs);
+		track.once('fade', () => track.stop());
 	}
 
 	setMuted(muted) {
