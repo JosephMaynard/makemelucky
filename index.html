@@ -1,475 +1,189 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <html manifest="offline.appcache">
-    <head>
-      <meta charset="UTF-8" />
-      <meta
-        name="viewport"
-        content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, minimal-ui"
-      />
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-      <title>Make Me Lucky</title>
+		<title>Make Me Lucky — The Internet's Luck Machine</title>
+		<meta
+			name="description"
+			content="Make Me Lucky, the luckiest place on the internet! Need a bit of luck? Find good fortune, prosperity, triumph and success at the touch of a button." />
+		<link rel="canonical" href="https://makemelucky.com/" />
+		<meta name="theme-color" content="#12320f" />
 
-      <!-- Web App Manifest -->
-      <link rel="manifest" href="manifest.json" />
+		<meta property="og:title" content="Can you get lucky? Visit MAKE ME LUCKY now and find out!" />
+		<meta property="og:type" content="website" />
+		<meta property="og:url" content="https://makemelucky.com/" />
+		<meta property="og:image" content="https://makemelucky.com/img/Make-Me-Lucky.jpg" />
+		<meta property="og:site_name" content="Make Me Lucky" />
+		<meta
+			property="og:description"
+			content="Make Me Lucky, the luckiest place on the internet! Need a bit of luck? Find good fortune, prosperity, triumph and success at the touch of a button." />
 
-      <!-- CSS -->
-      <link rel="stylesheet" href="src/styles/index.css" />
+		<link rel="icon" href="/favicon.ico" sizes="32x32" />
+		<link rel="apple-touch-icon" href="/icons/icon180.png" />
 
-      <meta
-        property="og:title"
-        content="Make Me Lucky! The instant luck generator and good luck charm!"
-      />
-      <meta property="og:type" content="website" />
-      <meta property="og:url" content="https://makemelucky.com/" />
-      <meta
-        property="og:image"
-        content="https://makemelucky.com/img/Make-Me-Lucky.jpg"
-      />
-      <meta property="og:site_name" content="Make Me Lucky" />
-      <meta property="fb:admins" content="567865989" />
-      <meta property="fb:app_id" content="1423210177933429" />
-      <meta
-        property="og:description"
-        content="Make Me Lucky the internet's luck generator and good luck charm! Need a bit of luck? Find good fortune, prosperity, triumph, success and be Lucky Instantly! MakeMeLucky.com"
-      />
+		<link rel="preload" href="/fonts/RobotoSlab-Bold-webfont.woff" as="font" type="font/woff" crossorigin />
+		<link rel="preload" href="/fonts/RobotoSlab-Regular-webfont.woff" as="font" type="font/woff" crossorigin />
 
-      <meta
-        itemprop="name"
-        content="Make Me Lucky the internet's luck generator and good luck charm!"
-      />
-      <meta
-        itemprop="description"
-        content="Make Me Lucky the internet's luck generator and good luck charm! Need a bit of luck? Find good fortune, prosperity, triumph, success and be Lucky Instantly! MakeMeLucky.com"
-      />
-      <meta
-        itemprop="image"
-        content="https://makemelucky.com/img/Make-Me-Lucky.jpg"
-      />
+		<script type="application/ld+json">
+			{
+				"@context": "https://schema.org",
+				"@type": "WebApplication",
+				"name": "Make Me Lucky",
+				"url": "https://makemelucky.com/",
+				"description": "The internet's luck machine. Press the button and feel luckier — good fortune, prosperity, triumph and success at the touch of a button.",
+				"applicationCategory": "EntertainmentApplication",
+				"operatingSystem": "Any",
+				"offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+				"author": { "@type": "Person", "name": "Joseph Maynard" }
+			}
+		</script>
+	</head>
+	<body>
+		<!-- ============ HERO: the Luck Machine ============ -->
+		<header id="hero">
+			<canvas id="lucky-canvas" aria-hidden="true"></canvas>
 
-      <!-- Android -->
-      <meta name="mobile-web-app-capable" content="yes" />
-      <meta name="theme-color" content="#074407" />
+			<!-- The black glass message screen -->
+			<div id="screen-panel" role="status" aria-live="polite">
+				<div id="screen-text"><span class="line1">MAKE ME</span><span class="line2">LUCKY</span></div>
+			</div>
 
-      <!-- iOS -->
-      <meta name="apple-mobile-web-app-capable" content="yes" />
-      <meta
-        name="apple-mobile-web-app-status-bar-style"
-        content="translucent-black"
-      />
-      <meta name="apple-mobile-web-app-title" content="Make Me Lucky" />
+			<!-- Accessible press target (the 3D button mirrors this) -->
+			<button id="press-target" aria-label="Press the Make Me Lucky button">
+				<span class="visually-hidden">Press the Make Me Lucky button</span>
+			</button>
 
-      <!-- Favicon -->
-      <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
-      <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+			<div id="hud">
+				<button id="mute-button" aria-label="Mute or unmute sound" aria-pressed="false"></button>
+				<a id="scroll-down" href="#content" aria-label="Scroll down to read about Make Me Lucky"></a>
+			</div>
 
-      <!-- Icons iOs -->
-      <link rel="apple-touch-icon" href="/icons/icon57.png" sizes="57x57" />
-      <link rel="apple-touch-icon" href="/icons/icon72.png" sizes="72x72" />
-      <link rel="apple-touch-icon" href="/icons/icon76.png" sizes="76x76" />
-      <link rel="apple-touch-icon" href="/icons/icon114.png" sizes="114x114" />
-      <link rel="apple-touch-icon" href="/icons/icon120.png" sizes="120x120" />
-      <link rel="apple-touch-icon" href="/icons/icon144.png" sizes="144x144" />
-      <link rel="apple-touch-icon" href="/icons/icon152.png" sizes="152x152" />
-      <link
-        rel="apple-touch-icon-precomposed"
-        sizes="180x180"
-        href="/icons/icon180.png"
-      />
-      <link rel="apple-touch-icon" href="/icons/icon256.png" sizes="256x256" />
+			<div id="charm-toast" role="status" aria-live="polite" hidden></div>
 
-      <!-- Icons Android -->
-      <link rel="icon" sizes="192x192" href="/icons/icon192.png" />
-      <link rel="shortcut icon" sizes="256x256" href="/icons/icon256.png" />
+			<div id="loading" aria-hidden="true">
+				<div class="loading-ring"></div>
+				<p>Charging the Luck&nbsp;Machine…</p>
+			</div>
+		</header>
 
-      <noscript
-        ><style>
-          html,
-          body,
-          #mainArea {
-            height: 100%;
-          }
-          #loading,
-          #adStrip,
-          #socialMedia,
-          #luckyCharms,
-          #pageDown {
-            display: none;
-          }
-        </style></noscript
-      >
-    </head>
-    <body>
-      <div id="adStrip">
-        <div id="adUnit"></div>
-      </div>
-      <div id="loading">
-        <div class="spinner" id="loadingSpinner">MAKE ME<br />LUCKY</div>
-      </div>
-      <div id="mainArea">
-        <div id="luckyArea">
-          <div id="mute"><div id="muteIcon"></div></div>
-          <div id="pageDown"></div>
-          <div class="luckyAreaContainer">
-            <div class="luckBox">
-              <div id="screen">
-                <div id="screenInner">
-                  <!-- Welcome -->
-                  <div id="screenText1" class="screenText"></div>
+		<!-- ============ CRAWLER-READABLE CONTENT ============ -->
+		<main id="content">
+			<section class="content-section" id="intro">
+				<h1>Make Me <span class="brand-red">Lucky</span></h1>
+				<p class="tagline">The original internet luck machine — now a full 3D contraption. Still free. Still at least as effective as any other good luck charm.</p>
+				<p>
+					Welcome to Make Me Lucky, the luckiest place on the internet, where you can find good fortune, prosperity,
+					triumph and success at the touch of a button! Where previously you might have had to stay up all night to
+					get lucky, results can now be achieved instantly.
+				</p>
+			</section>
 
-                  <!-- You Are Now Lucky -->
-                  <div id="screenText2" class="screenText">
-                    <p class="line1"></p>
-                    <p class="line2"></p>
-                  </div>
+			<section class="content-section" id="lucky-charms">
+				<h2>Lucky Charms</h2>
+				<p>
+					You can earn Lucky Charms by achieving certain goals — pressing the button a lucky number of times, coming
+					back for more luck, or sharing the luck with your friends. Each Lucky Charm naturally increases your
+					luckiness. Your charms are stored on your device, so your luck stays yours.
+				</p>
+				<div id="lucky-charms-container" class="charms-grid"></div>
+				<p id="charms-progress" class="charms-progress"></p>
+				<p><button id="share-button" class="share-button">⭐ Share the Luck</button>
+				<span class="share-hint">Sharing with friends earns you a Lucky Charm, naturally.</span></p>
+			</section>
 
-                  <!-- Press the Button -->
-                  <div id="screenText3" class="screenText">
-                    <p class="line1">PRESS THE</p>
-                    <p class="line2">BUTTON</p>
-                  </div>
+			<section class="content-section" id="about">
+				<h2>Does pressing a button really make you lucky?</h2>
+				<p>
+					You may wonder whether simply pressing a button can really make you lucky, but we guarantee it works at
+					least as well as any other good luck charm — and we are quite sure that the more people who press the Make
+					Me Lucky button, the more lucky things will happen to people who have pressed it.
+				</p>
+				<p>
+					Roald Amundsen said <em>“Victory awaits him who has everything in order — luck, people call it. Defeat is
+					certain for him who has neglected to take the necessary precautions in time; this is called bad luck.”</em>
+					Having everything in order certainly helped him win the race to the South Pole, even if the decidedly less
+					lucky Robert Scott is better remembered now.
+				</p>
+				<p>
+					There is no definite answer to who the luckiest person ever was, but Frane Selak is often mentioned. The
+					Croatian music teacher allegedly escaped death seven times before going on to win the lottery. You could
+					argue he'd have been luckier to just win the lottery without the near-death experiences — but even then he
+					may not have been as lucky as Texan Joan Ginther, who won the lottery four times for over $20 million.
+				</p>
+				<h3>The actual science of luck</h3>
+				<p>
+					Professor (and magician) Richard Wiseman of the University of Hertfordshire studied hundreds of people who
+					considered themselves very lucky or very unlucky. He found that what people think, and the way they behave,
+					has a big effect on their fortune: lucky people are simply much better at spotting opportunities and
+					capitalising on them. His research suggests anyone can improve their luck:
+				</p>
+				<ul>
+					<li>Listen to your gut instincts — they are usually right.</li>
+					<li>Be open to new experiences and breaking your normal routine.</li>
+					<li>Spend a moment each day remembering things that went well.</li>
+					<li>Picture yourself being lucky before a big event. Luck is very often a self-fulfilling prophecy.</li>
+				</ul>
+				<p>
+					Had Make Me Lucky existed when he did his research, we are pretty sure pressing the button would have made
+					the list. No magic, no woo — just a delightful machine, a small ritual, and a slightly luckier state of
+					mind. (If you were looking for palm readings or magic potions, we cheerfully suggest keeping your money.)
+				</p>
+			</section>
 
-                  <!-- Question -->
-                  <div id="screenText4" class="screenText">
-                    <p class="line1"></p>
-                    <p class="line2"></p>
-                  </div>
+			<section class="content-section" id="more-projects">
+				<h2>More from the maker</h2>
+				<div class="promo-grid">
+					<a class="promo-card" href="https://magicaltrails.com" rel="noopener">
+						<h3>Magical Trails</h3>
+						<p>Magical adventures on real-world trails.</p>
+					</a>
+					<div class="promo-card promo-card--soon" aria-hidden="true">
+						<h3>PhonesOut.Games</h3>
+						<p>Coming soon…</p>
+					</div>
+				</div>
+			</section>
+		</main>
 
-                  <!-- Adverbs -->
-                  <div id="screenText5" class="screenText"></div>
+		<footer id="footer">
+			<h2 class="footer-brand">MAKE ME <span class="brand-red">LUCKY</span></h2>
+			<p>Created by Joseph Maynard. Est. 2015 — rebuilt in glorious 3D for 2026.</p>
+			<p>
+				Fancy some history? The <a href="/v1/">2015 original</a> and the
+				<a href="/v2/">classic 2016 machine</a> are lovingly preserved.
+			</p>
+			<div class="small-print">
+				<p>
+					This site is provided for entertainment purposes; the value of your luck may go down as well as up. If you
+					do become extremely rich after using this service, please send us some money, as it will clearly have been
+					thanks to us.
+				</p>
+				<p>
+					You must only use luck from Make Me Lucky for good, never for evil — unless the recipient really deserves
+					it, or it's really funny.
+				</p>
+				<p>
+					The luck button is at least as lucky as any other good luck charm or your money back (all refunds subject
+					to an $88 refund fee). Make Me Lucky is free and always will be, at least until we can think of a way of
+					charging lots of money for it.
+				</p>
+				<p>
+					Privacy: no ads, no cookies, no cookie banner. Your Lucky Charms live in your browser's local storage and
+					never leave your device. We count button presses anonymously (via PostHog, cookieless) purely to know how
+					much luck we've dispensed.
+				</p>
+				<p>
+					Sound effects licensed from AudioJungle — thanks to Rachowski, esSscar, strayworx, frontiersoundfx,
+					Sound-Ideas, FxProSound, grach, JiltedGeneration and lucafrancini. Sound playback by
+					<a href="https://howlerjs.com" rel="noopener">Howler.js</a>. 3D by
+					<a href="https://threejs.org" rel="noopener">three.js</a>.
+				</p>
+				<p>© 2026 Joseph Maynard</p>
+			</div>
+		</footer>
 
-                  <!-- Adjectives -->
-                  <div id="screenText6" class="screenText"></div>
-
-                  <!-- Charm Awarded -->
-                  <div id="screenText7" class="screenText">
-                    <p class="line1"></p>
-                    <p class="line2"></p>
-                  </div>
-                  <div id="screenOverlay"></div>
-                </div>
-              </div>
-              <div id="luckyButtonContainer">
-                <div id="buttonBkg">
-                  <div id="clouds"></div>
-                  <div id="cloudsTunnel"></div>
-                  <div id="cog1" class="cog"></div>
-                  <div id="cog2" class="cog"></div>
-                  <div id="cog3" class="cog"></div>
-                  <div id="cog4" class="cog"></div>
-                </div>
-                <div id="outerRim"></div>
-                <div id="rim">
-                  <div id="rimSpinning"></div>
-                </div>
-                <div id="rimOpen">
-                  <div id="rimTop"></div>
-                  <div id="rimRight"></div>
-                  <div id="rimBottom"></div>
-                  <div id="rimLeft"></div>
-                </div>
-                <div id="clamps" class="clampsClosed"></div>
-
-                <div id="shootingStars"></div>
-
-                <div class="powerRing" id="powerRing1"></div>
-                <div class="powerRing" id="powerRing2"></div>
-                <div class="powerRing" id="powerRing3"></div>
-                <div class="powerRing" id="powerRing4"></div>
-                <div class="powerRing" id="powerRing5"></div>
-
-                <div class="magicSwirl" id="magicSwirl3"></div>
-                <div class="magicSwirl" id="magicSwirl4"></div>
-
-                <a href="you_are_now_lucky.html" id="button" rel="nofollow">
-                  <div id="glint">
-                    <div id="glintLine"></div>
-                  </div>
-                </a>
-
-                <div id="rimLight"></div>
-              </div>
-            </div>
-          </div>
-          <div id="midOverlay"></div>
-          <div id="topOverlay"></div>
-          <div id="effectWrapper" class="effects">
-            <div class="luckyAreaContainer">
-              <div class="luckBox">
-                <div id="threeDfx">
-                  <div class="powerStream" id="powerStream1"></div>
-                  <div class="powerStream" id="powerStream2"></div>
-                  <div class="powerStream" id="powerStream3"></div>
-                  <div class="powerStream" id="powerStream4"></div>
-                  <div class="magicSwirl" id="magicSwirl1"></div>
-                  <div class="magicSwirl" id="magicSwirl2"></div>
-                </div>
-                <div id="effects">
-                  <div id="ol1" class="outerLight"></div>
-                  <div id="ol2" class="outerLight"></div>
-                  <div id="ol3" class="outerLight"></div>
-                  <div id="ol4" class="outerLight"></div>
-                  <div id="ol5" class="outerLight"></div>
-                  <div id="ol6" class="outerLight"></div>
-                  <div id="ol7" class="outerLight"></div>
-                  <div id="ol8" class="outerLight"></div>
-                  <div id="ol9" class="outerLight"></div>
-                  <div id="ol10" class="outerLight"></div>
-                  <div id="ol11" class="outerLight"></div>
-                  <div id="ol12" class="outerLight"></div>
-                  <div id="cloudLight"></div>
-                  <div id="glowClosed"></div>
-                  <div id="glowOpen"></div>
-                  <div id="spark1"></div>
-                  <div id="spark2"></div>
-                  <div id="spark3"></div>
-                  <div id="spark4"></div>
-                  <div id="luckySymbol"></div>
-                  <div id="effectsButton"></div>
-                  <div id="rimGlow"></div>
-                </div>
-                <div id="particles"></div>
-              </div>
-            </div>
-          </div>
-          <div id="whiteOverlay"></div>
-          <div id="muteOverlay"></div>
-          <div id="pageDownOverlay"></div>
-        </div>
-        <div id="charmsOverlay">
-          <div class="horizon">
-            <div id="charmsCard"></div>
-          </div>
-        </div>
-      </div>
-      <div id="pageUp"></div>
-      <div id="insideBkg">
-        <div class="mechBar" id="pageDownTarget"></div>
-        <div id="inside">
-          <div id="title" class="card">
-            <div id="titleSpinnerContainer">
-              <div class="spinner" id="footerSpinner">MAKE ME<br />LUCKY</div>
-            </div>
-            <p>The original and still the best!</p>
-          </div>
-          <div id="share" class="card">
-            <h2>Share the Luck</h2>
-            <p>Tell your friends and make them lucky too!</p>
-            <button type="button" id="share-the-luck-button">Share</button>
-          </div>
-          <div id="luckyCharms" class="card">
-            <h2>Lucky Charms</h2>
-            <p>
-              You can earn Lucky Charms that will increase you luckiness by
-              achieving certain goals. Each Luck Charm will increase your
-              luckiness!
-            </p>
-            <div id="luckyCharmsContainer"></div>
-          </div>
-          <div id="info" class="card">
-            <h2>About Make Me Lucky</h2>
-            <p>
-              Welcome to Make Me Lucky the Internet's luck generator and good
-              luck charm where you can find good fortune, prosperity, triumph
-              and success at the touch or a button!
-            </p>
-            <p>
-              Where previously you may have had to stay up all night to get
-              lucky, now results can be achieved instantly!
-            </p>
-            <p>
-              You may wonder whether simply pressing a button can really make
-              you lucky, but we guarantee that it works at least as well as any
-              other good luck charm and we are quite sure that the more people
-              who press the Make Me Lucky button, the more lucky things will
-              happen to people who've pressed it! If enough people use Make Me
-              Lucky, we will make it even better so please share the luck!
-            </p>
-            <p>
-              Roald Amundsen said
-              <i
-                >&quot;Victory awaits him who has everything in order - luck,
-                people call it. Defeat is certain for him who has neglected to
-                take the necessary precautions in time; this is called bad
-                luck.&quot;</i
-              >
-              Having everything in order certainly helped lead him to victory in
-              the race to be first to the South Pole, even if the decidedly more
-              unlucky Robert Scott is better remembered now.
-            </p>
-            <p>
-              There is no definite answer to who the luckiest person ever was,
-              but Frane Selak is often mentioned. The Croatian music teacher
-              allegedly miraculously escape death seven times before going on to
-              win the lottery. You could certainly argue that he would have been
-              luckier if he'd just won the lottery and not had the close brushes
-              with tragedy, but even then he may not have been as lucky as Texas
-              lady Joan Ginther who won the lottery an amazing 4 times winning a
-              total of over $20 million in the process.
-            </p>
-            <p>
-              Professor and magician Richard Wiseman from the University of
-              Hertfordshire, who on top of all his academic accolades has
-              appeared on The Infinite Monkey Cage and been name checked by
-              Stephen Fry on QI, did extensive research into hundreds of people
-              who either considered themselves very lucky or unlucky. He
-              discovered that what people think and the way they behaved had a
-              big effect on their fortune.
-            </p>
-            <p>
-              Lucky people are much better at spotting opportunities and
-              capitalising on them than unlucky people. Professor Wiseman found
-              everyone can improve their luck by following these four pieces of
-              advice:
-            </p>
-            <ul>
-              <li>
-                Always listen to your gut instincts, they are usually right.
-              </li>
-              <li>
-                Always be open to new experiences and getting out of your normal
-                routine.
-              </li>
-              <li>
-                Try and spend some time each day remembering things that went
-                well for you.
-              </li>
-              <li>
-                Picture yourself being lucky before an important event. Luck is
-                very often a self-fulfilling prophecy.
-              </li>
-            </ul>
-            <p>
-              Had Make Me Lucky been available when he did his research, we are
-              pretty sure he would also have added pressing the Make Me Lucky
-              button to his advice!
-            </p>
-          </div>
-        </div>
-      </div>
-      <div class="mechBar"></div>
-      <div id="footer">
-        <div id="footerSpinnerContainer">
-          <div class="spinner" id="footerSpinner">MAKE ME<br />LUCKY</div>
-        </div>
-        <div id="footerText">
-          <p>
-            Created by
-            <a href="http://josephmaynard.co.uk/" target="_blank"
-              >Joseph Maynard.</a
-            >
-          </p>
-          <p>
-            All of the animation was made much easier with
-            <a href="http://julian.com/research/velocity/">Velocity.js</a> by
-            <a href="https://twitter.com/shapiro">Julian Shapiro</a>
-          </p>
-          <p>
-            <a href="http://codepen.io/fixcl/pen/lvCFr" target="_blank"
-              >Double ring animation</a
-            >
-            by
-            <a href="https://twitter.com/marco_bf" target="_blank"
-              >Marco Barría</a
-            >
-          </p>
-          <p>
-            Cloud picture from
-            <a
-              href="http://freebigpictures.com/clouds-pictures/heaven-clouds/"
-              target="_blank"
-              >Free Big Pictures</a
-            >.
-          </p>
-          <p>
-            Sound FX licensed from
-            <a href="http://audiojungle.net/" target="_blank">AudioJungle</a>,
-            thanks to
-            <a href="http://audiojungle.net/user/Rachowski" target="_blank"
-              >Rachowski</a
-            >,
-            <a href="http://audiojungle.net/user/esSscar" target="_blank"
-              >esSscar</a
-            >,
-            <a href="http://audiojungle.net/user/strayworx" target="_blank"
-              >strayworx</a
-            >,
-            <a
-              href="http://audiojungle.net/user/frontiersoundfx"
-              target="_blank"
-              >frontiersoundfx</a
-            >,
-            <a href="http://audiojungle.net/user/Sound-Ideas" target="_blank"
-              >Sound-Ideas</a
-            >,
-            <a
-              href="http://audiojungle.net/user/frontiersoundfx"
-              target="_blank"
-              >frontiersoundfx</a
-            >,
-            <a href="http://audiojungle.net/user/FxProSound" target="_blank"
-              >FxProSound</a
-            >,
-            <a href="http://audiojungle.net/user/grach" target="_blank">grach</a
-            >,
-            <a
-              href="http://audiojungle.net/user/JiltedGeneration"
-              target="_blank"
-              >JiltedGeneration</a
-            >
-            and
-            <a href="http://audiojungle.net/user/lucafrancini" target="_blank"
-              >lucafrancini</a
-            >.
-          </p>
-          <p>
-            Sound play back was made super easy with
-            <a
-              href="http://goldfirestudios.com/blog/104/howler.js-Modern-Web-Audio-Javascript-Library"
-              target="_blank"
-              >Howler.js</a
-            >
-            by
-            <a href="https://twitter.com/GoldFireStudios" target="_blank"
-              >James Simpson</a
-            >.
-          </p>
-        </div>
-        <div id="smallprint">
-          <p>
-            This site is provided for entertainment purposes, the value of your
-            luck may go down as well as up. If however you do become extremely
-            rich after using this service, please send us some money as it will
-            clearly have been thanks to us.
-          </p>
-          <p>
-            You must only use any luck form Make Me Lucky for good, never for
-            evil, unless of course the recipient really deserves it or it's
-            really funny.
-          </p>
-          <p>
-            The luck button is at least as lucky as any other good luck charm or
-            your money back! (All refunds subject to an $88 refund fee). Make Me
-            Lucky is a free service and always will be, at least until we can
-            think of a way of charging lots of money for it.
-          </p>
-          <p>
-            We do not store any information about how you use this site other
-            than what Google tells us through their analytics. To be fair they
-            already know all of your secrets (yes even that one), so if anything
-            they probably think better of you now for having visited this site.
-          </p>
-        </div>
-      </div>
-      <div id="copyright">
-        <p>
-          &copy; 2015
-          <a href="http://josephmaynard.co.uk/" target="_blank"
-            >Joseph Maynard</a
-          >
-        </p>
-      </div>
-      <script type="module" src="src/index.js"></script>
-    </body>
-  </html>
+		<script type="module" src="/src/main.js"></script>
+	</body>
 </html>

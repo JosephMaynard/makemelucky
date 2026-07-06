@@ -1,21 +1,24 @@
 {
 	"name": "makemelucky",
-	"version": "2.0.33",
+	"version": "3.0.0",
 	"author": "Joseph Maynard",
 	"private": true,
+	"type": "module",
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",
-		"lint": "eslint 'src/**/*.js'",
-		"test": "vitest"
+		"preview": "vite preview"
 	},
 	"dependencies": {
 		"howler": "^2.2.4",
-		"jquery": "^3.7.1",
-		"velocity-animate": "^1.5.2"
+		"posthog-js": "^1.200.0",
+		"three": "^0.180.0"
 	},
 	"devDependencies": {
-		"vite": "^5.4.9"
+		"puppeteer-core": "^25.3.0",
+		"vite": "^6.0.0",
+		"vite-plugin-pwa": "^0.21.0",
+		"workbox-window": "^7.4.1"
 	},
 	"packageManager": "pnpm@9.5.0+sha512.140036830124618d624a2187b50d04289d5a087f326c9edfc0ccd733d76c4f52c3a313d4fc148794a2a9d81553016004e6742e8cf850670268a7387fc220c903"
 }

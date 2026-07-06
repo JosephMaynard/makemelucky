@@ -1,3 +1,5 @@
 # Dependency directory
 node_modules
 dist
+screen_shots
+.vercel
