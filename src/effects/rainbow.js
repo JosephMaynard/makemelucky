@@ -64,11 +64,13 @@ export async function play(ctx) {
 		fragmentShader: FRAG,
 		transparent: true,
 		depthWrite: false,
+		depthTest: false, // the rainbow arcs OVER everything
 		blending: THREE.AdditiveBlending,
 		side: THREE.DoubleSide
 	});
 	const arc = new THREE.Mesh(new THREE.RingGeometry(INNER, OUTER, 96, 1, 0, Math.PI), mat);
-	arc.position.set(0, -0.75, -0.15);
+	arc.position.set(0, -0.75, 0.7);
+	arc.renderOrder = 9;
 	scene.scene.add(arc);
 	const stopTime = scene.addUpdatable((dt, t) => (mat.uniforms.uTime.value = t));
 
@@ -77,43 +79,59 @@ export async function play(ctx) {
 	await tween(2200, 'inOutCubic', (v) => (mat.uniforms.uProgress.value = v));
 	haptics.vibrate([20, 30, 60]);
 
-	// sparkles + coin trickle at both ends of the rainbow
-	const ends = [new THREE.Vector3(-1.85, -0.75, -0.15), new THREE.Vector3(1.85, -0.75, -0.15)];
+	// coins tumble OUT of both rainbow ends, with sparkle fountains
 	const emitters = [];
-	for (const end of ends) {
+	for (const side of [-1, 1]) {
+		const end = new THREE.Vector3(side * 1.82, -0.55, 0.7);
 		emitters.push(
 			particles.emitter({
 				texture: sprites.star4,
-				count: 90,
-				emitRate: 26,
+				count: 130,
+				emitRate: 42,
 				origin: end,
-				originSpread: 0.25,
-				direction: new THREE.Vector3(0, 1, 0.3).normalize(),
-				cone: 1,
-				speed: [0.3, 0.9],
-				gravity: new THREE.Vector3(0, -0.5, 0),
+				originSpread: 0.3,
+				direction: new THREE.Vector3(side * 0.3, 1, 0.2).normalize(),
+				cone: 1.4,
+				speed: [0.4, 1.2],
+				gravity: new THREE.Vector3(0, -0.6, 0),
 				life: [0.8, 1.8],
-				size: [0.03, 0.08],
+				size: [0.03, 0.09],
 				colors: [0xffffff, 0xfff3cf, 0xffd27a]
 			}),
 			particles.emitter({
 				texture: sprites.coin,
-				count: 60,
-				emitRate: 14,
-				origin: end.clone().add(new THREE.Vector3(0, 0.2, 0.15)),
-				originSpread: 0.15,
-				direction: new THREE.Vector3(0, 1, 0.4).normalize(),
-				cone: 0.8,
-				speed: [0.8, 1.8],
-				gravity: new THREE.Vector3(0, -2.4, 0),
-				life: [1.2, 2],
-				size: [0.09, 0.17],
-				colors: [0xf7ce6b, 0xffe9ad],
-				spin: [-5, 5]
+				count: 110,
+				emitRate: 30,
+				origin: end.clone(),
+				originSpread: 0.18,
+				direction: new THREE.Vector3(side * 0.55, -0.7, 0.35).normalize(),
+				cone: 0.9,
+				speed: [0.6, 1.6],
+				gravity: new THREE.Vector3(0, -3, 0),
+				life: [1.2, 2.1],
+				size: [0.2, 0.34],
+				colors: [0xffe9ad, 0xf7ce6b, 0xffd75e],
+				spin: [-7, 7]
 			})
 		);
 	}
-	machine.setInnerGlow(0.4, 0xfff3cf);
+	// glitter drifting off the whole arch
+	emitters.push(
+		particles.emitter({
+			texture: sprites.star4,
+			count: 120,
+			emitRate: 30,
+			origin: new THREE.Vector3(0, 0.6, 0.7),
+			originSpread: 1.7,
+			speed: [0.05, 0.25],
+			gravity: new THREE.Vector3(0, -0.15, 0),
+			life: [1.2, 2.4],
+			size: [0.015, 0.05],
+			colors: [0xffffff, 0xfff3cf],
+			fadeIn: 0.3
+		})
+	);
+	machine.setInnerGlow(0.22, 0xfff3cf);
 	await delay(3400);
 
 	// the rainbow melts away
@@ -125,7 +143,7 @@ export async function play(ctx) {
 	mat.dispose();
 	await flashPulse(machine, 0.6, 120, 700, 0xfff3cf);
 	tween(700, 'outQuad', (v) => {
-		machine.setInnerGlow(0.4 * (1 - v));
+		machine.setInnerGlow(0.22 * (1 - v));
 		scene.fxLight.intensity = 3.5 * (1 - v);
 	});
 	await restore(900);

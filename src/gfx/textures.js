@@ -92,7 +92,7 @@ export function createQuiltTextures(size = 512) {
 			// fine, expensive-looking leather grain (kept subtle — think Gatsby lounge)
 			const grain = fbmTile(u * 24, v * 24, 24, 4, 7) - 0.5;
 			const micro = fbmTile(u * 96, v * 96, 96, 2, 13) - 0.5;
-			let hgt = pillow * 0.92 + grain * 0.045 + micro * 0.02;
+			let hgt = pillow * 0.92 + grain * 0.026 + micro * 0.01;
 
 			// stitches: dotted thread line near the seams
 			const seam = Math.min(dx, dy);
@@ -116,8 +116,8 @@ export function createQuiltTextures(size = 512) {
 			ai.data[i + 3] = 255;
 
 			// glossy sheen on the pillow tops, satin in the seams
-			const rr = 0.62 - pillow * 0.3 + micro * 0.1;
-			const rv = Math.max(0.22, Math.min(0.8, rr)) * 255;
+			const rr = 0.48 - pillow * 0.3 + micro * 0.05;
+			const rv = Math.max(0.13, Math.min(0.62, rr)) * 255;
 			ri.data[i] = ri.data[i + 1] = ri.data[i + 2] = rv;
 			ri.data[i + 3] = 255;
 		}
@@ -126,7 +126,7 @@ export function createQuiltTextures(size = 512) {
 	hcx.putImageData(hi, 0, 0);
 	r.putImageData(ri, 0, 0);
 
-	const normal = heightToNormal(height, 1.7, true);
+	const normal = heightToNormal(height, 1.3, true);
 	const REP = 22;
 	return {
 		map: toTexture(albedo, { repeat: REP }),
@@ -373,13 +373,62 @@ export function createMachineFaceTextures(size = 2048) {
 			A.arc(c, c, px(rf), 0, Math.PI * 2);
 			A.stroke();
 		}
-		A.strokeStyle = 'rgba(240,212,136,0.28)';
+		A.strokeStyle = 'rgba(240,212,136,0.4)';
 		A.lineWidth = px(0.004);
 		for (let i = 0; i < 32; i++) {
 			const ang = (i / 32) * Math.PI * 2 + Math.PI / 32;
 			A.beginPath();
 			A.moveTo(c + Math.cos(ang) * px(0.578), c + Math.sin(ang) * px(0.578));
 			A.lineTo(c + Math.cos(ang) * px(0.762), c + Math.sin(ang) * px(0.762));
+			A.stroke();
+		}
+	}
+
+	// ============ ENGINE-TURNED GUILLOCHÉ on the inner half of the blue band —
+	// two offset rows of overlapping circles, the classic Art-Deco watch finish
+	{
+		for (const [rMid, n, phase] of [[0.596, 64, 0], [0.628, 64, 0.5]]) {
+			const rC = px(0.026);
+			for (let i = 0; i < n; i++) {
+				const ang = ((i + phase) / n) * Math.PI * 2;
+				const x = c + Math.cos(ang) * px(rMid);
+				const y = c + Math.sin(ang) * px(rMid);
+				A.strokeStyle = 'rgba(240,212,136,0.22)';
+				A.lineWidth = px(0.0035);
+				A.beginPath();
+				A.arc(x, y, rC, 0, Math.PI * 2);
+				A.stroke();
+				H.strokeStyle = 'rgba(255,255,255,0.3)';
+				H.lineWidth = px(0.0035) * hs;
+				H.beginPath();
+				H.arc(x * hs, y * hs, rC * hs, 0, Math.PI * 2);
+				H.stroke();
+			}
+		}
+		// gold micro-rivets punctuating the lane
+		for (let i = 0; i < 24; i++) {
+			const ang = (i / 24) * Math.PI * 2 + Math.PI / 24;
+			const x = c + Math.cos(ang) * px(0.612);
+			const y = c + Math.sin(ang) * px(0.612);
+			const g = A.createRadialGradient(x - 2, y - 2, 0, x, y, px(0.009));
+			g.addColorStop(0, '#fff3cf');
+			g.addColorStop(0.5, '#c9a959');
+			g.addColorStop(1, '#6a5220');
+			A.fillStyle = g;
+			A.beginPath();
+			A.arc(x, y, px(0.008), 0, Math.PI * 2);
+			A.fill();
+			H.fillStyle = '#fff';
+			H.beginPath();
+			H.arc(x * hs, y * hs, px(0.007) * hs, 0, Math.PI * 2);
+			H.fill();
+		}
+		// fine silver rails bracketing the engine-turned lane
+		for (const rf of [0.582, 0.649]) {
+			A.strokeStyle = 'rgba(204,214,222,0.45)';
+			A.lineWidth = px(0.004);
+			A.beginPath();
+			A.arc(c, c, px(rf), 0, Math.PI * 2);
 			A.stroke();
 		}
 	}
@@ -391,6 +440,14 @@ export function createMachineFaceTextures(size = 2048) {
 	A.fillStyle = '#0c0e14';
 	A.fill();
 	A.restore();
+	// machining grooves so the window floor isn't flat black
+	A.strokeStyle = 'rgba(150,165,190,0.14)';
+	A.lineWidth = px(0.004);
+	for (const rf of [0.49, 0.512, 0.534]) {
+		A.beginPath();
+		A.arc(c, c, px(rf), 0, Math.PI * 2);
+		A.stroke();
+	}
 
 	// ============ GOLD BEAD RING, r 0.395–0.475
 	A.save();

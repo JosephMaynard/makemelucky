@@ -66,30 +66,37 @@ function buildTunnel(ctx) {
 		clouds.push(sp);
 	}
 
-	// the light at the end
+	// the light at the end — a soft halo, not a hard disc; fog hides the far
+	// opening so no cap is needed
 	const sun = new THREE.Sprite(
 		new THREE.SpriteMaterial({
 			map: sprites.softDot,
 			color: 0xfffbe8,
 			transparent: true,
+			opacity: 0.75,
 			blending: THREE.AdditiveBlending,
 			depthWrite: false
 		})
 	);
-	sun.scale.setScalar(14);
+	sun.scale.setScalar(7);
 	sun.position.z = -56;
 	group.add(sun);
-
-	// far cap so the tube never shows an open end
-	const cap = new THREE.Mesh(
-		new THREE.CircleGeometry(3.4, 40),
-		new THREE.MeshBasicMaterial({ color: 0xeaf4ff, fog: false })
+	const halo = new THREE.Sprite(
+		new THREE.SpriteMaterial({
+			map: sprites.softDot,
+			color: 0xf4f8ff,
+			transparent: true,
+			opacity: 0.22,
+			blending: THREE.AdditiveBlending,
+			depthWrite: false
+		})
 	);
-	cap.position.z = -69;
-	group.add(cap);
+	halo.scale.setScalar(24);
+	halo.position.z = -56;
+	group.add(halo);
 
 	group.visible = false;
-	return { group, tube, wisps, clouds, sun, skyTex, wispTex };
+	return { group, tube, wisps, clouds, sun, halo, skyTex, wispTex };
 }
 
 export async function play(ctx) {
@@ -166,13 +173,30 @@ export async function play(ctx) {
 
 	await delay(6600);
 
-	// ---- the light rushes up — teleport home
+	// ---- the light rushes up — teleport home. The world whites out via fog
+	// closing in, NOT a giant sprite in the lens (that read as a hard disc).
 	haptics.vibrate([40, 40, 160]);
+	const fogC0 = scene.scene.fog.color.clone();
+	const bgC = scene.scene.background;
+	const white = new THREE.Color(0xffffff);
 	await tween(1000, 'inCubic', (v) => {
-		tunnel.sun.position.z = -56 + v * 52;
-		tunnel.sun.scale.setScalar(14 + v * 30);
+		tunnel.sun.position.z = -56 + v * 40;
+		tunnel.sun.scale.setScalar(7 + v * 8);
+		tunnel.halo.position.z = -56 + v * 40;
+		tunnel.halo.scale.setScalar(24 + v * 8);
+		tunnel.halo.material.opacity = 0.22 + v * 0.2;
+		scene.scene.fog.far = 52 - v * 46;
+		scene.scene.fog.near = 7 - v * 6.2;
+		scene.scene.fog.color.lerpColors(fogC0, white, v);
+		bgC.lerpColors(new THREE.Color(0x9cc3ea), white, v);
 	});
 	await tween(280, 'inQuad', (v) => machine.setOuterGlow(v, 0xffffff));
+	// reset the shared tunnel props for the next ride
+	tunnel.sun.position.z = -56;
+	tunnel.sun.scale.setScalar(7);
+	tunnel.halo.position.z = -56;
+	tunnel.halo.scale.setScalar(24);
+	tunnel.halo.material.opacity = 0.22;
 
 	stopFly();
 	fxFollow();

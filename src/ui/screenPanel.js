@@ -30,18 +30,27 @@ const PRESS_AGAIN = [
 export class ScreenPanel {
 	constructor() {
 		this.el = document.getElementById('screen-text');
+		this.panel = document.getElementById('screen-panel');
+		this.sparkle = document.getElementById('screen-sparkle');
 		this.timer = null;
 		this.seq = 0; // cancels stale async sequences
 	}
 
 	_render(lines) {
+		this.panel.classList.remove('away'); // swing back if we were hidden
 		const [l1, l2] = Array.isArray(lines) ? lines : [lines, ''];
 		this.el.classList.remove('text-in');
-		void this.el.offsetWidth; // restart animation
+		this.sparkle.classList.remove('go');
+		void this.el.offsetWidth; // restart animations
 		this.el.innerHTML =
 			`<span class="line1">${l1 || ''}</span>` + (l2 ? `<span class="line2">${l2}</span>` : '');
 		this.el.classList.toggle('small', (l1 || '').length > 12 || (l2 || '').length > 12);
 		this.el.classList.add('text-in');
+		// the bling lands somewhere new behind the text every time
+		this.sparkle.style.left = `${28 + Math.random() * 44}%`;
+		this.sparkle.style.top = `${34 + Math.random() * 32}%`;
+		this.sparkle.style.setProperty('--spk', (0.5 + Math.random() * 0.5).toFixed(2));
+		this.sparkle.classList.add('go');
 	}
 
 	_stopLoop() {
@@ -55,6 +64,7 @@ export class ScreenPanel {
 		this.seq++;
 		this._stopLoop();
 		this.el.innerHTML = '';
+		this.panel.classList.add('away'); // the screen retires while magic happens
 	}
 
 	/** Show items in order (interval ms apart), then keep cycling loopItems. */

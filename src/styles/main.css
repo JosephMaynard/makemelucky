@@ -118,6 +118,48 @@ body {
 	justify-content: center;
 	pointer-events: none;
 	z-index: 5;
+	transition: transform 0.75s cubic-bezier(0.55, -0.4, 0.6, 1.1), opacity 0.5s ease 0.15s;
+}
+
+/* during effects the screen swings up and away on its coils */
+#screen-panel.away {
+	transform: translateX(-50%) translateY(-320%) rotate(-7deg) scale(0.92);
+	opacity: 0;
+	transition: transform 0.8s cubic-bezier(0.5, -0.55, 0.7, 0.6), opacity 0.45s ease 0.3s;
+}
+
+/* the sparkle that pops behind arriving text */
+#screen-sparkle {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 8px;
+	height: 8px;
+	margin: -4px 0 0 -4px;
+	pointer-events: none;
+	opacity: 0;
+}
+#screen-sparkle::before,
+#screen-sparkle::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(90deg, transparent, #fff8dd 35%, #ffffff 50%, #fff8dd 65%, transparent);
+	border-radius: 999px;
+}
+#screen-sparkle::before {
+	transform: scaleX(22) scaleY(0.5);
+}
+#screen-sparkle::after {
+	transform: rotate(90deg) scaleX(14) scaleY(0.45);
+}
+#screen-sparkle.go {
+	animation: sparkle-pop 0.55s ease-out both;
+}
+@keyframes sparkle-pop {
+	0% { opacity: 0; transform: scale(calc(0.1 * var(--spk, 1))) rotate(-20deg); }
+	25% { opacity: 1; }
+	100% { opacity: 0; transform: scale(calc(1.6 * var(--spk, 1))) rotate(14deg); }
 }
 
 /* gold coil detail top + bottom, like the V2 frame */
@@ -160,11 +202,11 @@ body {
 #screen-text .line1,
 #screen-text .line2 {
 	display: block;
-	font-size: clamp(17px, 4.4vw, 30px);
+	font-size: clamp(21px, 5.35vw, 36px);
 }
 #screen-text.small .line1,
 #screen-text.small .line2 {
-	font-size: clamp(13px, 3.4vw, 23px);
+	font-size: clamp(15px, 4.1vw, 28px);
 }
 #screen-text.text-in {
 	animation: text-pop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both;
@@ -356,19 +398,65 @@ body {
 
 #content {
 	position: relative;
-	background:
-		linear-gradient(180deg, rgba(6, 12, 6, 0.92), rgba(6, 12, 6, 0.86)),
-		var(--green-deep);
+	background: #050a05;
 	border-top: 3px solid #3a3021;
+	overflow: hidden;
+	padding: 30px 0 10px;
+}
+
+/* ethereal lights drifting behind the panels */
+#content::before,
+#content::after {
+	content: '';
+	position: absolute;
+	border-radius: 50%;
+	filter: blur(80px);
+	pointer-events: none;
+	z-index: 0;
+}
+#content::before {
+	width: 58vw;
+	height: 58vw;
+	background: radial-gradient(circle, rgba(70, 240, 180, 0.28), rgba(70, 240, 180, 0) 65%);
+	top: 2%;
+	left: -16%;
+	animation: drift-a 26s ease-in-out infinite alternate;
+}
+#content::after {
+	width: 64vw;
+	height: 64vw;
+	background: radial-gradient(circle, rgba(201, 169, 89, 0.24), rgba(201, 169, 89, 0) 65%);
+	top: 38%;
+	right: -22%;
+	animation: drift-b 34s ease-in-out infinite alternate;
+}
+@keyframes drift-a {
+	to { transform: translate(26vw, 42%) scale(1.3); }
+}
+@keyframes drift-b {
+	to { transform: translate(-24vw, -18%) scale(0.8); }
 }
 
 .content-section {
-	max-width: 760px;
-	margin: 0 auto;
-	padding: 56px 24px 8px;
+	position: relative;
+	z-index: 1;
+	max-width: 780px;
+	margin: 30px auto;
+	padding: 42px 40px;
+	background: linear-gradient(165deg, rgba(16, 30, 16, 0.82), rgba(7, 14, 8, 0.92));
+	border: 1px solid rgba(201, 169, 89, 0.28);
+	border-radius: 22px;
+	box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(240, 212, 136, 0.12);
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
 }
-.content-section:last-child {
-	padding-bottom: 64px;
+
+@media (max-width: 640px) {
+	.content-section {
+		margin: 18px 14px;
+		padding: 28px 22px;
+		border-radius: 16px;
+	}
 }
 
 h1 {
@@ -564,5 +652,12 @@ p + p {
 	}
 	#scroll-down::before {
 		animation: none;
+	}
+	#content::before,
+	#content::after {
+		animation: none;
+	}
+	#screen-panel {
+		transition: opacity 0.4s ease;
 	}
 }

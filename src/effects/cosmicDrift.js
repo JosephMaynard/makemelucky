@@ -28,9 +28,10 @@ export async function play(ctx) {
 	backdrop.visible = false;
 	scene.scene.background = new THREE.Color(0x040510);
 
-	// starfield — two depths of near-static twinkling stars
+	// starfield — twinkles for instant depth, plus two drifting parallax
+	// layers so space itself feels like it's slowly sliding past
 	const stars = [];
-	for (const [depth, size, count] of [[-3, 0.02, 130], [-6, 0.035, 90]]) {
+	for (const [depth, size, count] of [[-3, 0.02, 110], [-6, 0.035, 80]]) {
 		stars.push(
 			particles.burst({
 				texture: sprites.softDot,
@@ -43,6 +44,26 @@ export async function play(ctx) {
 				size: [size * 0.6, size * 1.6],
 				colors: [0xffffff, 0xcfe2ff, 0xffe9c0],
 				fadeIn: 0.12
+			})
+		);
+	}
+	const drifters = [];
+	for (const [depth, size, rate, sp] of [[-2.5, 0.028, 26, [0.5, 0.9]], [-5.5, 0.016, 20, [0.18, 0.38]]]) {
+		drifters.push(
+			particles.emitter({
+				texture: sprites.softDot,
+				count: 170,
+				emitRate: rate,
+				origin: new THREE.Vector3(0, 0.2, depth),
+				originSpread: 7,
+				direction: new THREE.Vector3(-1, -0.08, 0).normalize(),
+				cone: 0.05,
+				speed: sp,
+				gravity: new THREE.Vector3(0, 0, 0),
+				life: [5, 8],
+				size: [size * 0.6, size * 1.5],
+				colors: [0xffffff, 0xcfe2ff, 0xffe9c0],
+				fadeIn: 0.25
 			})
 		);
 	}
@@ -149,6 +170,7 @@ export async function play(ctx) {
 		n.material.dispose();
 	}
 	for (const s of stars) s.emitting = false;
+	for (const d of drifters) d.stop();
 	backdrop.visible = true;
 	await tween(1200, 'inOutQuad', (v) => {
 		scene.keyLight.intensity = key0 * (0.15 + v * 0.85);

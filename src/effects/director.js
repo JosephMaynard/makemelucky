@@ -16,6 +16,12 @@ import * as clockworkOverdrive from './clockworkOverdrive.js';
 import * as fireflies from './fireflies.js';
 import * as rainbow from './rainbow.js';
 import * as cosmicDrift from './cosmicDrift.js';
+import * as diceStorm from './diceStorm.js';
+import * as discoFever from './discoFever.js';
+import * as ufoAbduction from './ufoAbduction.js';
+import * as pinball from './pinball.js';
+import * as cardCyclone from './cardCyclone.js';
+import * as horseshoeToss from './horseshoeToss.js';
 import * as gentleGlow from './gentleGlow.js';
 
 const EFFECTS = {
@@ -33,7 +39,13 @@ const EFFECTS = {
 	clockworkOverdrive,
 	fireflies,
 	rainbow,
-	cosmicDrift
+	cosmicDrift,
+	diceStorm,
+	discoFever,
+	ufoAbduction,
+	pinball,
+	cardCyclone,
+	horseshoeToss
 };
 
 export class Director {

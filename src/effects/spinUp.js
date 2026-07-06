@@ -9,10 +9,28 @@ export const sound = 'spinningRim';
 export const duration = 8000;
 
 export async function play(ctx) {
-	const { scene, machine, particles, sprites, haptics } = ctx;
+	const { scene, machine, particles, sprites, haptics, lightning } = ctx;
 
 	await machine.openClamps(550);
 	haptics.vibrate(40);
+
+	// energy arcs leap from the clamps into the button while the face spins
+	let arcing = true;
+	const button = new THREE.Vector3(0, -0.32, 0.32);
+	const clampPos = new THREE.Vector3();
+	(async () => {
+		while (arcing) {
+			const deco = machine.decos[Math.floor(rand(0, 4))];
+			deco.userData.clamp.getWorldPosition(clampPos);
+			clampPos.z = 0.3;
+			lightning.strike(clampPos, button, { width: rand(0.012, 0.022), life: rand(0.14, 0.24), jitter: 0.3 });
+			scene.fxLight.color.set(0xbfe8ff);
+			scene.fxLight.position.set(clampPos.x * 0.5, clampPos.y * 0.5, 1.1);
+			scene.fxLight.intensity = rand(2, 4);
+			machine.setInnerGlow(rand(0.25, 0.5), 0xbfe8ff);
+			await delay(rand(120, 340));
+		}
+	})();
 
 	const bloom0 = scene.bloomPass.strength;
 	tween(2000, 'inQuad', () => {}); // spacer
@@ -63,6 +81,9 @@ export async function play(ctx) {
 	machine.faceSpin.rotation.z = 0;
 	scene.cameraRoll = 0;
 	stopSparks();
+	arcing = false;
+	lightning.clear();
+	scene.fxLight.intensity = 0;
 
 	// clunk home
 	scene.shake(0.35);

@@ -23,24 +23,143 @@ function makeGearGeometry(radius = 0.09, teeth = 12, depth = 0.03) {
 	return new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
 }
 
-function makeClampGeometry() {
-	// Rounded three-lobed clamp arm pointing towards -y (machine centre).
+function angularArmGeometry(wBase, wTip, l, depth) {
+	// tapered, chamfered strut — long axis along -Y, base at origin
 	const s = new THREE.Shape();
-	const w = 0.15;
-	const l = 0.2;
-	s.moveTo(-w, l);
-	s.quadraticCurveTo(-w * 1.45, 0, -w * 0.55, -l * 0.75);
-	s.quadraticCurveTo(0, -l * 1.15, w * 0.55, -l * 0.75);
-	s.quadraticCurveTo(w * 1.45, 0, w, l);
-	s.quadraticCurveTo(0, l * 1.35, -w, l);
+	s.moveTo(-wBase / 2, 0.04);
+	s.lineTo(wBase / 2, 0.04);
+	s.lineTo(wTip / 2, -l);
+	s.lineTo(-wTip / 2, -l);
 	s.closePath();
 	return new THREE.ExtrudeGeometry(s, {
-		depth: 0.055,
+		depth,
 		bevelEnabled: true,
-		bevelThickness: 0.02,
-		bevelSize: 0.02,
-		bevelSegments: 3
+		bevelThickness: 0.014,
+		bevelSize: 0.014,
+		bevelSegments: 1 // single segment = crisp chamfer, not a rounded sausage
 	});
+}
+
+/** Three-pronged angular clamp plate outline: one long prong gripping inward
+ *  (-y), two short braced prongs angled back and outward. */
+function clampPlateGeometry() {
+	const prongs = [
+		{ a: -Math.PI / 2, len: 0.42, wBase: 0.23, wTip: 0.12 }, // main, toward the button
+		{ a: Math.PI * 0.26, len: 0.24, wBase: 0.17, wTip: 0.1 },
+		{ a: Math.PI * 0.74, len: 0.24, wBase: 0.17, wTip: 0.1 }
+	];
+	const pts = [];
+	for (const p of prongs) {
+		const dir = new THREE.Vector2(Math.cos(p.a), Math.sin(p.a));
+		const perp = new THREE.Vector2(-dir.y, dir.x);
+		pts.push(
+			new THREE.Vector2().addScaledVector(dir, 0.09).addScaledVector(perp, p.wBase / 2),
+			new THREE.Vector2().addScaledVector(dir, p.len).addScaledVector(perp, p.wTip / 2),
+			new THREE.Vector2().addScaledVector(dir, p.len).addScaledVector(perp, -p.wTip / 2),
+			new THREE.Vector2().addScaledVector(dir, 0.09).addScaledVector(perp, -p.wBase / 2)
+		);
+	}
+	const s = new THREE.Shape();
+	pts.forEach((p, i) => (i === 0 ? s.moveTo(p.x, p.y) : s.lineTo(p.x, p.y)));
+	s.closePath();
+	return new THREE.ExtrudeGeometry(s, {
+		depth: 0.05,
+		bevelEnabled: true,
+		bevelThickness: 0.016,
+		bevelSize: 0.016,
+		bevelSegments: 1 // crisp chamfer
+	});
+}
+
+/** Angular tri-prong clamp: bold gold plate like the V2 original, dressed with
+ *  silver hex hardware and gem-set brace tips. */
+function buildClamp(gold, silver, darkMetal) {
+	const g = new THREE.Group();
+	const gemMat = new THREE.MeshPhysicalMaterial({
+		color: 0xcfe2f8,
+		metalness: 0,
+		roughness: 0.06,
+		clearcoat: 1,
+		envMapIntensity: 2.4,
+		emissive: 0x36495e,
+		emissiveIntensity: 0.4
+	});
+
+	const hex = (r, h, mat, x, y, z) => {
+		const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.08, h, 6), mat);
+		m.rotation.x = Math.PI / 2;
+		m.position.set(x, y, z);
+		g.add(m);
+		return m;
+	};
+
+	// dark under-plate then the bold gold tri-prong plate (a slim pinstripe
+	// outline, not a cartoon border)
+	const under = new THREE.Mesh(clampPlateGeometry(), darkMetal);
+	under.scale.set(1.05, 1.05, 0.35);
+	under.position.z = -0.012;
+	const plate = new THREE.Mesh(clampPlateGeometry(), gold);
+	g.add(under, plate);
+
+	// silver spine inlay running down the gripping prong
+	const spine = new THREE.Mesh(angularArmGeometry(0.07, 0.035, 0.31, 0.014), silver);
+	spine.position.set(0, -0.05, 0.062);
+	g.add(spine);
+
+	// tip hardware — stops at the gold ring, never over the button cap (the
+	// cap sinks on press and would reveal the tip's underside)
+	hex(0.065, 0.045, silver, 0, -0.375, 0.045);
+	const tipDome = new THREE.Mesh(new THREE.SphereGeometry(0.024, 14, 10), silver);
+	tipDome.position.set(0, -0.375, 0.072);
+	g.add(tipDome);
+
+	// intricate silver inlay across the bare gold: fillets tracing the main
+	// prong's edges, ladder bands across it, and a strip down each brace
+	const strip = (w, l, x, y, rz, z = 0.066) => {
+		const m = new THREE.Mesh(new THREE.BoxGeometry(w, l, 0.008), silver);
+		m.position.set(x, y, z);
+		m.rotation.z = rz;
+		g.add(m);
+		return m;
+	};
+	strip(0.011, 0.42, 0.068, -0.155, -0.1); // edge fillets, tapering with the prong
+	strip(0.011, 0.42, -0.068, -0.155, 0.1);
+	strip(0.13, 0.011, 0, -0.15, 0); // ladder bands under the spine
+	strip(0.115, 0.011, 0, -0.235, 0);
+	strip(0.1, 0.011, 0, -0.315, 0);
+	for (const side of [-1, 1]) {
+		const a = Math.PI * (0.5 + side * 0.24);
+		strip(0.011, 0.13, Math.cos(a) * 0.17, Math.sin(a) * 0.17, a - Math.PI / 2);
+	}
+
+	// gem-set hexes on the two brace prongs
+	for (const side of [-1, 1]) {
+		const a = Math.PI * (0.5 + side * 0.24);
+		const ex = Math.cos(a) * 0.19;
+		const ey = Math.sin(a) * 0.19;
+		hex(0.055, 0.04, silver, ex, ey, 0.05);
+		const gem = new THREE.Mesh(new THREE.SphereGeometry(0.027, 14, 10), gemMat);
+		gem.position.set(ex, ey, 0.082);
+		g.add(gem);
+	}
+
+	// central boss: octagonal gold block, silver hex plate, gold collar, dome screw
+	const boss = new THREE.Mesh(new THREE.CylinderGeometry(0.098, 0.112, 0.05, 8), gold);
+	boss.rotation.x = Math.PI / 2;
+	boss.rotation.y = Math.PI / 8;
+	boss.position.z = 0.06;
+	g.add(boss);
+	hex(0.062, 0.03, silver, 0, 0, 0.095);
+	const collar = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.011, 8, 24), gold);
+	collar.position.z = 0.112;
+	const screw = new THREE.Mesh(new THREE.SphereGeometry(0.03, 16, 12), darkMetal);
+	screw.position.z = 0.116;
+	const slot = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.006), gold);
+	slot.position.z = 0.143;
+	slot.rotation.z = Math.PI / 4;
+	g.add(collar, screw, slot);
+
+	return g;
 }
 
 /** Planar-map UVs from local XY position so a disc image lands correctly. */
@@ -105,6 +224,19 @@ export class Machine {
 		plate.position.z = -0.07;
 		this.backplate.add(plate);
 		this.group.add(this.backplate);
+
+		// socket lining — when the iris opens this frames the hole in the housing:
+		// a polished gold rim and a dark bore wall, so it reads solid, not paper
+		const socketWall = new THREE.Mesh(
+			new THREE.CylinderGeometry(R * 1.045, R * 1.02, 0.55, 72, 1, true),
+			new THREE.MeshStandardMaterial({ color: 0x171209, metalness: 0.85, roughness: 0.55, side: THREE.BackSide })
+		);
+		socketWall.rotation.x = Math.PI / 2;
+		socketWall.position.z = -0.3;
+		this.group.add(socketWall);
+		const socketRim = new THREE.Mesh(new THREE.TorusGeometry(R * 1.048, 0.038, 14, 96), gold);
+		socketRim.position.z = -0.02;
+		this.group.add(socketRim);
 
 		// ---------- portal (revealed when the iris opens)
 		this.portal = new THREE.Group();
@@ -181,10 +313,7 @@ export class Machine {
 			);
 			this.quadrants.push(quadrant);
 
-			// decorations that must NOT spin with the face: gems + the clamp.
-			// They live in their own diagonal group and slide with the iris.
-			const deco = new THREE.Group();
-			deco.userData.dir = quadrant.userData.dir;
+			// pearls sit IN the painted chain, so they ride the spinning face
 			for (let g = 0; g < 3; g++) {
 				const ang = thetaStart + ((g + 0.5) / 3) * (Math.PI / 2);
 				const gem = new THREE.Mesh(
@@ -200,24 +329,16 @@ export class Machine {
 					})
 				);
 				gem.position.set(Math.cos(ang) * R * 0.8825, Math.sin(ang) * R * 0.8825, 0.1);
-				deco.add(gem);
+				quadrant.add(gem);
 			}
-			const clampGroup = new THREE.Group();
-			// dark seat plate beneath the clamp gives it sculpted depth
-			const seat = new THREE.Mesh(makeClampGeometry(), darkMetal);
-			seat.scale.set(1.16, 1.16, 0.4);
-			seat.position.z = -0.015;
-			const clamp = new THREE.Mesh(makeClampGeometry(), gold);
-			const clampPlate = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.035, 24), silver);
-			clampPlate.rotation.x = Math.PI / 2;
-			clampPlate.position.z = 0.075;
-			const collar = new THREE.Mesh(new THREE.TorusGeometry(0.052, 0.012, 8, 24), gold);
-			collar.position.z = 0.09;
-			const screw = new THREE.Mesh(new THREE.SphereGeometry(0.038, 16, 12), darkMetal);
-			screw.position.z = 0.1;
-			clampGroup.add(seat, clamp, clampPlate, collar, screw);
+
+			// the clamp must NOT spin with the face — it lives in its own
+			// diagonal group and slides with the iris.
+			const deco = new THREE.Group();
+			deco.userData.dir = quadrant.userData.dir;
+			const clampGroup = buildClamp(gold, silver, darkMetal);
 			const ang = QUADRANT_ANGLES[q];
-			clampGroup.position.set(Math.cos(ang) * R * 0.74, Math.sin(ang) * R * 0.74, 0.12);
+			clampGroup.position.set(Math.cos(ang) * R * 0.76, Math.sin(ang) * R * 0.76, 0.16);
 			clampGroup.rotation.z = ang - Math.PI / 2; // arm points inward
 			deco.add(clampGroup);
 			deco.userData.clamp = clampGroup;
@@ -414,9 +535,11 @@ export class Machine {
 					transparent: true,
 					opacity: 0,
 					blending: THREE.AdditiveBlending,
-					depthWrite: false
+					depthWrite: false,
+					depthTest: false // glows overlay the dome — never slice through it
 				})
 			);
+			sp.renderOrder = 8;
 			sp.scale.setScalar(scale);
 			sp.position.z = z;
 			this.group.add(sp);
@@ -450,7 +573,7 @@ export class Machine {
 			glint.userData.timer -= dt;
 			if (glint.userData.timer <= 0) {
 				glint.userData.timer = rand(1.4, 5);
-				const q = this.decos[Math.floor(rand(0, 4))];
+				const q = this.quadrants[Math.floor(rand(0, 4))];
 				const gems = q.children.filter((ch) => ch.geometry && ch.geometry.type === 'SphereGeometry');
 				if (gems.length) {
 					const gem = gems[Math.floor(rand(0, gems.length))];
@@ -492,35 +615,29 @@ export class Machine {
 		});
 	}
 
-	openClamps(duration = 700) {
-		return Promise.all(
-			this.decos.map((d, i) => {
-				const clamp = d.userData.clamp;
-				const home = d.userData.clampHome;
-				const dir = d.userData.dir;
-				return tween(duration, 'inOutCubic', (v) => {
-					clamp.position.x = home.x + dir.x * 0.17 * v;
-					clamp.position.y = home.y + dir.y * 0.17 * v;
-					clamp.rotation.z = QUADRANT_ANGLES[i] - Math.PI / 2 + v * 0.6;
-				});
-			})
-		);
+	_layoutClamps(v) {
+		// v: 0 = locked home, 1 = fully released, in the current mode
+		const twist = this._clampMode === 'twist';
+		const reach = twist ? 0.17 : 0.3;
+		for (let i = 0; i < this.decos.length; i++) {
+			const d = this.decos[i];
+			const clamp = d.userData.clamp;
+			const home = d.userData.clampHome;
+			const dir = d.userData.dir;
+			clamp.position.x = home.x + dir.x * reach * v;
+			clamp.position.y = home.y + dir.y * reach * v;
+			clamp.rotation.z = QUADRANT_ANGLES[i] - Math.PI / 2 + (twist ? v * 0.6 : 0);
+		}
+	}
+
+	openClamps(duration = 700, mode) {
+		// sometimes they twist off, sometimes they draw straight back like the original
+		this._clampMode = mode || (Math.random() < 0.55 ? 'slide' : 'twist');
+		return tween(duration, 'inOutCubic', (v) => this._layoutClamps(v));
 	}
 
 	closeClamps(duration = 700) {
-		return Promise.all(
-			this.decos.map((d, i) => {
-				const clamp = d.userData.clamp;
-				const home = d.userData.clampHome;
-				const dir = d.userData.dir;
-				return tween(duration, 'inOutCubic', (v) => {
-					const w = 1 - v;
-					clamp.position.x = home.x + dir.x * 0.17 * w;
-					clamp.position.y = home.y + dir.y * 0.17 * w;
-					clamp.rotation.z = QUADRANT_ANGLES[i] - Math.PI / 2 + w * 0.6;
-				});
-			})
-		);
+		return tween(duration, 'inOutCubic', (v) => this._layoutClamps(1 - v));
 	}
 
 	_slideIris(distance, v) {

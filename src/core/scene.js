@@ -98,8 +98,12 @@ export class LuckyScene {
 		const w = this.canvas.clientWidth || innerWidth;
 		const h = this.canvas.clientHeight || innerHeight;
 		this.camera.aspect = w / h;
-		// keep the machine framed on narrow screens: widen FOV in portrait
-		this.camera.fov = w < h ? 50 : 40;
+		// fit the machine's width on any screen: solve the vertical FOV from a
+		// fixed horizontal half-width (machine radius + margin) at camera depth
+		const halfWidth = 1.5; // world units the frame must span horizontally
+		const dist = 5.35;
+		const vFov = THREE.MathUtils.radToDeg(2 * Math.atan(halfWidth / dist / this.camera.aspect));
+		this.camera.fov = THREE.MathUtils.clamp(vFov, 40, 68);
 		this.camera.updateProjectionMatrix();
 		this.renderer.setPixelRatio(this.qualityDPR);
 		this.renderer.setSize(w, h, false);

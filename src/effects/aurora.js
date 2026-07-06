@@ -49,7 +49,10 @@ export async function play(ctx) {
 	const defs = [
 		{ y: 1.1, z: -0.35, colA: 0x2ee6a0, colB: 0x6a7dff, phase: 0 },
 		{ y: 1.55, z: -0.5, colA: 0x46f0b4, colB: 0x9a5cff, phase: 2.1 },
-		{ y: 2.0, z: -0.62, colA: 0x8ff0ff, colB: 0x5cff9a, phase: 4.4 }
+		{ y: 2.0, z: -0.62, colA: 0x8ff0ff, colB: 0x5cff9a, phase: 4.4 },
+		// and below — the lights pool along the floor of the scene too
+		{ y: -1.5, z: -0.4, colA: 0x2ee6a0, colB: 0x8a5cff, phase: 1.2, flip: true },
+		{ y: -1.95, z: -0.55, colA: 0x5cff9a, colB: 0x6a7dff, phase: 3.6, flip: true }
 	];
 	for (const def of defs) {
 		const mat = new THREE.ShaderMaterial({
@@ -69,7 +72,7 @@ export async function play(ctx) {
 		});
 		const mesh = new THREE.Mesh(new THREE.PlaneGeometry(8, 1.15, 160, 1), mat);
 		mesh.position.set(0, def.y, def.z);
-		mesh.rotation.x = -0.15;
+		mesh.rotation.x = def.flip ? 0.15 : -0.15;
 		scene.scene.add(mesh);
 		ribbons.push(mesh);
 	}
