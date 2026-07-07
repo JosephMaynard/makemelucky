@@ -71,6 +71,11 @@ export async function play(ctx) {
 	const arc = new THREE.Mesh(new THREE.RingGeometry(INNER, OUTER, 96, 1, 0, Math.PI), mat);
 	arc.position.set(0, -0.75, 0.7);
 	arc.renderOrder = 9;
+	// fit the arch inside the visible width — phones are much narrower
+	const cam = scene.camera;
+	const halfW = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * (5.35 - 0.7) * cam.aspect;
+	const fit = Math.min(1, (halfW * 0.97) / OUTER);
+	arc.scale.setScalar(fit);
 	scene.scene.add(arc);
 	const stopTime = scene.addUpdatable((dt, t) => (mat.uniforms.uTime.value = t));
 
@@ -82,7 +87,7 @@ export async function play(ctx) {
 	// coins tumble OUT of both rainbow ends, with sparkle fountains
 	const emitters = [];
 	for (const side of [-1, 1]) {
-		const end = new THREE.Vector3(side * 1.82, -0.55, 0.7);
+		const end = new THREE.Vector3(side * 1.82 * fit, -0.6, 0.7);
 		emitters.push(
 			particles.emitter({
 				texture: sprites.star4,
@@ -121,8 +126,8 @@ export async function play(ctx) {
 			texture: sprites.star4,
 			count: 120,
 			emitRate: 30,
-			origin: new THREE.Vector3(0, 0.6, 0.7),
-			originSpread: 1.7,
+			origin: new THREE.Vector3(0, 0.6 * fit, 0.7),
+			originSpread: 1.7 * fit,
 			speed: [0.05, 0.25],
 			gravity: new THREE.Vector3(0, -0.15, 0),
 			life: [1.2, 2.4],

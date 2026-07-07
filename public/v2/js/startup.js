@@ -40,9 +40,6 @@ function preLoadImages(imageArray, callBack, path){
 }
 
 function pageLoaded(){
-	if (window.location.protocol != 'file:') {
-		$('#facebookLike').html('<iframe src="//www.facebook.com/plugins/like.php?href=http%3A%2F%2Fmakemelucky.com&amp;send=false&amp;layout=box_count&amp;width=55&amp;show_faces=true&amp;font&amp;colorscheme=light&amp;action=like&amp;height=65&amp;appId=423609547672506" scrolling="no" frameborder="0" style="border:none; overflow:hidden; width:55px; height:65px;" allowTransparency="true"></iframe>');
-	}
 	createCharmsArrays();
 	resizeWindow();	
 	//screenText.textQueue([screenText.welcome, screenText.needLuck, screenText.press]);

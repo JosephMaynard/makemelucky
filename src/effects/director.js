@@ -22,7 +22,6 @@ import * as ufoAbduction from './ufoAbduction.js';
 import * as pinball from './pinball.js';
 import * as cardCyclone from './cardCyclone.js';
 import * as horseshoeToss from './horseshoeToss.js';
-import * as fortuneCookie from './fortuneCookie.js';
 import * as makeItRain from './makeItRain.js';
 import * as slotArm from './slotArm.js';
 import * as gentleGlow from './gentleGlow.js';
@@ -49,7 +48,6 @@ const EFFECTS = {
 	pinball,
 	cardCyclone,
 	horseshoeToss,
-	fortuneCookie,
 	makeItRain,
 	slotArm
 };

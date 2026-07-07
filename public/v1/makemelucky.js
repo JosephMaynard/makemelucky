@@ -36,8 +36,7 @@ $('#button').click(function(){
 		} else {
 			$('#output').html('<span class="newMessage">You are now SUPER MEGA EXTRA LUCKY x' + luckyness + '</span>');
 		}
-		_gaq.push(['_trackEvent', 'Luck Button', 'Pressed', 'Now Lucky']);
-		setTimeout(resetButton, 1010); 
+		setTimeout(resetButton, 1010);
 	}
 });
 

@@ -38,20 +38,25 @@ export async function play(ctx) {
 	scene.fxLight.position.set(1.2, 0.1, 1.6);
 	tween(700, 'inOutQuad', (v) => (scene.fxLight.intensity = v * 2.4));
 
-	// ---- the lever slides in from off the right edge, pointing up
+	// ---- the lever slides in from off the right edge, pointing up. On narrow
+	// screens it hugs (even overlaps) the machine edge so it stays in frame.
 	const lever = buildLever();
-	lever.position.set(3.7, -0.1, 0.78);
+	const cam = scene.camera;
+	const halfW = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * (5.35 - 0.78) * cam.aspect;
+	const pivotX = Math.min(1.95, halfW - 0.45);
+	lever.position.set(pivotX + 1.75, -0.1, 0.78);
 	scene.scene.add(lever);
 	haptics.vibrate(20);
-	await tween(700, 'outCubic', (v) => (lever.position.x = 3.7 - v * 1.75)); // → x 1.95
+	await tween(700, 'outCubic', (v) => (lever.position.x = pivotX + 1.75 - v * 1.75));
 	await delay(600);
 
 	// ---- THE PULL: clamps release, arm hauls down with a clack, springs back
 	machine.openClamps(420);
 	audio.sfx('clack');
 	haptics.vibrate([40, 40, 90]);
-	await tween(480, 'outCubic', (v) => (lever.rotation.z = v * -2.05)); // ~118° down-right
-	tween(1500, 'outElastic', (v) => (lever.rotation.z = -2.05 * (1 - v))); // wobble home
+	// swings INWARD across the face — outward carries the knob off-screen
+	await tween(480, 'outCubic', (v) => (lever.rotation.z = v * 2.05));
+	tween(1500, 'outElastic', (v) => (lever.rotation.z = 2.05 * (1 - v))); // wobble home
 
 	// ---- the reel: accelerate → hold → ratcheting decel, clicks home at z=0
 	let stopReel = () => {};
@@ -135,7 +140,7 @@ export async function play(ctx) {
 
 	// ---- the lever slides back out to the right
 	await delay(500);
-	await tween(750, 'inCubic', (v) => (lever.position.x = 1.95 + v * 1.9));
+	await tween(750, 'inCubic', (v) => (lever.position.x = pivotX + v * 1.9));
 
 	// ---- teardown: restore everything exactly
 	stopReel(); // defensive — the reel already stopped itself

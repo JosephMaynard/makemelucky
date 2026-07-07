@@ -1,0 +1,8 @@
+# V1 (/v1/) and V2 (/v2/) are museum pieces. They are deliberately NOT
+# Disallowed here: search engines must be able to crawl them to see their
+# noindex meta tags / X-Robots-Tag headers, which is what actually keeps
+# them out of search results.
+User-agent: *
+Allow: /
+
+Sitemap: https://makemelucky.com/sitemap.xml

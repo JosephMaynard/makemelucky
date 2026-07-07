@@ -4,17 +4,18 @@
 // usage: node snap.mjs <outPrefix> [fx] [captureTimesMsCsv] [--press]
 import puppeteer from 'puppeteer-core';
 
-const [, , prefix = 'v3', fx = '', timesCsv = '0', pressFlag = ''] = process.argv;
+const [, , prefix = 'v3', fx = '', timesCsv = '0', pressFlag = '', sizeArg = ''] = process.argv;
 const times = timesCsv.split(',').map(Number);
+const [vw, vh] = (sizeArg || '1280x900').split('x').map(Number);
 const url = `http://localhost:5199/${fx ? `?fx=${fx}` : ''}`;
 
 const browser = await puppeteer.launch({
 	executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
 	headless: 'new',
-	args: ['--window-size=1280,900', '--hide-scrollbars', '--mute-audio', '--use-angle=metal']
+	args: [`--window-size=${vw},${vh}`, '--hide-scrollbars', '--mute-audio', '--use-angle=metal']
 });
 const page = await browser.newPage();
-await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 1 });
+await page.setViewport({ width: vw, height: vh, deviceScaleFactor: 1 });
 page.on('console', (m) => {
 	const t = m.type();
 	if (t === 'error' || t === 'warning') console.log(`[console.${t}]`, m.text());
