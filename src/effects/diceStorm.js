@@ -46,7 +46,7 @@ function makeDieMaterials() {
 }
 
 export async function play(ctx) {
-	const { scene, machine, particles, sprites, haptics } = ctx;
+	const { scene, machine, particles, sprites, haptics, audio } = ctx;
 	if (!dieMaterials) dieMaterials = makeDieMaterials();
 
 	const restore = dimLights(scene, 0.5, 700);
@@ -83,6 +83,7 @@ export async function play(ctx) {
 				v.x *= 0.9;
 				die.userData.ang.multiplyScalar(0.75);
 				if (Math.abs(v.y) > 0.7) {
+					audio.sfx('clack', { pitch: 0.9 + Math.random() * 0.4 });
 					scene.shake(0.12);
 					haptics.vibrate(18);
 					particles.burst({
@@ -134,6 +135,7 @@ export async function play(ctx) {
 			});
 		})
 	);
+	audio.sfx('chime', { pitch: 1.2 });
 
 	// LUCKY ROLL! everything comes up gold
 	await delay(500);

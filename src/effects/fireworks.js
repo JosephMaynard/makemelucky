@@ -17,8 +17,11 @@ const PALETTES = [
 ];
 
 async function launchRocket(ctx, x, apexY, palette, kind = 'peony') {
-	const { scene, particles, sprites, haptics } = ctx;
+	const { scene, particles, sprites, haptics, audio } = ctx;
 	const origin = new THREE.Vector3(x * 0.3, -0.6, 0.3);
+
+	// discrete launch — a soft whoosh as the shell leaves the tube
+	audio.sfx('swoosh', { gain: 0.35, pitch: 1.3 });
 
 	// the rising comet: an emitter whose origin we drag along an arc
 	const trail = particles.emitter({
@@ -42,6 +45,13 @@ async function launchRocket(ctx, x, apexY, palette, kind = 'peony') {
 
 	// burst!
 	haptics.vibrate(35);
+	// booms scale with apex height as a proxy for burst size; the grand-finale
+	// willows get their own lower, fuller boom
+	const sizeScale = Math.min(1, Math.max(0, (apexY - 1) / 1.4));
+	audio.sfx('boom', {
+		pitch: kind === 'willow' ? 0.7 : 0.85 + Math.random() * 0.35,
+		gain: kind === 'willow' ? 1 : 0.5 + sizeScale * 0.5
+	});
 	scene.fxLight.color.set(palette[0]);
 	scene.fxLight.position.set(origin.x, origin.y, 1);
 	scene.fxLight.intensity = 14;
@@ -112,7 +122,7 @@ async function launchRocket(ctx, x, apexY, palette, kind = 'peony') {
 }
 
 export async function play(ctx) {
-	const { scene, machine, particles, sprites, haptics } = ctx;
+	const { scene, machine, particles, sprites, haptics, audio } = ctx;
 
 	const restore = dimLights(scene, 0.18, 1200);
 	machine.setInnerGlow(0.35, 0xffd27a);

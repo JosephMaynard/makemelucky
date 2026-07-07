@@ -142,9 +142,9 @@ export async function play(ctx) {
 		scene.fxLight.position.z += 1.2;
 	});
 
-	await tween(600, 'outQuad', (v) => machine.setOuterGlow(1 - v));
-
-	// ---- fly
+	// ---- fly — register the motion updatable NOW, before the glow-fade await,
+	// so clouds, sky texture, and button move from the very first visible frame
+	// (previously it waited on the 600ms fade, freezing the tunnel for ~0.6s)
 	const stopFly = scene.addUpdatable((dt, t) => {
 		tunnel.skyTex.offset.y -= dt * 1.7;
 		tunnel.wispTex.offset.y -= dt * 3.1;
@@ -170,6 +170,8 @@ export async function play(ctx) {
 		button.rotation.z = Math.sin(t * 0.85) * -0.45; // banks into its turns
 		button.rotation.x = Math.cos(t * 0.6) * 0.3;
 	});
+
+	await tween(600, 'outQuad', (v) => machine.setOuterGlow(1 - v));
 
 	await delay(6600);
 

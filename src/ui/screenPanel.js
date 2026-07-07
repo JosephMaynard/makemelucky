@@ -38,13 +38,15 @@ export class ScreenPanel {
 
 	_render(lines) {
 		this.panel.classList.remove('away'); // swing back if we were hidden
-		const [l1, l2] = Array.isArray(lines) ? lines : [lines, ''];
+		// third item, when present, is an opt-in style variant (e.g. 'giant')
+		const [l1, l2, variant] = Array.isArray(lines) ? lines : [lines, ''];
 		this.el.classList.remove('text-in');
 		this.sparkle.classList.remove('go');
 		void this.el.offsetWidth; // restart animations
 		this.el.innerHTML =
 			`<span class="line1">${l1 || ''}</span>` + (l2 ? `<span class="line2">${l2}</span>` : '');
-		this.el.classList.toggle('small', (l1 || '').length > 12 || (l2 || '').length > 12);
+		this.el.classList.toggle('giant', variant === 'giant');
+		this.el.classList.toggle('small', variant !== 'giant' && ((l1 || '').length > 12 || (l2 || '').length > 12));
 		this.el.classList.add('text-in');
 		// the bling lands somewhere new behind the text every time
 		this.sparkle.style.left = `${28 + Math.random() * 44}%`;
@@ -68,7 +70,7 @@ export class ScreenPanel {
 	}
 
 	/** Show items in order (interval ms apart), then keep cycling loopItems. */
-	sequence(items, loopItems = null, interval = 1700) {
+	sequence(items, loopItems = null, interval = 1360) { // 1700 * 0.8 — +20% faster pacing
 		this.seq++;
 		const mySeq = this.seq;
 		this._stopLoop();
@@ -111,7 +113,7 @@ export class ScreenPanel {
 			used.add(adv);
 			items.push([adv, '']);
 		}
-		items.push(['LUCKY!', '']);
+		items.push(['LUCKY!', '', 'giant']);
 		this.sequence(items, [pick(MORE_LUCK), pick(PRESS_AGAIN)]);
 	}
 }

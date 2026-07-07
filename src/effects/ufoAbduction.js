@@ -45,7 +45,7 @@ function buildSaucer() {
 }
 
 export async function play(ctx) {
-	const { scene, machine, particles, sprites, haptics } = ctx;
+	const { scene, machine, particles, sprites, haptics, audio } = ctx;
 
 	const restore = dimLights(scene, 0.22, 900);
 	const saucer = buildSaucer();
@@ -67,6 +67,7 @@ export async function play(ctx) {
 	});
 
 	// wobble in and park above the machine
+	const stopWoo = audio.sfxLoop('wooWoo'); // eerie descending whistle
 	haptics.vibrate(25);
 	await tween(1800, 'inOutQuad', (v) => {
 		saucer.g.position.x = -4.2 + v * 4.2;
@@ -88,6 +89,7 @@ export async function play(ctx) {
 	scene.fxLight.color.set(0x9fe8d8);
 	scene.fxLight.position.set(0, 0.6, 1.4);
 	haptics.vibrate([30, 40, 80]);
+	audio.sfx('zap', { gain: 0.6 }); // tractor beam snaps on
 	await tween(700, 'inOutQuad', (v) => {
 		beamMat.opacity = v * 0.22;
 		scene.fxLight.intensity = v * 5;
@@ -118,20 +120,41 @@ export async function play(ctx) {
 		// so the rim never carves through the outer rings
 		button.position.z = startZ + Math.min(v * 4, 1) * 0.55;
 		button.position.y = startY + v * 0.95;
-		button.rotation.y = Math.max(0, (v - 0.22) / 0.78) * Math.PI * 3;
+		// spin to 4π (even) so the red face ends up pointing at the camera,
+		// and shrink to 0.6 while being "scanned" — smaller reads better in
+		// the beam and stops the rim clipping the cone
+		button.rotation.y = Math.max(0, (v - 0.22) / 0.78) * Math.PI * 4;
 		button.rotation.x = Math.sin(v * Math.PI * 2) * 0.2;
+		button.scale.setScalar(1 - v * 0.4);
 	});
 
-	// scanning pause… nope, too lucky. Put it back.
+	// scanning pause… the button shivers nervously in the beam
+	const holdY = startY + 0.95;
+	const holdZ = startZ + 0.55;
+	let jiggling = true;
+	const stopJiggle = scene.addUpdatable((dt, t) => {
+		if (!jiggling) return;
+		// wobble centred ON the hold pose so there's no jump when it stops
+		button.position.x = Math.sin(t * 31) * 0.03;
+		button.position.y = holdY + Math.sin(t * 27 + 1.3) * 0.03;
+		button.rotation.z = Math.sin(t * 34) * 0.06;
+	});
 	await delay(900);
+	jiggling = false;
+	stopJiggle();
+	// snap back exactly onto the hold pose before the descent begins
+	button.position.set(0, holdY, holdZ);
+	button.rotation.z = 0;
 	haptics.vibrate([20, 30, 20]);
 	dust.stop();
+	// nope, too lucky. Put it back — grow to full size, unwind the spin.
 	await tween(900, 'inQuad', (v) => {
 		button.position.y = startY + 0.95 - v * 0.95;
-		// finish the spin early, tuck back into the housing at the very end
-		button.rotation.y = Math.PI * 3 * Math.max(0, 1 - v * 1.4);
+		// finish the spin early (4π → 0), tuck back into the housing at the end
+		button.rotation.y = Math.PI * 4 * Math.max(0, 1 - v * 1.4);
 		button.rotation.x = 0;
 		button.position.z = startZ + 0.55 * (1 - Math.max(0, (v - 0.72) / 0.28));
+		button.scale.setScalar(0.6 + v * 0.4);
 	});
 	home.attach(button);
 	button.position.set(0, 0, 0);
@@ -146,6 +169,7 @@ export async function play(ctx) {
 		scene.fxLight.intensity = 5 * (1 - v);
 	});
 	hovering = false;
+	stopWoo(400); // whistle fades as the saucer bolts
 	haptics.vibrate([40, 30, 100]);
 	particles.burst({
 		texture: sprites.streak,

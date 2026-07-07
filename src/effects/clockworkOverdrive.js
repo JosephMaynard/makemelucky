@@ -13,7 +13,7 @@ export const duration = 9000;
 let clockTex = null;
 
 export async function play(ctx) {
-	const { scene, machine, particles, sprites, haptics } = ctx;
+	const { scene, machine, particles, sprites, haptics, audio } = ctx;
 	if (!clockTex) clockTex = createClockRingTexture(1024);
 
 	const restore = dimLights(scene, 0.3, 800);
@@ -63,6 +63,7 @@ export async function play(ctx) {
 	});
 
 	// wind time up — mechanism races, hands whirl faster and faster
+	const stopTick = audio.sfxLoop('tickTock');
 	machine.mechSpeed = 2;
 	let handSpeed = 0.6;
 	let tickTimer = 0;
@@ -109,6 +110,7 @@ export async function play(ctx) {
 	await flashPulse(machine, 1, 80, 900, 0xffe9ad);
 
 	// time settles back down
+	stopTick(400);
 	machine.mechSpeed = 2;
 	await Promise.all([
 		tween(900, 'inOutQuad', (v) => {

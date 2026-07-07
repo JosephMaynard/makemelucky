@@ -42,7 +42,7 @@ function buildHorseshoe() {
 }
 
 export async function play(ctx) {
-	const { scene, machine, particles, sprites, haptics } = ctx;
+	const { scene, machine, particles, sprites, haptics, audio } = ctx;
 
 	const restore = dimLights(scene, 0.4, 700);
 	scene.fxLight.color.set(0xffe9ad);
@@ -68,6 +68,7 @@ export async function play(ctx) {
 	// the throw: a tumbling parabolic arc onto the button; a slight forward
 	// tilt keeps it reading as a thrown object rather than part of the face
 	haptics.vibrate(30);
+	audio.sfx('swoosh', { gain: 0.6, pitch: 0.9 });
 	const target = new THREE.Vector3(0, -0.32, 0.78);
 	await tween(1500, 'inOutQuad', (v) => {
 		shoe.position.x = -3.1 + v * 3.1;
@@ -81,6 +82,7 @@ export async function play(ctx) {
 	shoe.rotation.x = 0.18;
 
 	// CLANG — it rings the button
+	audio.sfx('clang');
 	glitterTrail.stop();
 	scene.shake(0.45);
 	haptics.vibrate([50, 40, 100]);

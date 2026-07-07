@@ -87,6 +87,62 @@ export async function play(ctx) {
 		tween(2000, 'inOutQuad', (v) => (n.material.opacity = v * 0.33));
 	}
 
+	// ACCRETION RING — debris orbiting the machine like Saturn's rings. Rigid
+	// angular motion, so these are their own THREE.Points clouds (not particles).
+	const ringCenter = new THREE.Vector3(0, -0.32, 0.15);
+	const ringTilt = 0.9; // steep tilt → flat Saturn ellipse crossing the machine
+	const buildRing = ({ count, rMin, rMax, size, color, speedMin, speedMax, maxOpacity }) => {
+		const positions = new Float32Array(count * 3);
+		const angles = new Float32Array(count);
+		const speeds = new Float32Array(count);
+		const radii = new Float32Array(count);
+		const thick = new Float32Array(count); // per-point vertical jitter
+		for (let i = 0; i < count; i++) {
+			angles[i] = Math.random() * Math.PI * 2;
+			speeds[i] = rand(speedMin, speedMax);
+			radii[i] = rand(rMin, rMax);
+			thick[i] = rand(-0.04, 0.04);
+		}
+		const geo = new THREE.BufferGeometry();
+		geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+		const mat = new THREE.PointsMaterial({
+			map: sprites.star4,
+			color,
+			size,
+			transparent: true,
+			opacity: 0,
+			blending: THREE.AdditiveBlending,
+			depthWrite: false,
+			depthTest: true, // let the machine occlude the far side of the ring
+			sizeAttenuation: true
+		});
+		const points = new THREE.Points(geo, mat);
+		scene.scene.add(points);
+		return { count, positions, angles, speeds, radii, thick, geo, mat, points, maxOpacity };
+	};
+	const rings = [
+		buildRing({ count: 240, rMin: 1.55, rMax: 1.85, size: 0.1, color: 0xffd27a, speedMin: 0.5, speedMax: 0.8, maxOpacity: 1 }),
+		buildRing({ count: 210, rMin: 1.95, rMax: 2.3, size: 0.07, color: 0xbfe0ff, speedMin: 0.25, speedMax: 0.4, maxOpacity: 0.85 })
+	];
+	const updateRings = (dt) => {
+		for (const ring of rings) {
+			for (let i = 0; i < ring.count; i++) {
+				ring.angles[i] += ring.speeds[i] * dt;
+				const a = ring.angles[i];
+				const r = ring.radii[i];
+				const i3 = i * 3;
+				// tilt the plane so points sweep IN FRONT at the bottom, BEHIND at top
+				ring.positions[i3] = ringCenter.x + Math.cos(a) * r;
+				ring.positions[i3 + 1] = ringCenter.y + Math.sin(a) * r * Math.cos(ringTilt) + ring.thick[i];
+				ring.positions[i3 + 2] = ringCenter.z + Math.sin(a) * r * Math.sin(ringTilt);
+			}
+			ring.geo.attributes.position.needsUpdate = true;
+		}
+	};
+	updateRings(0); // seed positions before the first frame
+	const stopRings = scene.addUpdatable((dt) => updateRings(dt));
+	for (const ring of rings) tween(1500, 'inOutQuad', (v) => (ring.mat.opacity = v * ring.maxOpacity));
+
 	// the machine levitates, weightless
 	const baseY = machine.group.position.y;
 	let drifting = true;
@@ -163,11 +219,18 @@ export async function play(ctx) {
 		machine.group.rotation.z *= 1 - v;
 		machine.group.rotation.x *= 1 - v;
 		for (const n of nebulae) n.material.opacity = 0.33 * (1 - v);
+		for (const ring of rings) ring.mat.opacity = ring.maxOpacity * (1 - v);
 		machine.setInnerGlow(0.3 * (1 - v), 0xcfe2ff);
 	});
 	for (const n of nebulae) {
 		scene.scene.remove(n);
 		n.material.dispose();
+	}
+	stopRings();
+	for (const ring of rings) {
+		scene.scene.remove(ring.points);
+		ring.geo.dispose();
+		ring.mat.dispose();
 	}
 	for (const s of stars) s.emitting = false;
 	for (const d of drifters) d.stop();

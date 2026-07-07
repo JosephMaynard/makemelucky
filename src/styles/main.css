@@ -208,6 +208,12 @@ body {
 #screen-text.small .line2 {
 	font-size: clamp(15px, 4.1vw, 28px);
 }
+#screen-text.giant .line1,
+#screen-text.giant .line2 {
+	font-size: clamp(40px, 11vw, 72px);
+	letter-spacing: -0.01em;
+	font-weight: 800;
+}
 #screen-text.text-in {
 	animation: text-pop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both;
 }

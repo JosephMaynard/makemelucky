@@ -9,7 +9,7 @@ export const sound = 'luckySymbol';
 export const duration = 9500;
 
 export async function play(ctx) {
-	const { scene, machine, particles, sprites, haptics } = ctx;
+	const { scene, machine, particles, sprites, haptics, audio } = ctx;
 
 	const restore = dimLights(scene, 0.4, 700);
 	scene.fxLight.color.set(0xffffff);
@@ -57,6 +57,9 @@ export async function play(ctx) {
 	const bump = (at, strength = 1) => {
 		scene.shake(0.12 * strength);
 		haptics.vibrate(16);
+		// clamp bumpers (strength ≥ 1) ring bright & random; wall bumps thud softer
+		if (strength >= 1) audio.sfx('ding', { pitch: 0.9 + Math.random() * 0.4 });
+		else audio.sfx('ding', { pitch: 0.7, gain: 0.5 });
 		scene.fxLight.position.copy(at);
 		scene.fxLight.position.z = 1.2;
 		scene.fxLight.intensity = 6;
@@ -105,17 +108,45 @@ export async function play(ctx) {
 
 	await delay(5600);
 
-	// drain shot: the ball is drawn into the button
+	// drain shot: the button becomes a MOUTH and eats the ball
 	playing = false;
 	haptics.vibrate([30, 40, 30, 40, 120]);
-	const from = ball.position.clone();
-	const target = new THREE.Vector3(0, -0.32, 0.5);
-	await tween(850, 'inQuad', (v) => {
-		ball.position.lerpVectors(from, target, v);
-		ball.scale.setScalar(1 - v * 0.65);
+	const bg = machine.buttonGroup; // child of the machine centre — animate LOCAL
+
+	// the mouth opens: lift up and tip back, baring the dark socket behind it
+	await tween(280, 'outQuad', (v) => {
+		bg.position.y = 0.38 * v;
+		bg.rotation.x = -0.3 * v;
 	});
+
+	// the ball arcs to the hole and drops IN, behind the button's lip
+	const from = ball.position.clone();
+	const target = new THREE.Vector3(0, -0.38, 0.2);
+	await tween(520, 'inQuad', (v) => {
+		ball.position.lerpVectors(from, target, v);
+		ball.position.y += Math.sin(v * Math.PI) * 0.35; // lofted approach
+	});
+	await tween(300, 'inQuad', (v) => {
+		ball.position.y = target.y - v * 0.5; // falls down the hole
+		ball.position.z = target.z - v * 0.35; // sinks behind the button
+		ball.scale.setScalar(1 - v * 0.7); // 1 → 0.3
+	});
+	ball.visible = false;
 	trail.stop();
 	stopSim();
+
+	// the mouth closes with a satisfied little gulp
+	audio.sfx('gulp');
+	await tween(200, 'outBack', (v) => {
+		bg.position.y = 0.38 * (1 - v);
+		bg.rotation.x = -0.3 * (1 - v);
+		bg.scale.y = 1 - Math.sin(v * Math.PI) * 0.06; // squash pulse
+	});
+	// restore the buttonGroup exactly
+	bg.position.set(0, 0, 0);
+	bg.rotation.set(0, 0, 0);
+	bg.scale.set(1, 1, 1);
+
 	scene.scene.remove(ball);
 	ball.geometry.dispose();
 

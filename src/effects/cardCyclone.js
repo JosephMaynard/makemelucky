@@ -66,7 +66,7 @@ function buildDeck() {
 }
 
 export async function play(ctx) {
-	const { scene, machine, particles, sprites, haptics } = ctx;
+	const { scene, machine, particles, sprites, haptics, audio } = ctx;
 	if (!cardCache) cardCache = buildDeck();
 
 	const restore = dimLights(scene, 0.32, 800);
@@ -106,6 +106,7 @@ export async function play(ctx) {
 		}
 	});
 	haptics.vibrate([20, 40, 20]);
+	audio.sfx('swoosh', { gain: 0.5 });
 	const wind = particles.emitter({
 		texture: sprites.softDot,
 		count: 160,
@@ -144,6 +145,7 @@ export async function play(ctx) {
 				z: 1.7,
 				rz: (i - 2) * -0.18
 			};
+			audio.sfx('swoosh', { pitch: 1.1 + i * 0.08, gain: 0.6 });
 			return tween(650 + i * 80, 'outBack', (v) => {
 				card.position.set(
 					from.p.x + (to.x - from.p.x) * v,
@@ -155,6 +157,7 @@ export async function play(ctx) {
 			});
 		})
 	);
+	audio.sfx('chime');
 
 	// hold the winning hand, sparkling
 	scene.shake(0.25);
