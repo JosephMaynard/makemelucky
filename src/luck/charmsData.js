@@ -11,7 +11,7 @@ export const PRESS_CHARMS = [
 	{ id: 'luckyUniverse', amount: 42, icon: '42', title: 'Luck of the Universe and Everything!', description: 'Press the Make Me Lucky button 42 times.' },
 	{ id: 'halfCentury', amount: 50, icon: '50', title: 'Half Century of Luck!', description: 'Press the Make Me Lucky button 50 times.' },
 	{ id: 'hotLuck', amount: 69, icon: '69', title: 'Hot Luck!', description: 'Press the Make Me Lucky button 69 times.' },
-	{ id: 'wealthyx2', amount: 88, icon: '88', title: 'Wealthy Wealthy!', description: 'Two times the prosperity — press the Make Me Lucky button 88 times.' },
+	{ id: 'wealthyx2', amount: 88, icon: '88', title: 'Wealthy Wealthy!', description: 'Two times the prosperity. Press the Make Me Lucky button 88 times.' },
 	{ id: 'eternalLuck', amount: 99, icon: '99', title: 'Eternal Luckyness!', description: 'Press the Make Me Lucky button 99 times.' },
 	{ id: 'century', amount: 100, icon: '💯', title: 'Century of Luck!', description: 'Press the Make Me Lucky button 100 times.' },
 	{ id: 'maximumBreak', amount: 147, icon: '🎱', title: 'Maximum Break Luck!', description: 'Press the Make Me Lucky button 147 times.' },
@@ -19,7 +19,7 @@ export const PRESS_CHARMS = [
 	{ id: 'bargainLuck', amount: 241, icon: '241', title: 'Bargain Luckyness!', description: 'Press the Make Me Lucky button 241 times.' },
 	{ id: 'beastlyLuck', amount: 666, icon: '😈', title: 'Beastly Luck!', description: 'Press the Make Me Lucky button Six Hundred and Sixty Six times.' },
 	{ id: 'greatFortune', amount: 768, icon: '768', title: 'Great Fortune all the Way!', description: 'Press the Make Me Lucky button 768 times.' },
-	{ id: 'wealthyx3', amount: 888, icon: '888', title: 'Wealthy Wealthy Wealthy!', description: 'Three times the prosperity — press the Make Me Lucky button 888 times.' },
+	{ id: 'wealthyx3', amount: 888, icon: '888', title: 'Wealthy Wealthy Wealthy!', description: 'Three times the prosperity. Press the Make Me Lucky button 888 times.' },
 	{ id: 'millennium', amount: 1000, icon: '1K', title: 'The Millennium!', description: 'Press the Make Me Lucky button one thousand times.' }
 ];
 

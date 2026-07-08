@@ -76,7 +76,7 @@ async function boot() {
 		machine.update(dt, t);
 		particles.update(dt);
 		lightning.update(dt);
-		// slow travelling highlight — reflections glide across the metalwork
+		// slow travelling highlight: reflections glide across the metalwork
 		scene.keyLight.position.x = 2.5 + Math.sin(t * 0.11) * 2.2;
 		scene.keyLight.position.y = 3.5 + Math.cos(t * 0.07) * 1.1;
 	});
@@ -193,7 +193,7 @@ async function boot() {
 				shared = true;
 			} else {
 				await navigator.clipboard.writeText(shareData.url);
-				shareBtn.textContent = '🍀 Link copied — luck attached!';
+				shareBtn.textContent = '🍀 Link copied. Luck attached!';
 				shared = true;
 			}
 		} catch { /* user cancelled the share sheet */ }

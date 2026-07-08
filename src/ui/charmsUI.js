@@ -16,7 +16,7 @@ function formatDate(iso) {
 	const d = new Date(iso);
 	if (isNaN(d)) return '';
 	const mins = String(d.getMinutes()).padStart(2, '0');
-	return `${d.getDate()}<sup>${ordinal(d.getDate())}</sup> ${monthNames[d.getMonth()]} ${d.getFullYear()} — ${d.getHours()}:${mins}`;
+	return `${d.getDate()}<sup>${ordinal(d.getDate())}</sup> ${monthNames[d.getMonth()]} ${d.getFullYear()}, ${d.getHours()}:${mins}`;
 }
 
 export class CharmsUI {
