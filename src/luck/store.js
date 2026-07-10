@@ -124,6 +124,13 @@ export class LuckStore {
 		return this.data.charms.some((c) => c.id === id);
 	}
 
+	/** One-off charms awarded outside the normal press/hold/share flow. */
+	awardSpecial(id, title, description, icon) {
+		const charm = this._award({ id, title, description, icon });
+		if (charm) this.save();
+		return charm;
+	}
+
 	/** Returns array of newly awarded charms (usually empty or one). */
 	registerPress() {
 		this.data.luckyness += 1;

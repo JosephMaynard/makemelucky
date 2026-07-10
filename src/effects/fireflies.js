@@ -5,9 +5,10 @@
 import * as THREE from 'three';
 import { tween, delay } from '../core/anim.js';
 import { dimLights, flashPulse } from './helpers.js';
+import { luckyWord } from './luckyWord.js';
 
 export const sound = 'lucky';
-export const duration = 9500;
+export const duration = 12000;
 
 export async function play(ctx) {
 	const { scene, machine, particles, sprites, haptics } = ctx;
@@ -56,11 +57,12 @@ export async function play(ctx) {
 	attraction = 0.12; // roam further out
 	await delay(2400);
 
-	// …then call them all home to the button
+	// …then the swarm gets organised: the fireflies spell out the good news
 	attraction = 4.5;
 	haptics.vibrate([20, 40, 20, 40, 90]);
-	await delay(1300);
+	await delay(700);
 	swarm.stop();
+	await luckyWord(ctx, { text: 'GOOD FORTUNE', color: 0xd8e07a, colorB: 0xf5f0a0, gather: 1700 });
 	scene.shake(0.25);
 	particles.burst({
 		texture: sprites.star4,

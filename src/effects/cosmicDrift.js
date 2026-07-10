@@ -7,7 +7,7 @@ import { tween, delay, rand, pick } from '../core/anim.js';
 import { flashPulse } from './helpers.js';
 
 export const sound = 'rimLight';
-export const duration = 10500;
+export const duration = 7400;
 
 export async function play(ctx) {
 	const { scene, machine, particles, sprites, haptics } = ctx;
@@ -18,7 +18,7 @@ export async function play(ctx) {
 	const env0 = scene.scene.environmentIntensity;
 	const bg0 = scene.scene.background;
 	const backdrop = machine.backdrop;
-	await tween(1400, 'inOutQuad', (v) => {
+	await tween(1000, 'inOutQuad', (v) => {
 		scene.keyLight.intensity = key0 * (1 - v * 0.72);
 		scene.fillLight.intensity = fill0 * (1 - v * 0.45);
 		scene.scene.environmentIntensity = env0 * (1 - v * 0.7);
@@ -48,7 +48,7 @@ export async function play(ctx) {
 		);
 	}
 	const drifters = [];
-	for (const [depth, size, rate, sp] of [[-2.5, 0.028, 26, [0.5, 0.9]], [-5.5, 0.016, 20, [0.18, 0.38]]]) {
+	for (const [depth, size, rate, sp] of [[-2.5, 0.028, 34, [0.9, 1.6]], [-5.5, 0.016, 26, [0.35, 0.7]]]) {
 		drifters.push(
 			particles.emitter({
 				texture: sprites.softDot,
@@ -121,8 +121,8 @@ export async function play(ctx) {
 		return { count, positions, angles, speeds, radii, thick, geo, mat, points, maxOpacity };
 	};
 	const rings = [
-		buildRing({ count: 240, rMin: 1.55, rMax: 1.85, size: 0.1, color: 0xffd27a, speedMin: 0.5, speedMax: 0.8, maxOpacity: 1 }),
-		buildRing({ count: 210, rMin: 1.95, rMax: 2.3, size: 0.07, color: 0xbfe0ff, speedMin: 0.25, speedMax: 0.4, maxOpacity: 0.85 })
+		buildRing({ count: 240, rMin: 1.55, rMax: 1.85, size: 0.1, color: 0xffd27a, speedMin: 0.8, speedMax: 1.25, maxOpacity: 1 }),
+		buildRing({ count: 210, rMin: 1.95, rMax: 2.3, size: 0.07, color: 0xbfe0ff, speedMin: 0.42, speedMax: 0.65, maxOpacity: 0.85 })
 	];
 	const updateRings = (dt) => {
 		for (const ring of rings) {
@@ -175,11 +175,11 @@ export async function play(ctx) {
 				colors: [0xffffff, 0xcfe2ff],
 				spin: [0, 0]
 			});
-			await delay(rand(700, 1500));
+			await delay(rand(420, 900));
 		}
 	})();
 
-	await delay(6200);
+	await delay(4200);
 
 	// wish granted — a bright star falls INTO the button
 	shooting = false;
@@ -214,7 +214,7 @@ export async function play(ctx) {
 
 	// gravity resumes; dawn comes back to the lounge
 	drifting = false;
-	await tween(1300, 'inOutQuad', (v) => {
+	await tween(950, 'inOutQuad', (v) => {
 		machine.group.position.y = baseY + (1 - v) * 0.06;
 		machine.group.rotation.z *= 1 - v;
 		machine.group.rotation.x *= 1 - v;
@@ -235,7 +235,7 @@ export async function play(ctx) {
 	for (const s of stars) s.emitting = false;
 	for (const d of drifters) d.stop();
 	backdrop.visible = true;
-	await tween(1200, 'inOutQuad', (v) => {
+	await tween(900, 'inOutQuad', (v) => {
 		scene.keyLight.intensity = key0 * (0.15 + v * 0.85);
 		scene.fillLight.intensity = fill0 * (0.4 + v * 0.6);
 		scene.scene.environmentIntensity = env0 * (0.2 + v * 0.8);

@@ -101,8 +101,9 @@ export class ScreenPanel {
 		this.sequence([['LUCKY', 'CHARM!']], null);
 	}
 
-	youAreNowLucky(presses, charmAwarded = false) {
+	youAreNowLucky(presses, charmAwarded = false, quip = null) {
 		const items = [];
+		if (quip) items.push(Array.isArray(quip) ? quip : [quip, '']);
 		if (charmAwarded) items.push(['LUCKY', 'CHARM!']);
 		items.push(['YOU ARE NOW', '']);
 		const adverbCount = presses < 2 ? 0 : presses < 4 ? 1 : presses < 8 ? 2 : 3;

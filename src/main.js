@@ -106,6 +106,32 @@ async function boot() {
 	let holdStart = 0;
 	let pointerHeld = false;
 
+	// a short, witty postscript for each effect, shown as the screen returns
+	const QUIPS = {
+		powerSurge: ['FULLY', 'CHARGED'],
+		spinUp: ['RIGHT ROUND,', 'BABY'],
+		runeCircle: ['THE RUNES', 'APPROVE'],
+		portalDrop: ['MIND', 'THE GAP'],
+		cloudTunnel: ['WHAT A', 'RIDE!'],
+		starBurst: ['WRITTEN IN', 'THE STARS'],
+		goldRush: ['KA-CHING!', ''],
+		cloverVortex: ['THERE IS', 'NO SPOON'],
+		aurora: ['OOOH,', 'PRETTY'],
+		fireworks: ['THE CROWD', 'GOES WILD'],
+		clockworkOverdrive: ['RIGHT', 'ON TIME'],
+		fireflies: ['THEY SPELLED IT,', 'NOT US'],
+		rainbow: ['ALL THE', 'WAY!'],
+		cosmicDrift: ['WISH', 'GRANTED'],
+		diceStorm: ['SIXES.', 'ALWAYS SIXES.'],
+		discoFever: ["STAYIN'", 'ALIVE'],
+		ufoAbduction: ['TOO LUCKY', 'TO ABDUCT'],
+		pinball: ['NOM NOM', 'MULTIBALL'],
+		cardCyclone: ['READ ’EM', 'AND WEEP'],
+		horseshoeToss: ['RINGER!', ''],
+		makeItRain: ['FORECAST:', 'MONEY'],
+		slotArm: ['777.', 'HOUSE PAYS.']
+	};
+
 	async function completePress(holdSeconds) {
 		if (director.running) return;
 		const awarded = [...store.registerPress(), ...store.registerHold(holdSeconds)];
@@ -129,12 +155,42 @@ async function boot() {
 			});
 		}
 		charmsUI.updateProgress();
-		screen.youAreNowLucky(store.data.luckyness, awarded.length > 0);
+		screen.youAreNowLucky(store.data.luckyness, awarded.length > 0, QUIPS[fx]);
 	}
+
+	// party trick: run any effect from the console without waiting for the
+	// shuffle bag. Curiosity is its own kind of luck — it earns a charm.
+	window.showEffect = async (name) => {
+		if (director.running) return 'An effect is already running — patience is lucky too.';
+		if (!name || !director.names.includes(name)) {
+			return `Unknown effect. Try one of: ${director.names.join(', ')}`;
+		}
+		const charm = store.awardSpecial(
+			'consoleWizard',
+			'Behind the curtain',
+			'Summoned an effect from the developer console. Curiosity is its own kind of luck.',
+			'🧙'
+		);
+		if (charm) {
+			audio.play('charmAward');
+			charmsUI.showToast(charm);
+			charmsUI.addCharm(charm);
+			charmsUI.updateProgress();
+			track('charm_awarded', { charm: charm.id });
+		}
+		screen.blank();
+		director.forced = name;
+		const fx = await director.play();
+		director.forced = null;
+		track('effect_played', { effect: fx, via: 'console' });
+		screen.youAreNowLucky(store.data.luckyness, false, QUIPS[fx]);
+		return `Played ${fx} 🍀`;
+	};
 
 	pressTarget.addEventListener('pointerdown', (e) => {
 		if (director.running) return;
 		e.preventDefault();
+		charmsUI.hideToast(); // a new press clears the old celebration instantly
 		pointerHeld = true;
 		holdStart = performance.now();
 		machine.pressDown();

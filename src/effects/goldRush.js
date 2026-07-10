@@ -4,9 +4,10 @@
 import * as THREE from 'three';
 import { tween, delay } from '../core/anim.js';
 import { flashPulse, shockwave, dimLights } from './helpers.js';
+import { luckyWord } from './luckyWord.js';
 
 export const sound = 'buttonFall';
-export const duration = 8000;
+export const duration = 11000;
 
 export async function play(ctx) {
 	const { scene, machine, particles, sprites, haptics } = ctx;
@@ -69,8 +70,9 @@ export async function play(ctx) {
 	glints.stop();
 	stopRumble();
 
-	// settle: last flash, glow dies down, mechanism slows
+	// settle: last flash, then the gold dust in the air spells it out
 	await flashPulse(machine, 0.85, 90, 800, 0xffe9ad);
+	await luckyWord(ctx, { text: 'JACKPOT!', color: 0xf7ce6b, colorB: 0xfff3cf });
 	machine.mechSpeed = 2;
 	tween(900, 'outQuad', (v) => {
 		machine.setInnerGlow(0.42 * (1 - v));

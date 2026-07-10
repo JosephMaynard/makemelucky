@@ -59,7 +59,7 @@ export async function play(ctx) {
 
 	// ---- 26 banknotes, all sharing one geometry + one material
 	const billTex = billTexture();
-	const billMat = new THREE.MeshBasicMaterial({ map: billTex, side: THREE.DoubleSide });
+	const billMat = new THREE.MeshBasicMaterial({ map: billTex, side: THREE.DoubleSide, transparent: true });
 	const billGeo = new THREE.PlaneGeometry(0.42, 0.2);
 	const bills = [];
 	for (let i = 0; i < 26; i++) {
@@ -69,7 +69,7 @@ export async function play(ctx) {
 			phase: rand(0, Math.PI * 2),
 			swayFreq: rand(0.8, 1.8),
 			swayAmp: rand(0.1, 0.32),
-			fall: rand(0.5, 0.8),
+			fall: rand(1, 1.6),
 			spinX: rand(-2.2, 2.2),
 			spinZ: rand(-1.6, 1.6)
 		};
@@ -79,20 +79,20 @@ export async function play(ctx) {
 		bills.push(bill);
 	}
 
-	// flutter + fall physics, recycling bills back to the top for a steady rain
-	let raining = true;
+	// flutter + fall physics, recycling bills back to the top for a steady rain.
+	// Recycle WELL below the frame edge so notes visibly fall out of shot.
+	let recycling = true;
 	const stopSim = scene.addUpdatable((dt, t) => {
-		if (!raining) return;
 		for (const bill of bills) {
 			const u = bill.userData;
 			bill.position.y -= u.fall * dt;
 			bill.position.x = u.baseX + Math.sin(t * u.swayFreq + u.phase) * u.swayAmp;
 			bill.rotation.x += u.spinX * dt;
 			bill.rotation.z += u.spinZ * dt;
-			if (bill.position.y < -1.7) {
+			if (recycling && bill.position.y < -2.4) {
 				u.baseX = rand(-2, 2);
-				u.fall = rand(0.5, 0.8);
-				bill.position.y = rand(1.8, 3.2);
+				u.fall = rand(1, 1.6);
+				bill.position.y = rand(2.2, 3.6);
 				bill.position.z = rand(0.7, 1.1);
 			}
 		}
@@ -121,23 +121,13 @@ export async function play(ctx) {
 	await tween(1000, 'inOutQuad', (v) => machine.setInnerGlow(v * 0.45, 0x7dd87d));
 	await delay(6000);
 
-	// ---- finale: reverse gravity — the whole fortune whooshes up and away
-	raining = false;
-	stopSim();
+	// ---- finale: the rain simply dries up — last notes flutter away and fade
+	recycling = false;
 	coinDrizzle.stop();
 	audio.sfx('chime');
 	haptics.vibrate([30, 30, 80]);
-	scene.shake(0.25);
-	await Promise.all(
-		bills.map((bill) => {
-			const from = bill.position.clone();
-			const rz = bill.rotation.z;
-			return tween(800, 'inQuad', (v) => {
-				bill.position.y = from.y + v * 4.4;
-				bill.rotation.z = rz + v * 5;
-			});
-		})
-	);
+	await tween(1000, 'inQuad', (v) => (billMat.opacity = 1 - v));
+	stopSim();
 	await flashPulse(machine, 0.8, 90, 750, 0x9be89b);
 
 	// ---- teardown

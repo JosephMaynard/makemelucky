@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { tween, delay } from '../core/anim.js';
 import { dimLights, flashPulse, shockwave } from './helpers.js';
+import { stripTexture } from './luckyWord.js';
 
 export const sound = 'spinningRim';
 export const duration = 10500;
@@ -58,9 +59,11 @@ export async function play(ctx) {
 	await tween(480, 'outCubic', (v) => (lever.rotation.z = v * 2.05));
 	tween(1500, 'outElastic', (v) => (lever.rotation.z = 2.05 * (1 - v))); // wobble home
 
-	// ---- the reel: accelerate → hold → ratcheting decel, clicks home at z=0
+	// ---- the reel: accelerate → hold → ratcheting decel, clicks home at z=0.
+	// While it spins, the WIN LINE fills in — a smoked-glass box across the
+	// middle of the screen where the 7s land one by one, like reels stopping.
 	let stopReel = () => {};
-	await new Promise((resolve) => {
+	const reelDone = new Promise((resolve) => {
 		let rot = 0;
 		let vel = 0;
 		let phaseT = 0;
@@ -96,16 +99,55 @@ export async function play(ctx) {
 		});
 	});
 
-	// ---- TRIPLE JACKPOT: three rising dings, each a gold glow pulse
-	haptics.vibrate([30, 40, 30]);
+	// the win-line box fades in across the middle while the reel is turning
+	const stripGeo = new THREE.PlaneGeometry(2.5, 0.95);
+	const stripMat = new THREE.MeshBasicMaterial({
+		map: stripTexture(),
+		transparent: true,
+		opacity: 0,
+		depthTest: false,
+		depthWrite: false
+	});
+	const stripBox = new THREE.Mesh(stripGeo, stripMat);
+	stripBox.renderOrder = 9;
+	stripBox.position.set(0, -0.1, 1.3);
+	scene.scene.add(stripBox);
+	tween(400, 'outQuad', (v) => {
+		stripMat.opacity = v * 0.78;
+		stripBox.scale.setScalar(1.3 - 0.3 * v);
+	});
+
+	// three golden 7s pop out of the button into the box MID-SPIN
+	const sevens = [];
+	const slots = [-0.72, 0, 0.72];
 	for (let i = 0; i < 3; i++) {
+		await delay(i === 0 ? 900 : 950);
 		audio.sfx('ding', { pitch: 1 + i * 0.15 });
 		machine.setInnerGlow(0.6, 0xffd27a);
 		tween(320, 'outQuad', (v) => machine.setInnerGlow(0.6 * (1 - v), 0xffd27a));
 		scene.shake(0.18);
 		haptics.vibrate([18, 26]);
-		await delay(420);
+		const seven = new THREE.Sprite(
+			new THREE.SpriteMaterial({
+				map: sprites.seven,
+				color: 0xffd75e,
+				transparent: true,
+				depthTest: false
+			})
+		);
+		seven.renderOrder = 10;
+		seven.position.set(0, -0.32, 0.9);
+		seven.scale.setScalar(0.05);
+		scene.scene.add(seven);
+		sevens.push(seven);
+		const tx = slots[i];
+		tween(450, 'outBack', (v) => {
+			seven.position.set(tx * v, -0.32 + 0.22 * v, 0.9 + v * 0.45);
+			seven.scale.setScalar(0.05 + v * 0.55);
+		});
 	}
+	await reelDone;
+	haptics.vibrate([30, 40, 30]);
 
 	// ---- payout: coin fountain + shockwave + flash, clamps slam home
 	const origin = new THREE.Vector3(0, -0.32, 0.42);
@@ -136,6 +178,27 @@ export async function play(ctx) {
 		colors: [0xffffff, 0xffe9ad]
 	});
 	await flashPulse(machine, 0.85, 90, 750, 0xffe9ad);
+	// the win line drifts up and melts away, the box growing out with it
+	tween(650, 'inQuad', (v) => {
+		stripMat.opacity = 0.78 * (1 - v);
+		stripBox.scale.setScalar(1 + 0.3 * v);
+	});
+	await Promise.all(
+		sevens.map((seven, i) => {
+			const fy = seven.position.y;
+			return tween(550 + i * 90, 'inQuad', (v) => {
+				seven.position.y = fy + v * 0.5;
+				seven.material.opacity = 1 - v;
+			});
+		})
+	);
+	for (const seven of sevens) {
+		scene.scene.remove(seven);
+		seven.material.dispose();
+	}
+	scene.scene.remove(stripBox);
+	stripGeo.dispose();
+	stripMat.dispose();
 	await machine.closeClamps(450);
 
 	// ---- the lever slides back out to the right

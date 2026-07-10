@@ -68,4 +68,9 @@ export class CharmsUI {
 		void this.toast.offsetWidth;
 		this.toast.classList.add('show');
 	}
+
+	hideToast() {
+		this.toast.classList.remove('show');
+		this.toast.hidden = true;
+	}
 }

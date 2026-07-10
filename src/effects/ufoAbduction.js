@@ -171,16 +171,18 @@ export async function play(ctx) {
 	hovering = false;
 	stopWoo(400); // whistle fades as the saucer bolts
 	haptics.vibrate([40, 30, 100]);
+	// speed streaks trail BEHIND the departing saucer (fired forwards they
+	// looked like it was shooting torpedoes at the neighbours)
 	particles.burst({
 		texture: sprites.streak,
-		count: 10,
+		count: 8,
 		origin: saucer.g.position.clone(),
-		direction: new THREE.Vector3(1, 0.25, 0).normalize(),
-		cone: 0.25,
-		speed: [6, 10],
+		direction: new THREE.Vector3(-1, -0.25, 0).normalize(),
+		cone: 0.2,
+		speed: [3, 6],
 		gravity: new THREE.Vector3(0, 0, 0),
-		life: [0.4, 0.7],
-		size: [0.4, 0.7],
+		life: [0.3, 0.55],
+		size: [0.3, 0.55],
 		colors: [0x9fe8d8, 0xffffff]
 	});
 	await tween(650, 'inQuart', (v) => {

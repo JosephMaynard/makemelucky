@@ -4,9 +4,10 @@
 import * as THREE from 'three';
 import { tween, delay } from '../core/anim.js';
 import { flashPulse, shockwave } from './helpers.js';
+import { luckyWord } from './luckyWord.js';
 
 export const sound = 'lucky';
-export const duration = 7500;
+export const duration = 10500;
 
 export async function play(ctx) {
 	const { scene, machine, particles, sprites, haptics } = ctx;
@@ -79,6 +80,14 @@ export async function play(ctx) {
 	});
 
 	await flashPulse(machine, 1, 70, 900, 0xffe9ad);
+
+	// ---- the drifting debris regroups to spell it out (dim the blaze first,
+	// or the additive motes vanish against the glow)
+	tween(600, 'outQuad', (v) => {
+		machine.setInnerGlow(1 - v * 0.85, 0xffd27a);
+		scene.fxLight.intensity = 6 * (1 - v * 0.8);
+	});
+	await luckyWord(ctx, { color: 0xffd27a, colorB: 0xffffff });
 
 	// ---- gentle sparkle rain to finish
 	const rain = particles.emitter({

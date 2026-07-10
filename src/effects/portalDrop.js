@@ -20,7 +20,7 @@ export async function play(ctx) {
 	scene.fxLight.position.set(0, -0.3, 0.6);
 	const rigZ = scene.rig.position.z;
 	tween(2400, 'inOutCubic', (v) => (scene.rig.position.z = rigZ - v * 0.55));
-	await machine.openIris(1.05, 1700);
+	await machine.openIris(0.72, 1700); // just clear of the portal edge — no big gap
 
 	// the button drops away, tumbling
 	haptics.vibrate(60);

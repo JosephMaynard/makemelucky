@@ -17,7 +17,8 @@ const SPRITE = {
 // Standalone tunes that live outside the licensed sprite. Each gets its own Howl,
 // created lazily the first time it's played.
 const TRACKS = {
-	luckyNowDisco: { src: '/soundfx/lucky-now-disco.mp3', volume: 0.9 }
+	luckyNowDisco: { src: '/soundfx/lucky-now-disco.mp3', volume: 0.9 },
+	luckyFireworks: { src: '/soundfx/fireworks-luckyness.mp3', volume: 0.9 }
 };
 
 export class AudioService {

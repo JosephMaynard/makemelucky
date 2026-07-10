@@ -1,101 +1,112 @@
-// Effect 9 — CLOVER VORTEX: the room darkens to deep emerald and a spiral of
-// clovers whirls around the machine before being drunk into the button.
+// Effect 9 — CYBER LUCK: the lounge drops into the matrix. Emerald code rains
+// down the room — except the code is clovers, sevens and lucky katakana — until
+// the button decodes the lot into one giant glowing clover.
 
 import * as THREE from 'three';
-import { tween, delay } from '../core/anim.js';
+import { tween, delay, rand, pick } from '../core/anim.js';
 import { dimLights, flashPulse, shockwave } from './helpers.js';
+import { luckyWord } from './luckyWord.js';
 
 export const sound = 'luckySymbol';
-export const duration = 9000;
+export const duration = 10500;
+
+let glyphTexCache = null;
+function codeGlyphs() {
+	if (glyphTexCache) return glyphTexCache;
+	glyphTexCache = ['☘', '7', 'ラ', 'ッ', 'キ', '★', '¥', '☘'].map((g) => {
+		const cv = document.createElement('canvas');
+		cv.width = cv.height = 64;
+		const c = cv.getContext('2d');
+		c.fillStyle = '#fff';
+		c.textAlign = 'center';
+		c.textBaseline = 'middle';
+		c.font = 'bold 46px monospace';
+		c.fillText(g, 32, 34);
+		return new THREE.CanvasTexture(cv);
+	});
+	return glyphTexCache;
+}
 
 export async function play(ctx) {
-	const { scene, machine, particles, sprites, haptics } = ctx;
-	const centre = { x: 0, y: -0.32, z: 0.55 };
+	const { scene, machine, particles, haptics, audio } = ctx;
 
-	const restore = dimLights(scene, 0.16, 900);
-	scene.fxLight.color.set(0x51d84b);
-	scene.fxLight.position.set(0, -0.2, 1.5);
-	tween(900, 'inOutQuad', (v) => (scene.fxLight.intensity = v * 6));
-	machine.setInnerGlow(0, 0x6fe06a);
-	tween(2000, 'inQuad', (v) => machine.setInnerGlow(v * 0.7, 0x6fe06a));
+	const restore = dimLights(scene, 0.1, 900);
+	scene.fxLight.color.set(0x39ff5e);
+	scene.fxLight.position.set(0, 0, 1.5);
+	tween(900, 'inOutQuad', (v) => (scene.fxLight.intensity = v * 4));
+	machine.setInnerGlow(0, 0x39ff5e);
+	tween(1600, 'inQuad', (v) => machine.setInnerGlow(v * 0.55, 0x39ff5e));
+	audio.sfx('zap', { pitch: 0.8, gain: 0.5 });
 
-	// the vortex field: tangential swirl + gentle inward pull
-	let inwardPull = 0.7;
-	const field = (x, y, z) => {
-		const dx = x - centre.x;
-		const dy = y - centre.y;
-		const r = Math.max(0.25, Math.hypot(dx, dy));
-		const tx = -dy / r;
-		const ty = dx / r;
-		const swirl = 2.6 / r;
-		return [
-			tx * swirl - (dx / r) * inwardPull,
-			ty * swirl - (dy / r) * inwardPull,
-			(centre.z - z) * 0.5
-		];
-	};
-
-	const vortex = particles.emitter({
-		texture: sprites.clover,
-		count: 240,
-		emitRate: 60,
-		origin: new THREE.Vector3(centre.x, centre.y, centre.z),
-		originSpread: 2.4,
-		speed: [0.1, 0.5],
-		gravity: new THREE.Vector3(0, 0, 0),
-		drag: 0.99,
-		life: [3.5, 5.5],
-		size: [0.11, 0.2],
-		colors: [0x51d84b, 0x8af284, 0x2fae4a],
-		spin: [-4, 4],
-		fadeIn: 0.15,
-		field
+	// ---- code rain: each column is an emitter whose origin plummets, leaving
+	// a fading trail of glyphs behind it — pure Matrix, lounge edition
+	const texes = codeGlyphs();
+	const columns = [];
+	for (let i = 0; i < 14; i++) {
+		const origin = new THREE.Vector3(rand(-2.3, 2.3), rand(1.6, 4), rand(-0.35, 0.9));
+		columns.push({
+			origin,
+			speed: rand(2.2, 4.2),
+			emitter: particles.emitter({
+				texture: pick(texes),
+				count: 40,
+				emitRate: rand(16, 26),
+				origin,
+				originSpread: 0.02,
+				speed: [0, 0.05],
+				gravity: new THREE.Vector3(0, 0, 0),
+				life: [0.7, 1.3],
+				size: [0.09, 0.15],
+				colors: [0x39ff5e, 0x9dffb0, 0x1f9e3d, 0xeafff0],
+				fadeIn: 0.05
+			})
+		});
+	}
+	let speedMul = 1;
+	const stopRain = scene.addUpdatable((dt) => {
+		for (const col of columns) {
+			col.origin.y -= col.speed * speedMul * dt;
+			if (col.origin.y < -2.2) {
+				col.origin.set(rand(-2.3, 2.3), rand(2, 3.6), rand(-0.35, 0.9));
+			}
+		}
 	});
-	const motes = particles.emitter({
-		texture: sprites.softDot,
-		count: 300,
-		emitRate: 80,
-		origin: new THREE.Vector3(centre.x, centre.y, centre.z),
-		originSpread: 2.6,
-		speed: [0.05, 0.3],
-		gravity: new THREE.Vector3(0, 0, 0),
-		drag: 0.99,
-		life: [2, 4],
-		size: [0.01, 0.04],
-		colors: [0x8af284, 0xd8ffd0],
-		fadeIn: 0.2,
-		field
+	haptics.vibrate(25);
+
+	await delay(4200);
+
+	// the code compiles… faster and faster
+	speedMul = 2.4;
+	machine.setInnerGlow(0.85, 0x39ff5e);
+	haptics.vibrate([20, 30, 20, 30, 80]);
+	await delay(1400);
+
+	// ---- decoded: the rain resolves into one giant emerald clover
+	for (const col of columns) col.emitter.stop();
+	stopRain();
+	scene.shake(0.4);
+	audio.sfx('zap', { pitch: 1.3, gain: 0.7 });
+	shockwave(scene.scene, new THREE.Vector3(0, -0.32, 0.3), { color: 0x39ff5e, maxScale: 5 });
+	// duck the green blaze so the clover motes read against the dark
+	tween(600, 'outQuad', (v) => {
+		machine.setInnerGlow(0.85 - v * 0.65, 0x39ff5e);
+		scene.fxLight.intensity = 4 * (1 - v * 0.7);
 	});
-
-	haptics.vibrate(40);
-	await delay(4600);
-
-	// ---- the button drinks the vortex
-	inwardPull = 9; // everything spirals in hard
-	haptics.vibrate([30, 40, 30, 40, 140]);
-	await delay(900);
-	vortex.stop();
-	motes.stop();
-	scene.shake(0.5);
-	shockwave(scene.scene, new THREE.Vector3(centre.x, centre.y, 0.3), { color: 0x51d84b, maxScale: 5 });
-	particles.burst({
-		texture: sprites.clover,
-		count: 40,
-		origin: new THREE.Vector3(centre.x, centre.y, 0.4),
-		direction: new THREE.Vector3(0, 0.2, 1),
-		cone: 2.1,
-		speed: [1.5, 4.5],
-		gravity: new THREE.Vector3(0, -0.8, 0),
-		life: [1.2, 2.2],
-		size: [0.1, 0.22],
-		colors: [0x51d84b, 0x8af284],
-		spin: [-4, 4]
+	await luckyWord(ctx, {
+		text: '☘',
+		color: 0x39ff5e,
+		colorB: 0x9dffb0,
+		width: 2.6,
+		y: 0.9,
+		gather: 1300,
+		hold: 1100,
+		strip: false // a strip behind a clover just looks like a lost road sign
 	});
 	await flashPulse(machine, 1, 80, 850, 0x8af284);
 
 	tween(800, 'outQuad', (v) => {
-		scene.fxLight.intensity = 6 * (1 - v);
-		machine.setInnerGlow(0.7 * (1 - v), 0x6fe06a);
+		scene.fxLight.intensity = 4 * (1 - v);
+		machine.setInnerGlow(0.85 * (1 - v), 0x39ff5e);
 	});
 	await restore(1000);
 }
