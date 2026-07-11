@@ -1,0 +1,27 @@
+// A short, witty postscript for each effect, shown as the screen returns.
+// Keys must match the director's effect registry — there's a test for that.
+
+export const QUIPS: Record<string, readonly [string, string]> = {
+	powerSurge: ['FULLY', 'CHARGED'],
+	spinUp: ['RIGHT ROUND,', 'BABY'],
+	runeCircle: ['THE RUNES', 'APPROVE'],
+	portalDrop: ['MIND', 'THE GAP'],
+	cloudTunnel: ['WHAT A', 'RIDE!'],
+	starBurst: ['WRITTEN IN', 'THE STARS'],
+	goldRush: ['KA-CHING!', ''],
+	cloverVortex: ['THERE IS', 'NO SPOON'],
+	aurora: ['OOOH,', 'PRETTY'],
+	fireworks: ['THE CROWD', 'GOES WILD'],
+	clockworkOverdrive: ['RIGHT', 'ON TIME'],
+	fireflies: ['THEY SPELLED IT,', 'NOT US'],
+	rainbow: ['ALL THE', 'WAY!'],
+	cosmicDrift: ['WISH', 'GRANTED'],
+	diceStorm: ['SIXES.', 'ALWAYS SIXES.'],
+	discoFever: ["STAYIN'", 'ALIVE'],
+	ufoAbduction: ['TOO LUCKY', 'TO ABDUCT'],
+	pinball: ['NOM NOM', 'MULTIBALL'],
+	cardCyclone: ['READ ’EM', 'AND WEEP'],
+	horseshoeToss: ['RINGER!', ''],
+	makeItRain: ['FORECAST:', 'MONEY'],
+	slotArm: ['777.', 'HOUSE PAYS.']
+};
