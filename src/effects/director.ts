@@ -23,6 +23,9 @@ import * as cardCyclone from './cardCyclone';
 import * as horseshoeToss from './horseshoeToss';
 import * as makeItRain from './makeItRain';
 import * as slotArm from './slotArm';
+import * as solarEclipse from './solarEclipse';
+import * as genieOfTheMachine from './genieOfTheMachine';
+import * as champagneSalute from './champagneSalute';
 import * as gentleGlow from './gentleGlow';
 import type { EffectContext, EffectModule } from '../types';
 
@@ -49,6 +52,9 @@ const EFFECTS: Record<string, EffectModule> = {
 	horseshoeToss,
 	makeItRain,
 	slotArm,
+	solarEclipse,
+	genieOfTheMachine,
+	champagneSalute,
 };
 
 export class Director {
@@ -79,7 +85,7 @@ export class Director {
 			}
 			this.index = 0;
 		}
-		console.log('Now playing: ', this.bag[this.index]);
+		if (import.meta.env.DEV) console.log('Now playing: ', this.bag[this.index]);
 		return this.bag[this.index++];
 	}
 
@@ -99,6 +105,10 @@ export class Director {
 			await effect.play(this.ctx);
 		} catch (err) {
 			console.error(`Effect ${name} failed:`, err);
+			// a crashed effect can leave the iris open, glows lit and loops running
+			this.ctx.machine.resetToIdle();
+			this.ctx.audio.stopAllLoops();
+			this.ctx.lightning.clear();
 		} finally {
 			this.ctx.machine.mechSpeed = 1;
 			this.running = false;

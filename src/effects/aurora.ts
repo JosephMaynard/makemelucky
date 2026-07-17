@@ -3,11 +3,12 @@
 
 import * as THREE from 'three';
 import { tween, delay } from '../core/anim';
-import { dimLights } from './helpers';
+import { dimLights, flashPulse } from './helpers';
+import { luckyWord } from './luckyWord';
 import type { EffectContext } from '../types';
 
 export const sound = 'rimLight';
-export const duration = 6650;
+export const duration = 8400;
 
 const VERT = /* glsl */ `
 	uniform float uTime;
@@ -103,11 +104,43 @@ export async function play(ctx: EffectContext): Promise<void> {
 	machine.setInnerGlow(0, 0x46f0b4);
 	tween(1700, 'inOutQuad', (v) => machine.setInnerGlow(v * 0.5, 0x46f0b4));
 
-	// fade the curtains in, let them dance, fade out
+	// fade the curtains in, let them dance
 	await Promise.all(
 		ribbons.map((r, i) => tween(1000 + i * 210, 'inOutQuad', (v) => (r.material.uniforms.uAlpha.value = v * 0.75)))
 	);
-	await delay(2900);
+	await delay(2100);
+
+	// the crescendo: the whole sky surges once — bright, then breathless
+	ctx.audio.sfx('chime', { pitch: 0.75, gain: 0.9 });
+	scene.shake(0.18); // barely a tremor; this one stays serene
+	haptics.vibrate(20);
+	tween(900, 'inOutQuad', (v) => {
+		const surge = 0.75 + Math.sin(v * Math.PI) * 0.25;
+		for (const r of ribbons) r.material.uniforms.uAlpha.value = surge;
+		machine.setInnerGlow(0.5 + Math.sin(v * Math.PI) * 0.4, 0x46f0b4);
+	});
+	// a slow soft bloom of motes released at once, like a breath let out
+	particles.burst({
+		texture: sprites.softDot,
+		count: 90,
+		origin: new THREE.Vector3(0, 1.2, -0.2),
+		originSpread: 2.6,
+		speed: [0.05, 0.25],
+		life: [1.6, 2.8],
+		size: [0.01, 0.04],
+		colors: [0x8ff0ff, 0x46f0b4, 0xbf9aff],
+		fadeIn: 0.35
+	});
+	flashPulse(machine, 0.45, 260, 900, 0x46f0b4); // a glow swell, not a bang
+	await luckyWord(ctx, {
+		text: 'SERENELY LUCKY',
+		color: 0x46f0b4,
+		colorB: 0xbf9aff,
+		y: -1.1,
+		gather: 900,
+		hold: 1100,
+		scatter: 600
+	});
 
 	motes.stop();
 	await Promise.all(
