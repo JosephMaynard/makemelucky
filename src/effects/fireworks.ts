@@ -168,7 +168,9 @@ async function launchRocket(ctx: EffectContext, x: number, apexY: number, palett
  *  bottom-middle up BOTH sides at once, meeting at the top. */
 async function bridgeRun(ctx: EffectContext) {
 	const { particles, sprites, haptics, audio } = ctx;
-	const R = 1.42;
+	// the fountains sit ON the machine — in the seam between the pale outer
+	// band and the dark star-map band — not floating off the rim
+	const R = 1.02;
 	const CX = 0;
 	const CY = -0.32;
 	const spray = (th: number) => {
@@ -176,24 +178,24 @@ async function bridgeRun(ctx: EffectContext) {
 		const dir = new THREE.Vector3(Math.cos(th), Math.sin(th), 0.22).normalize();
 		particles.burst({
 			texture: sprites.spark,
-			count: 24,
+			count: 40,
 			origin: p,
 			direction: dir,
 			cone: 0.32,
-			speed: [1.4, 3],
+			speed: [1.8, 3.6],
 			gravity: new THREE.Vector3(0, -1.6, 0),
 			life: [0.55, 1.1],
-			size: [0.045, 0.1],
+			size: [0.05, 0.12],
 			colors: [0xffd27a, 0xfff3cf, 0xffffff]
 		});
 		// a hot core at the muzzle so the racing point itself reads
 		particles.burst({
 			texture: sprites.softDot,
-			count: 3,
+			count: 5,
 			origin: p.clone(),
 			speed: [0.05, 0.2],
 			life: [0.2, 0.35],
-			size: [0.14, 0.2],
+			size: [0.16, 0.24],
 			colors: [0xfff3cf, 0xffffff]
 		});
 	};

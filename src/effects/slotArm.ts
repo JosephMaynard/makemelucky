@@ -5,7 +5,59 @@
 import * as THREE from 'three';
 import { tween, delay } from '../core/anim';
 import { dimLights, flashPulse, shockwave } from './helpers';
-import { stripTexture } from './luckyWord';
+
+// Each 7 lands in its own casino reel window: deep maroon glass in a chunky
+// gold bezel with corner studs — one shared texture, three planes.
+let reelWinTexCache: THREE.CanvasTexture | null = null;
+function reelWindowTexture(): THREE.CanvasTexture {
+	if (reelWinTexCache) return reelWinTexCache;
+	const cv = document.createElement('canvas');
+	cv.width = 256;
+	cv.height = 296;
+	const c = cv.getContext('2d')!;
+	const rr = (inset: number, r: number) => {
+		c.beginPath();
+		c.roundRect(inset, inset, 256 - inset * 2, 296 - inset * 2, r);
+	};
+	// deep maroon glass
+	const glass = c.createLinearGradient(0, 0, 0, 296);
+	glass.addColorStop(0, '#31070f');
+	glass.addColorStop(0.5, '#0c0105');
+	glass.addColorStop(1, '#20040b');
+	c.fillStyle = glass;
+	rr(10, 34);
+	c.fill();
+	// glass sheen across the top
+	const sheen = c.createLinearGradient(0, 10, 0, 130);
+	sheen.addColorStop(0, 'rgba(255,255,255,0.13)');
+	sheen.addColorStop(1, 'rgba(255,255,255,0)');
+	c.fillStyle = sheen;
+	rr(10, 34);
+	c.fill();
+	// chunky gold bezel
+	const gold = c.createLinearGradient(0, 0, 0, 296);
+	gold.addColorStop(0, '#f6e2a4');
+	gold.addColorStop(0.45, '#caa254');
+	gold.addColorStop(1, '#8a6a26');
+	c.strokeStyle = gold;
+	c.lineWidth = 13;
+	rr(10, 34);
+	c.stroke();
+	// inner hairline
+	c.strokeStyle = 'rgba(240,212,136,0.6)';
+	c.lineWidth = 3;
+	rr(26, 22);
+	c.stroke();
+	// corner studs
+	c.fillStyle = '#f2d488';
+	for (const [x, y] of [[30, 30], [226, 30], [30, 266], [226, 266]] as const) {
+		c.beginPath();
+		c.arc(x, y, 6, 0, Math.PI * 2);
+		c.fill();
+	}
+	reelWinTexCache = new THREE.CanvasTexture(cv);
+	return reelWinTexCache;
+}
 import type { EffectContext } from '../types';
 
 export const sound = 'spinningRim';
@@ -56,9 +108,10 @@ export async function play(ctx: EffectContext): Promise<void> {
 	machine.openClamps(420);
 	audio.sfx('clack');
 	haptics.vibrate([40, 40, 90]);
-	// swings INWARD across the face — outward carries the knob off-screen
-	await tween(480, 'outCubic', (v) => (lever.rotation.z = v * 2.05));
-	tween(1500, 'outElastic', (v) => (lever.rotation.z = 2.05 * (1 - v))); // wobble home
+	// hauls TOWARD the player — the knob arcs out of the screen and down past
+	// the pivot, like a real bandit arm, then springs back over-centre
+	await tween(480, 'outCubic', (v) => (lever.rotation.x = v * 2.3));
+	tween(1500, 'outElastic', (v) => (lever.rotation.x = 2.3 * (1 - v))); // wobble home
 
 	// ---- the reel: accelerate → hold → ratcheting decel, clicks home at z=0.
 	// While it spins, the WIN LINE fills in — a smoked-glass box across the
@@ -100,27 +153,34 @@ export async function play(ctx: EffectContext): Promise<void> {
 		});
 	});
 
-	// the win-line box fades in across the middle while the reel is turning
-	const stripGeo = new THREE.PlaneGeometry(2.5, 0.95);
-	const stripMat = new THREE.MeshBasicMaterial({
-		map: stripTexture(),
-		transparent: true,
-		opacity: 0,
-		depthTest: false,
-		depthWrite: false
-	});
-	const stripBox = new THREE.Mesh(stripGeo, stripMat);
-	stripBox.renderOrder = 9;
-	stripBox.position.set(0, -0.1, 1.3);
-	scene.scene.add(stripBox);
-	tween(400, 'outQuad', (v) => {
-		stripMat.opacity = v * 0.78;
-		stripBox.scale.setScalar(1.3 - 0.3 * v);
+	// three empty reel windows tick on across the payline while the reel turns
+	const winGeo = new THREE.PlaneGeometry(0.66, 0.76);
+	const slots = [-0.72, 0, 0.72];
+	const windows = slots.map((x, i) => {
+		const m = new THREE.MeshBasicMaterial({
+			map: reelWindowTexture(),
+			transparent: true,
+			opacity: 0,
+			depthTest: false,
+			depthWrite: false
+		});
+		const win = new THREE.Mesh(winGeo, m);
+		win.renderOrder = 9;
+		win.position.set(x, -0.1, 1.28);
+		scene.scene.add(win);
+		void (async () => {
+			await delay(120 + i * 110);
+			audio.sfx('tick', { pitch: 1.4 + i * 0.2, gain: 0.35 });
+			await tween(380, 'outBack', (v) => {
+				m.opacity = Math.min(1, v) * 0.96;
+				win.scale.setScalar(1.35 - 0.35 * v);
+			});
+		})();
+		return win;
 	});
 
-	// three golden 7s pop out of the button into the box MID-SPIN
+	// three golden 7s pop out of the button into their windows MID-SPIN
 	const sevens: THREE.Sprite[] = [];
-	const slots = [-0.72, 0, 0.72];
 	for (let i = 0; i < 3; i++) {
 		await delay(i === 0 ? 900 : 950);
 		audio.sfx('ding', { pitch: 1 + i * 0.15 });
@@ -179,17 +239,16 @@ export async function play(ctx: EffectContext): Promise<void> {
 		colors: [0xffffff, 0xffe9ad]
 	});
 	await flashPulse(machine, 0.85, 90, 750, 0xffe9ad);
-	// the win line drifts up and melts away, the box growing out with it
-	tween(650, 'inQuad', (v) => {
-		stripMat.opacity = 0.78 * (1 - v);
-		stripBox.scale.setScalar(1 + 0.3 * v);
-	});
+	// the payline drifts up and melts away, each 7 rising with its window
 	await Promise.all(
 		sevens.map((seven, i) => {
 			const fy = seven.position.y;
+			const win = windows[i];
 			return tween(550 + i * 90, 'inQuad', (v) => {
 				seven.position.y = fy + v * 0.5;
 				seven.material.opacity = 1 - v;
+				win.position.y = -0.1 + v * 0.5;
+				win.material.opacity = 0.96 * (1 - v);
 			});
 		})
 	);
@@ -197,9 +256,11 @@ export async function play(ctx: EffectContext): Promise<void> {
 		scene.scene.remove(seven);
 		seven.material.dispose();
 	}
-	scene.scene.remove(stripBox);
-	stripGeo.dispose();
-	stripMat.dispose();
+	for (const win of windows) {
+		scene.scene.remove(win);
+		win.material.dispose();
+	}
+	winGeo.dispose(); // window texture is cached module-wide, keep it
 	await machine.closeClamps(450);
 
 	// ---- the lever slides back out to the right

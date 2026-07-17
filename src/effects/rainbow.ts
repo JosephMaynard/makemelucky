@@ -116,11 +116,16 @@ export async function play(ctx: EffectContext): Promise<void> {
 		roughness: 0.24,
 		envMapIntensity: 1.7,
 		emissive: 0x7a5c1e, // keeps the shadowed faces golden, not black blobs
-		emissiveIntensity: 0.55
+		emissiveIntensity: 0.55,
+		// transparent (at full opacity) moves the coins into the transparent
+		// pass — opaque meshes ALWAYS draw before the arc, whatever their
+		// renderOrder, and the depth-ignoring rainbow painted over them
+		transparent: true
 	});
 	const popCoins: THREE.Mesh[] = [];
 	for (let i = 0; i < 22; i++) {
 		const coin = new THREE.Mesh(coinGeo, coinMat);
+		coin.renderOrder = 10; // draw after the arc — coins pop IN FRONT of the rainbow
 		coin.visible = false;
 		coin.userData = {
 			vel: new THREE.Vector3(),

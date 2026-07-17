@@ -7,7 +7,7 @@ import { dimLights } from './helpers';
 import type { EffectContext } from '../types';
 
 export const sound = 'rimLight';
-export const duration = 9500;
+export const duration = 6650;
 
 const VERT = /* glsl */ `
 	uniform float uTime;
@@ -101,17 +101,17 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	haptics.vibrate(25);
 	machine.setInnerGlow(0, 0x46f0b4);
-	tween(2400, 'inOutQuad', (v) => machine.setInnerGlow(v * 0.5, 0x46f0b4));
+	tween(1700, 'inOutQuad', (v) => machine.setInnerGlow(v * 0.5, 0x46f0b4));
 
 	// fade the curtains in, let them dance, fade out
 	await Promise.all(
-		ribbons.map((r, i) => tween(1400 + i * 300, 'inOutQuad', (v) => (r.material.uniforms.uAlpha.value = v * 0.75)))
+		ribbons.map((r, i) => tween(1000 + i * 210, 'inOutQuad', (v) => (r.material.uniforms.uAlpha.value = v * 0.75)))
 	);
-	await delay(4300);
+	await delay(2900);
 
 	motes.stop();
 	await Promise.all(
-		ribbons.map((r, i) => tween(1200 + i * 200, 'inOutQuad', (v) => (r.material.uniforms.uAlpha.value = 0.75 * (1 - v))))
+		ribbons.map((r, i) => tween(850 + i * 140, 'inOutQuad', (v) => (r.material.uniforms.uAlpha.value = 0.75 * (1 - v))))
 	);
 	stopWave();
 	for (const r of ribbons) {

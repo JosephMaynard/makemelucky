@@ -178,11 +178,13 @@ function drawTriquetra(
 	y: number,
 	radius: number,
 	lineWidth: number,
-	style: string | CanvasGradient
+	style: string | CanvasGradient,
+	rotation = 0
 ) {
 	// Three interlaced vesica arcs — the classic trinity knot.
 	ctx.save();
 	ctx.translate(x, y);
+	ctx.rotate(rotation);
 	ctx.strokeStyle = style;
 	ctx.lineWidth = lineWidth;
 	ctx.lineCap = 'round';
@@ -305,16 +307,17 @@ export function createMachineFaceTextures(size = 2048): MachineFaceTextures {
 			H.stroke();
 			H.restore();
 		}
-		// triquetra medallion stamps over the chain
+		// triquetra medallion stamps over the chain — every knot rotated with its
+		// place on the ring, so they all lead the same way going clockwise
 		const nm = 12;
 		for (let i = 0; i < nm; i++) {
 			const ang = ((i + 0.5) / nm) * Math.PI * 2;
 			const x = c + Math.cos(ang) * rMid;
 			const y = c + Math.sin(ang) * rMid;
-			drawTriquetra(A, x, y, px(0.068), px(0.02), metalGrad(A, x - 50, y - 50, x + 50, y + 50, GOLD));
+			drawTriquetra(A, x, y, px(0.068), px(0.02), metalGrad(A, x - 50, y - 50, x + 50, y + 50, GOLD), ang + Math.PI);
 			H.save();
 			H.scale(hs, hs);
-			drawTriquetra(H, x, y, px(0.068), px(0.02), '#ffffff');
+			drawTriquetra(H, x, y, px(0.068), px(0.02), '#ffffff', ang + Math.PI);
 			H.restore();
 		}
 	}
@@ -371,10 +374,10 @@ export function createMachineFaceTextures(size = 2048): MachineFaceTextures {
 			const ang = (i / n) * Math.PI * 2 + Math.PI / n;
 			const x = c + Math.cos(ang) * rMid;
 			const y = c + Math.sin(ang) * rMid;
-			drawTriquetra(A, x, y, px(0.055), px(0.014), metalGrad(A, x - 45, y - 45, x + 45, y + 45, GOLD));
+			drawTriquetra(A, x, y, px(0.055), px(0.014), metalGrad(A, x - 45, y - 45, x + 45, y + 45, GOLD), ang + Math.PI);
 			H.save();
 			H.scale(hs, hs);
-			drawTriquetra(H, x, y, px(0.055), px(0.014), '#e8e8e8');
+			drawTriquetra(H, x, y, px(0.055), px(0.014), '#e8e8e8', ang + Math.PI);
 			H.restore();
 		}
 		// silver rivet studs between them
@@ -416,52 +419,54 @@ export function createMachineFaceTextures(size = 2048): MachineFaceTextures {
 		}
 	}
 
-	// ============ ENGINE-TURNED GUILLOCHÉ on the inner half of the blue band —
-	// two offset rows of overlapping circles, the classic Art-Deco watch finish
+	// ============ STAR MAP on the blue band — little gold and silver stars
+	// scattered like the night-sky disc of an expensive perpetual calendar
 	{
-		for (const [rMid, n, phase] of [[0.596, 64, 0], [0.628, 64, 0.5]]) {
-			const rC = px(0.026);
-			for (let i = 0; i < n; i++) {
-				const ang = ((i + phase) / n) * Math.PI * 2;
-				const x = c + Math.cos(ang) * px(rMid);
-				const y = c + Math.sin(ang) * px(rMid);
-				A.strokeStyle = 'rgba(240,212,136,0.22)';
-				A.lineWidth = px(0.0035);
-				A.beginPath();
-				A.arc(x, y, rC, 0, Math.PI * 2);
-				A.stroke();
-				H.strokeStyle = 'rgba(255,255,255,0.3)';
-				H.lineWidth = px(0.0035) * hs;
+		const star = (x: number, y: number, r: number, color: string, rot: number) => {
+			A.save();
+			A.translate(x, y);
+			A.rotate(rot);
+			A.fillStyle = color;
+			A.beginPath();
+			for (let k = 0; k < 8; k++) {
+				const rr = k % 2 ? r * 0.36 : r;
+				const a = (k / 8) * Math.PI * 2;
+				if (k === 0) A.moveTo(rr, 0);
+				else A.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+			}
+			A.closePath();
+			A.fill();
+			A.restore();
+		};
+		const R0 = 0.585;
+		const R1 = 0.752;
+		const bandR = () => Math.sqrt(R0 * R0 + (R1 * R1 - R0 * R0) * Math.random());
+		for (let i = 0; i < 105; i++) {
+			const ang = Math.random() * Math.PI * 2;
+			const rf = bandR();
+			const x = c + Math.cos(ang) * px(rf);
+			const y = c + Math.sin(ang) * px(rf);
+			const goldStar = Math.random() < 0.55;
+			const a = 0.35 + Math.random() * 0.55;
+			const r = px(0.0035 + Math.pow(Math.random(), 2.2) * 0.007);
+			star(x, y, r, goldStar ? `rgba(240,212,136,${a})` : `rgba(216,226,236,${a})`, Math.random() * Math.PI);
+			if (r > px(0.007)) {
+				// the brightest stars get a raised sparkle in the relief
+				H.fillStyle = 'rgba(255,255,255,0.5)';
 				H.beginPath();
-				H.arc(x * hs, y * hs, rC * hs, 0, Math.PI * 2);
-				H.stroke();
+				H.arc(x * hs, y * hs, px(0.002) * hs, 0, Math.PI * 2);
+				H.fill();
 			}
 		}
-		// gold micro-rivets punctuating the lane
-		for (let i = 0; i < 24; i++) {
-			const ang = (i / 24) * Math.PI * 2 + Math.PI / 24;
-			const x = c + Math.cos(ang) * px(0.612);
-			const y = c + Math.sin(ang) * px(0.612);
-			const g = A.createRadialGradient(x - 2, y - 2, 0, x, y, px(0.009));
-			g.addColorStop(0, '#fff3cf');
-			g.addColorStop(0.5, '#c9a959');
-			g.addColorStop(1, '#6a5220');
-			A.fillStyle = g;
+		// a dust of pin-prick stars between them
+		for (let i = 0; i < 130; i++) {
+			const ang = Math.random() * Math.PI * 2;
+			const rf = bandR();
+			const a = 0.2 + Math.random() * 0.45;
+			A.fillStyle = Math.random() < 0.5 ? `rgba(240,212,136,${a})` : `rgba(216,226,236,${a})`;
 			A.beginPath();
-			A.arc(x, y, px(0.008), 0, Math.PI * 2);
+			A.arc(c + Math.cos(ang) * px(rf), c + Math.sin(ang) * px(rf), px(0.0012 + Math.random() * 0.0014), 0, Math.PI * 2);
 			A.fill();
-			H.fillStyle = '#fff';
-			H.beginPath();
-			H.arc(x * hs, y * hs, px(0.007) * hs, 0, Math.PI * 2);
-			H.fill();
-		}
-		// fine silver rails bracketing the engine-turned lane
-		for (const rf of [0.582, 0.649]) {
-			A.strokeStyle = 'rgba(204,214,222,0.45)';
-			A.lineWidth = px(0.004);
-			A.beginPath();
-			A.arc(c, c, px(rf), 0, Math.PI * 2);
-			A.stroke();
 		}
 	}
 
@@ -555,6 +560,47 @@ export function createMachineFaceTextures(size = 2048): MachineFaceTextures {
 
 export interface ButtonTextures {
 	map: THREE.CanvasTexture;
+	/** Wispy highlight clouds, rotated very slowly over the cap — a living ruby. */
+	sheen: THREE.CanvasTexture;
+}
+
+/** Wispy fbm cloud layer, painted small and scaled up soft — ruby inclusions. */
+function rubyClouds(size: number, seed: number): HTMLCanvasElement {
+	const n = 176;
+	const cv = makeCanvas(n);
+	const c = cv.getContext('2d')!;
+	const img = c.createImageData(n, n);
+	const d = img.data;
+	for (let y = 0; y < n; y++) {
+		for (let x = 0; x < n; x++) {
+			const v = fbm(x * 0.032, y * 0.032, 4, seed);
+			const w = fbm(x * 0.09 + 31, y * 0.09 + 57, 3, seed + 5);
+			const i = (y * n + x) * 4;
+			if (v < 0.5) {
+				// pure-crimson veins sinking into the depths (full saturation —
+				// any grey in here reads as dirt on the dome)
+				d[i] = 122;
+				d[i + 1] = 0;
+				d[i + 2] = 26;
+				d[i + 3] = Math.min(1, (0.5 - v) * 2.2) * 115;
+			} else {
+				// rosy inclusions catching the light
+				d[i] = 255;
+				d[i + 1] = 96;
+				d[i + 2] = 112;
+				d[i + 3] = Math.min(1, (v - 0.5) * 1.9) * 80;
+			}
+			// fine second-octave shimmer
+			d[i + 3] = Math.min(255, d[i + 3] + Math.max(0, w - 0.62) * 70);
+		}
+	}
+	c.putImageData(img, 0, 0);
+	const out = makeCanvas(size);
+	const o = out.getContext('2d')!;
+	o.imageSmoothingEnabled = true;
+	o.imageSmoothingQuality = 'high';
+	o.drawImage(cv, 0, 0, size, size);
+	return out;
 }
 
 export function createButtonTextures(size = 1024): ButtonTextures {
@@ -562,12 +608,14 @@ export function createButtonTextures(size = 1024): ButtonTextures {
 	const ctx = cap.getContext('2d')!;
 	const cx = size / 2;
 	const g = ctx.createRadialGradient(cx - size * 0.12, cx - size * 0.16, size * 0.05, cx, cx, cx);
-	g.addColorStop(0, '#e8402c');
-	g.addColorStop(0.42, '#c22318');
-	g.addColorStop(0.8, '#8f180e');
-	g.addColorStop(1, '#5f0f08');
+	g.addColorStop(0, '#ef4a48');
+	g.addColorStop(0.42, '#bd1a28');
+	g.addColorStop(0.8, '#870e1c');
+	g.addColorStop(1, '#4e0812');
 	ctx.fillStyle = g;
 	ctx.fillRect(0, 0, size, size);
+	// deep ruby clouds — mineral depths painted under the label
+	ctx.drawImage(rubyClouds(size, 11), 0, 0);
 	// subtle enamel noise
 	for (let i = 0; i < 9000; i++) {
 		const x = Math.random() * size;
@@ -602,7 +650,36 @@ export function createButtonTextures(size = 1024): ButtonTextures {
 	ctx.font = `700 ${size * 0.175}px 'Roboto Slab', Georgia, serif`;
 	ctx.fillText('Lucky', cx, cx + size * 0.135);
 
-	return { map: toTexture(cap) };
+	// the sheen layer: rosy light-cloud wisps that drift over the dome. It is a
+	// separate texture so it can rotate slowly without taking the label with it.
+	const sn = 176;
+	const scv = makeCanvas(sn);
+	const sc = scv.getContext('2d')!;
+	const simg = sc.createImageData(sn, sn);
+	const sd = simg.data;
+	const half = (sn - 1) / 2;
+	for (let y = 0; y < sn; y++) {
+		for (let x = 0; x < sn; x++) {
+			const v = fbm(x * 0.06 + 83, y * 0.06 + 19, 4, 41);
+			const dist = Math.hypot(x - half, y - half) / half;
+			const edge = Math.max(0, Math.min(1, (0.9 - dist) / 0.35)); // fade before the rim
+			const i = (y * sn + x) * 4;
+			sd[i] = 255;
+			sd[i + 1] = 205;
+			sd[i + 2] = 210;
+			sd[i + 3] = Math.min(1, Math.max(0, v - 0.52) * 2.1) * edge * 120;
+		}
+	}
+	sc.putImageData(simg, 0, 0);
+	const sheenCv = makeCanvas(512);
+	const so = sheenCv.getContext('2d')!;
+	so.imageSmoothingEnabled = true;
+	so.imageSmoothingQuality = 'high';
+	so.drawImage(scv, 0, 0, 512, 512);
+	const sheen = toTexture(sheenCv);
+	sheen.center.set(0.5, 0.5); // rotates about the dome centre
+
+	return { map: toTexture(cap), sheen };
 }
 
 /* ============================================================

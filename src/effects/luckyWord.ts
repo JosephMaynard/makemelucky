@@ -47,14 +47,7 @@ export function stripTexture(): THREE.CanvasTexture {
 	c.roundRect(24, 22, 464, 84, 34);
 	c.fill();
 	c.fill();
-	c.fill(); // stacked fills = dense core, feathered edge
-	// a gold hairline so the box reads as smoked glass, not a dim patch
-	c.filter = 'blur(0.6px)';
-	c.strokeStyle = 'rgba(240, 212, 136, 0.55)';
-	c.lineWidth = 2.5;
-	c.beginPath();
-	c.roundRect(24, 22, 464, 84, 34);
-	c.stroke();
+	c.fill(); // stacked fills = dense core, feathered edge — no border, pure smoke
 	stripTexCache = new THREE.CanvasTexture(cv);
 	return stripTexCache;
 }
@@ -97,6 +90,8 @@ export async function luckyWord(ctx: EffectContext, opts: LuckyWordOptions = {})
 
 	const positions = new Float32Array(n * 3);
 	const colors = new Float32Array(n * 3);
+	const sizes = new Float32Array(n);
+	const angles = new Float32Array(n);
 	const start = new Float32Array(n * 3);
 	const target = new Float32Array(n * 3);
 	const stagger = new Float32Array(n);
@@ -111,6 +106,9 @@ export async function luckyWord(ctx: EffectContext, opts: LuckyWordOptions = {})
 		start[i * 3 + 1] = rand(-1.7, 1.6);
 		start[i * 3 + 2] = z + rand(-0.5, 0.5);
 		stagger[i] = rand(0, 0.35);
+		// a loose scattering of sizes and spins so the stars read hand-strewn
+		sizes[i] = 0.05 + Math.pow(Math.random(), 1.8) * 0.065;
+		angles[i] = rand(0, Math.PI * 2);
 		const c = Math.random() < 0.5 ? cA : cB;
 		colors[i * 3] = c.r;
 		colors[i * 3 + 1] = c.g;
@@ -122,16 +120,48 @@ export async function luckyWord(ctx: EffectContext, opts: LuckyWordOptions = {})
 	const geo = new THREE.BufferGeometry();
 	geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 	geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-	const mat = new THREE.PointsMaterial({
-		map: sprites.star4,
-		size: 0.072,
+	geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+	geo.setAttribute('aAngle', new THREE.BufferAttribute(angles, 1));
+	// PointsMaterial draws every star at one size, bolt upright — a custom
+	// shader lets each mote keep its own size and rotation
+	const mat = new THREE.ShaderMaterial({
+		uniforms: {
+			uMap: { value: sprites.star4 },
+			uOpacity: { value: 0 },
+			uScale: { value: scene.renderer.domElement.height * 0.5 }
+		},
+		vertexShader: /* glsl */ `
+			attribute float aSize;
+			attribute float aAngle;
+			varying vec3 vColor;
+			varying float vAngle;
+			uniform float uScale;
+			void main() {
+				vColor = color;
+				vAngle = aAngle;
+				vec4 mv = modelViewMatrix * vec4(position, 1.0);
+				gl_PointSize = aSize * uScale / -mv.z;
+				gl_Position = projectionMatrix * mv;
+			}
+		`,
+		fragmentShader: /* glsl */ `
+			uniform sampler2D uMap;
+			uniform float uOpacity;
+			varying vec3 vColor;
+			varying float vAngle;
+			void main() {
+				vec2 p = gl_PointCoord - 0.5;
+				float s = sin(vAngle);
+				float c = cos(vAngle);
+				vec4 tex = texture2D(uMap, vec2(c * p.x - s * p.y, s * p.x + c * p.y) + 0.5);
+				gl_FragColor = vec4(vColor * tex.rgb, tex.a * uOpacity);
+			}
+		`,
 		vertexColors: true,
 		transparent: true,
-		opacity: 0,
 		blending: THREE.AdditiveBlending,
 		depthWrite: false,
-		depthTest: false,
-		sizeAttenuation: true
+		depthTest: false
 	});
 	const points = new THREE.Points(geo, mat);
 	points.renderOrder = 9; // the word floats over everything
@@ -139,7 +169,7 @@ export async function luckyWord(ctx: EffectContext, opts: LuckyWordOptions = {})
 
 	// the backdrop strip: starts big and invisible, shrinks + fades in as the
 	// letters land, and leaves the same way
-	const stripGeo = new THREE.PlaneGeometry(512 * scale * 1.06, Math.max(0.62, 160 * scale * 0.78));
+	const stripGeo = new THREE.PlaneGeometry(512 * scale * 1.06, Math.max(0.74, 160 * scale * 0.96));
 	const stripMat = new THREE.MeshBasicMaterial({
 		map: stripTexture(),
 		transparent: true,
@@ -167,13 +197,13 @@ export async function luckyWord(ctx: EffectContext, opts: LuckyWordOptions = {})
 			positions[i * 3 + 2] = start[i * 3 + 2] + (target[i * 3 + 2] - start[i * 3 + 2]) * p;
 		}
 		geo.attributes.position.needsUpdate = true;
-		// strip arrives with the last motes
-		const s = ease(Math.min(1, Math.max(0, (P - 0.5) / 0.45)));
+		// strip slips in only just before the words become readable
+		const s = ease(Math.min(1, Math.max(0, (P - 0.72) / 0.28)));
 		stripMat.opacity = 0.9 * s;
 		strip.scale.setScalar(1.35 - 0.35 * s);
 	});
 
-	tween(500, 'outQuad', (v) => (mat.opacity = v));
+	tween(500, 'outQuad', (v) => (mat.uniforms.uOpacity.value = v));
 	await tween(gather, 'linear', (v) => (P = v));
 	audio.sfx('chime', { pitch: 1.1 });
 	haptics.vibrate([15, 25, 40]);
@@ -196,9 +226,11 @@ export async function luckyWord(ctx: EffectContext, opts: LuckyWordOptions = {})
 		geo.attributes.position.needsUpdate = true;
 	});
 	await tween(scatter, 'inQuad', (v) => {
-		mat.opacity = 1 - v;
-		stripMat.opacity = 0.9 * (1 - v);
-		strip.scale.setScalar(1 + 0.35 * v);
+		mat.uniforms.uOpacity.value = 1 - v;
+		// the strip is gone almost immediately — visible only while the text is
+		const sOut = Math.min(1, v / 0.4);
+		stripMat.opacity = 0.9 * (1 - sOut);
+		strip.scale.setScalar(1 + 0.35 * sOut);
 	});
 	stopScatter();
 	scene.scene.remove(points, strip);

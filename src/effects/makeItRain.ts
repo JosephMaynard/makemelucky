@@ -8,7 +8,7 @@ import { dimLights, flashPulse } from './helpers';
 import type { EffectContext } from '../types';
 
 export const sound = 'lucky';
-export const duration = 9500;
+export const duration = 6650;
 
 /** A single pale-green Bank of Luck note, drawn once and shared by every bill. */
 function billTexture() {
@@ -120,7 +120,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	audio.sfx('swoosh');
 	haptics.vibrate([20, 40, 20]);
 	await tween(1000, 'inOutQuad', (v) => machine.setInnerGlow(v * 0.45, 0x7dd87d));
-	await delay(6000);
+	await delay(4000);
 
 	// ---- finale: the rain simply dries up — last notes flutter away and fade
 	recycling = false;
@@ -140,7 +140,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 		machine.setInnerGlow(0.45 * (1 - v), 0x7dd87d);
 		scene.fxLight.intensity = 2.4 * (1 - v);
 	});
-	await delay(600);
+	await delay(400);
 	machine.setInnerGlow(0);
 	scene.fxLight.intensity = 0;
 	await restore(900);

@@ -196,6 +196,7 @@ export class Machine {
 	outerGlow: THREE.Sprite;
 	glints: THREE.Sprite[];
 	_pressDepth: number;
+	_sheenTex: THREE.CanvasTexture;
 	_clampMode?: 'slide' | 'twist';
 	_irisDistance?: number;
 
@@ -364,7 +365,7 @@ export class Machine {
 			deco.userData.dir = quadrant.userData.dir;
 			const clampGroup = buildClamp(gold, silver, darkMetal);
 			const ang = QUADRANT_ANGLES[q];
-			clampGroup.position.set(Math.cos(ang) * R * 0.76, Math.sin(ang) * R * 0.76, 0.16);
+			clampGroup.position.set(Math.cos(ang) * R * 0.825, Math.sin(ang) * R * 0.825, 0.16);
 			clampGroup.rotation.z = ang - Math.PI / 2; // arm points inward
 			deco.add(clampGroup);
 			deco.userData.clamp = clampGroup;
@@ -409,9 +410,8 @@ export class Machine {
 		centreRing.position.z = 0.055;
 		this.mechGroup.add(centreRing);
 
-		const beadTorus = new THREE.Mesh(new THREE.TorusGeometry(R * 0.435, 0.045, 14, 72), centreGold);
-		beadTorus.position.z = 0.075;
-		this.mechGroup.add(beadTorus);
+		// (the old gold bead torus at R*0.435 is gone — the button now fills its
+		// footprint, so the cap itself is the first thing you meet from the centre)
 
 		// gold frame ring on the inner edge of the mechanism window
 		const windowFrame = new THREE.Mesh(new THREE.TorusGeometry(R * 0.478, 0.02, 10, 72), centreGold);
@@ -512,22 +512,22 @@ export class Machine {
 		this.buttonGroup = new THREE.Group();
 		this.centre.add(this.buttonGroup);
 
-		const base = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.545, 0.1, 56), gold);
+		const base = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.625, 0.1, 56), gold);
 		base.rotation.x = Math.PI / 2;
 		base.position.z = 0.09;
 		this.buttonGroup.add(base);
 
-		const trim = new THREE.Mesh(new THREE.TorusGeometry(0.512, 0.032, 14, 64), gold);
+		const trim = new THREE.Mesh(new THREE.TorusGeometry(0.592, 0.032, 14, 64), gold);
 		trim.position.z = 0.148;
 		this.buttonGroup.add(trim);
 
 		// domed red cap via lathe, planar-UV'd for the label art
 		const profile = [];
-		const capR = 0.495;
+		const capR = 0.575;
 		for (let i = 0; i <= 20; i++) {
 			const t = i / 20;
 			const r = Math.sin(t * Math.PI * 0.5) * capR;
-			const z = Math.cos(t * Math.PI * 0.5) * 0.175;
+			const z = Math.cos(t * Math.PI * 0.5) * 0.185;
 			profile.push(new THREE.Vector2(r, z));
 		}
 		const capGeo = new THREE.LatheGeometry(profile, 56);
@@ -539,18 +539,38 @@ export class Machine {
 				uv.setXY(i, pos.getX(i) / (capR * 2.15) + 0.5, -pos.getZ(i) / (capR * 2.15) + 0.5);
 			}
 		}
-		const capMat = new THREE.MeshStandardMaterial({
+		const capMat = new THREE.MeshPhysicalMaterial({
 			map: textures.button.map,
 			color: 0xffffff,
-			metalness: 0.05,
-			roughness: 0.4,
-			envMapIntensity: 0.45,
+			metalness: 0,
+			roughness: 0.3,
+			clearcoat: 0.85,
+			clearcoatRoughness: 0.28,
+			envMapIntensity: 0.55,
 			side: THREE.DoubleSide
 		});
 		this.buttonCap = new THREE.Mesh(capGeo, capMat);
 		this.buttonCap.rotation.x = Math.PI / 2;
 		this.buttonCap.position.z = 0.1;
 		this.buttonGroup.add(this.buttonCap);
+
+		// living ruby: a cloud-sheen skin over the dome whose texture creeps
+		// around imperceptibly slowly (the label stays put on the layer below)
+		this._sheenTex = textures.button.sheen;
+		const sheenMat = new THREE.MeshBasicMaterial({
+			map: this._sheenTex,
+			color: 0xff6a74,
+			transparent: true,
+			opacity: 0.4,
+			blending: THREE.AdditiveBlending,
+			depthWrite: false
+		});
+		const sheenSkin = new THREE.Mesh(capGeo, sheenMat);
+		sheenSkin.rotation.x = Math.PI / 2;
+		sheenSkin.position.z = 0.1;
+		sheenSkin.scale.setScalar(1.003); // just proud of the cap, no z-fighting
+		sheenSkin.renderOrder = 1;
+		this.buttonGroup.add(sheenSkin);
 
 		// ---------- glow sprites
 		const mkGlow = (map: THREE.Texture, scale: number, z: number, color: THREE.ColorRepresentation = 0xffffff) => {
@@ -571,7 +591,7 @@ export class Machine {
 			this.group.add(sp);
 			return sp;
 		};
-		this.innerGlow = mkGlow(sprites.softDot, 1.25, 0.2);
+		this.innerGlow = mkGlow(sprites.softDot, 1.45, 0.2);
 		this.outerGlow = mkGlow(sprites.softDot, 5.0, 0.3);
 		this.glints = [];
 		for (let i = 0; i < 5; i++) {
@@ -589,6 +609,9 @@ export class Machine {
 		// breathing
 		const breathe = 1 + Math.sin(t * 1.4) * 0.004;
 		this.group.scale.setScalar(breathe);
+		// the ruby's clouds creep around the dome, barely perceptibly
+		this._sheenTex.rotation = t * 0.02;
+		this._sheenTex.offset.x = Math.sin(t * 0.05) * 0.015;
 		// working mechanism — effects wind mechSpeed up for drama
 		for (const cog of this.cogs) {
 			cog.rotation.z += dt * cog.userData.speed * this.mechSpeed;
