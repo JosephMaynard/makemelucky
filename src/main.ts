@@ -18,6 +18,7 @@ import { ScreenPanel } from './ui/screenPanel';
 import { CharmsUI } from './ui/charmsUI';
 import { QUIPS } from './ui/quips';
 import { LuckStore } from './luck/store';
+import { initLottoPicker } from './luck/lottoPicker';
 import { AudioService } from './services/audio';
 import { Haptics } from './services/haptics';
 import { initAnalytics, track } from './services/analytics';
@@ -42,6 +43,10 @@ async function boot(): Promise<void> {
 	const screen = new ScreenPanel();
 	const charmsUI = new CharmsUI(store);
 	charmsUI.renderAll();
+
+	// the below-the-fold Luck Number Generator is self-contained; wire it up now
+	// so it works even before the WebGL scene finishes booting
+	initLottoPicker();
 
 	// wait for Roboto Slab so the canvas-painted button label uses it
 	try {

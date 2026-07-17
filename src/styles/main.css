@@ -590,6 +590,118 @@ p + p {
 	font-size: 13px;
 }
 
+/* --- Luck Number Generator --- */
+
+.lng {
+	/* --accent-h is set per-game by JS on #luck-numbers and inherits down here;
+	   the var() fallbacks below cover the pre-spin default */
+	margin-top: 20px;
+}
+.lng-controls {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	margin-bottom: 20px;
+}
+.lng-label {
+	color: var(--gold);
+	font-size: 15px;
+	font-weight: 700;
+}
+.lng-select {
+	font-family: inherit;
+	font-size: 16px;
+	color: var(--text);
+	background: linear-gradient(165deg, rgba(38, 66, 34, 0.55), rgba(10, 20, 10, 0.75));
+	border: 1.5px solid rgba(201, 169, 89, 0.5);
+	border-radius: 12px;
+	padding: 12px 14px;
+	cursor: pointer;
+	width: 100%;
+}
+.lng-select:focus-visible {
+	outline: 3px solid var(--gold-bright);
+	outline-offset: 2px;
+}
+.lng-custom {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	border: 1px solid rgba(201, 169, 89, 0.3);
+	border-radius: 14px;
+	padding: 16px 18px;
+}
+.lng-custom[hidden] {
+	display: none;
+}
+.lng-custom legend {
+	color: var(--gold);
+	font-size: 14px;
+	padding: 0 8px;
+}
+.lng-field {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	align-items: center;
+	gap: 6px 12px;
+}
+.lng-field label {
+	color: var(--text-dim);
+	font-size: 14px;
+}
+.lng-field output {
+	color: var(--gold-bright);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	min-width: 2.5ch;
+	text-align: right;
+}
+.lng-field input[type='range'] {
+	grid-column: 1 / -1;
+	width: 100%;
+	accent-color: hsl(var(--accent-h) 62% 55%);
+}
+.lng-odds {
+	color: var(--text-dim);
+	font-size: 15px;
+}
+.lng-odds #lng-chance {
+	color: var(--gold-bright);
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+.lng-spin {
+	font-family: inherit;
+	font-weight: 700;
+	font-size: 16px;
+	color: #241a05;
+	background: linear-gradient(170deg, #f0d488, #c9a959);
+	border: 1.5px solid #8f7a42;
+	border-radius: 999px;
+	padding: 13px 28px;
+	cursor: pointer;
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+	transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.lng-spin:hover:not(:disabled) {
+	transform: translateY(-1px);
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5), 0 0 16px rgba(240, 212, 136, 0.35);
+}
+.lng-spin:disabled {
+	opacity: 0.6;
+	cursor: default;
+}
+.lng-status {
+	min-height: 1.5em;
+	margin-top: 12px;
+	color: var(--gold);
+	font-size: 14px;
+	font-style: italic;
+}
+/* Orb + luck-field + ripple styling is injected from src/luck/lottoPicker.ts
+   (kept in one file with the rest of the numerological weirdness). .lng-result
+   sizing lives there too. */
+
 /* --- Promo cards --- */
 
 .promo-grid {

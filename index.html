@@ -114,6 +114,52 @@
 				<span class="share-hint">Sharing with friends earns you a Lucky Charm, naturally.</span></p>
 			</section>
 
+			<section class="content-section" id="luck-numbers">
+				<h2>Luck Number Generator</h2>
+				<p>
+					Need numbers as well as luck? This generator harvests genuine cosmic entropy — quantum foam, scheduler
+					jitter, your device's own aura — and channels Pure Universal Vibration™ into a properly random draw. Then it
+					ripples your numbers out into the universe, to make them that little bit luckier. It is, of course, exactly as
+					magical as everything else here.
+				</p>
+				<div class="lng">
+					<div class="lng-controls">
+						<label class="lng-label" for="lng-game">Choose your lottery</label>
+						<select id="lng-game" class="lng-select" aria-label="Choose lottery"></select>
+
+						<fieldset id="lng-custom" class="lng-custom" hidden>
+							<legend>Custom game settings</legend>
+							<div class="lng-field">
+								<label for="lng-numberRange">Main number range</label>
+								<input id="lng-numberRange" type="range" min="1" max="100" />
+								<output id="lng-numberRangeOut"></output>
+							</div>
+							<div class="lng-field">
+								<label for="lng-numberCount">Main number count</label>
+								<input id="lng-numberCount" type="range" min="1" max="10" />
+								<output id="lng-numberCountOut"></output>
+							</div>
+							<div class="lng-field">
+								<label for="lng-bonusRange">Bonus number range</label>
+								<input id="lng-bonusRange" type="range" min="1" max="100" />
+								<output id="lng-bonusRangeOut"></output>
+							</div>
+							<div class="lng-field">
+								<label for="lng-bonusCount">Bonus number count</label>
+								<input id="lng-bonusCount" type="range" min="0" max="10" />
+								<output id="lng-bonusCountOut"></output>
+							</div>
+						</fieldset>
+
+						<p class="lng-odds">Jackpot odds: <span id="lng-chance">–</span></p>
+					</div>
+
+					<button id="lng-spin" class="lng-spin" type="button">✨ Summon my lucky numbers</button>
+					<p id="lng-status" class="lng-status" role="status" aria-live="polite"></p>
+					<div id="lng-result" class="lng-result" aria-live="polite"></div>
+				</div>
+			</section>
+
 			<section class="content-section" id="about">
 				<h2>Does pressing a button really make you lucky?</h2>
 				<p>
