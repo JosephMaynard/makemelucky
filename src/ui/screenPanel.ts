@@ -27,13 +27,16 @@ const PRESS_AGAIN: ScreenMessage[] = [
 	['PRESS THE', 'BUTTON'],
 	['KEEP PRESSING', 'THE BUTTON'],
 	['HAVE ANOTHER', 'PRESS!'],
-	['PRESS', 'AGAIN!']
+	['PRESS', 'AGAIN!'],
+	['LUCKY NUMBERS', 'BELOW ↓'],
+	['YOUR CHARMS', 'AWAIT ↓']
 ];
 
 export class ScreenPanel {
 	el: HTMLElement;
 	panel: HTMLElement;
 	sparkle: HTMLElement;
+	live: HTMLElement | null;
 	timer: ReturnType<typeof setInterval> | null;
 	seq: number;
 
@@ -41,11 +44,12 @@ export class ScreenPanel {
 		this.el = document.getElementById('screen-text')!;
 		this.panel = document.getElementById('screen-panel')!;
 		this.sparkle = document.getElementById('screen-sparkle')!;
+		this.live = document.getElementById('screen-live'); // visually-hidden live region; the visible panel itself isn't live
 		this.timer = null;
 		this.seq = 0; // cancels stale async sequences
 	}
 
-	_render(lines: ScreenMessage | string): void {
+	_render(lines: ScreenMessage | string, announce = false): void {
 		this.panel.classList.remove('away'); // swing back if we were hidden
 		// third item, when present, is an opt-in style variant (e.g. 'giant')
 		const [l1, l2, variant] = Array.isArray(lines) ? lines : [lines, ''];
@@ -62,6 +66,8 @@ export class ScreenPanel {
 		this.sparkle.style.top = `${34 + Math.random() * 32}%`;
 		this.sparkle.style.setProperty('--spk', (0.5 + Math.random() * 0.5).toFixed(2));
 		this.sparkle.classList.add('go');
+		// only meaningful one-shot lines get announced — the idle cycle stays quiet
+		if (announce && this.live) this.live.textContent = [l1, l2].filter(Boolean).join(' ');
 	}
 
 	_stopLoop(): void {
@@ -78,32 +84,34 @@ export class ScreenPanel {
 		this.panel.classList.add('away'); // the screen retires while magic happens
 	}
 
-	/** Show items in order (interval ms apart), then keep cycling loopItems. */
+	/** Show items in order (interval ms apart), then keep cycling loopItems.
+	 *  Only the one-shot `items` are announced to screen readers — loopItems
+	 *  is the perpetual decorative idle cycle and stays silent forever. */
 	sequence(items: ScreenMessage[], loopItems: ScreenMessage[] | null = null, interval = 1360): void { // 1700 * 0.8 — +20% faster pacing
 		this.seq++;
 		const mySeq = this.seq;
 		this._stopLoop();
 		let i = 0;
 		const all = items.slice();
-		this._render(all[0]);
+		this._render(all[0], true);
 		this.timer = setInterval(() => {
 			if (mySeq !== this.seq) return;
 			i++;
 			if (i < all.length) {
-				this._render(all[i]);
+				this._render(all[i], true);
 			} else if (loopItems && loopItems.length) {
-				this._render(loopItems[(i - all.length) % loopItems.length]);
+				this._render(loopItems[(i - all.length) % loopItems.length], false);
 			} else {
 				this._stopLoop();
 			}
 		}, interval);
 	}
 
-	welcome(isReturn: boolean): void {
-		this.sequence(
-			[[isReturn ? 'WELCOME BACK' : 'WELCOME', ''], ['NEED A BIT', 'OF LUCK?']],
-			[['PRESS THE', 'BUTTON'], ['MAKE ME', 'LUCKY']]
-		);
+	welcome(isReturn: boolean, streak?: number): void {
+		const items: ScreenMessage[] = [[isReturn ? 'WELCOME BACK' : 'WELCOME', '']];
+		if (streak && streak >= 2) items.push([`DAY ${streak}`, 'OF LUCK']);
+		items.push(['NEED A BIT', 'OF LUCK?']);
+		this.sequence(items, [['PRESS THE', 'BUTTON'], ['MAKE ME', 'LUCKY']]);
 	}
 
 	charmAwarded(): void {

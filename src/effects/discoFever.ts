@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import { tween, delay } from '../core/anim';
-import { dimLights } from './helpers';
+import { dimLights, disposeObject } from './helpers';
 import type { EffectContext } from '../types';
 
 export const sound = 'luckyNowDisco';
@@ -144,7 +144,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	for (const s of spots) scene.scene.remove(s);
 	scene.scene.remove(ballSpot, ballGroup);
-	ball.geometry.dispose();
-	rod.geometry.dispose();
+	disposeObject(ballGroup); // ball, rod + their materials (glint sprite geometry is shared, skipped)
+	glintMat.dispose(); // the clone template itself — never attached, so traverse never sees it
 	await restore(900);
 }

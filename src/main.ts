@@ -18,6 +18,7 @@ import { ScreenPanel } from './ui/screenPanel';
 import { CharmsUI } from './ui/charmsUI';
 import { QUIPS } from './ui/quips';
 import { LuckStore } from './luck/store';
+import type { Charm } from './luck/charmsData';
 import { initLottoPicker } from './luck/lottoPicker';
 import { AudioService } from './services/audio';
 import { Haptics } from './services/haptics';
@@ -27,8 +28,11 @@ import type { EffectContext, TextureBundle } from './types';
 // rAF with a timeout fallback (headless/background tabs may not paint)
 const nextFrame = () =>
 	new Promise<void>((r) => {
-		requestAnimationFrame(() => r());
-		setTimeout(() => r(), 120);
+		const fallback = setTimeout(() => r(), 120);
+		requestAnimationFrame(() => {
+			clearTimeout(fallback);
+			r();
+		});
 	});
 
 async function boot(): Promise<void> {
@@ -100,7 +104,10 @@ async function boot(): Promise<void> {
 	// debug hooks: ?fx=powerSurge forces an effect
 	const params = new URLSearchParams(location.search);
 	if (params.get('fx')) director.forced = params.get('fx');
-	window.__mml = { scene, machine, director, particles, lightning, store, ctx, THREE };
+	// dev-only: exporting THREE here would pin the whole namespace into the bundle
+	if (import.meta.env.DEV) {
+		window.__mml = { scene, machine, director, particles, lightning, store, ctx, THREE };
+	}
 
 	scene.start();
 	syncParticleScale();
@@ -109,21 +116,23 @@ async function boot(): Promise<void> {
 
 	// ---- reveal
 	document.getElementById('loading')?.classList.add('done');
+	audio.warm(); // boot's done with the bandwidth — fetch the sound sprite now
 	track('page_loaded', { visits: store.data.visits, luckyness: store.data.luckyness });
-	screen.welcome(store.data.visits > 1);
+	screen.welcome(store.data.visits > 1, store.data.streak);
+
+	// visit/streak charms awarded during store construction used to appear
+	// silently in the drawer — give them their ceremony once the scene is up
+	const pendingCharms = store.newlyAwarded.splice(0);
+	if (pendingCharms.length) setTimeout(() => celebrateCharms(pendingCharms), 1800);
 
 	// ---- button wiring
 	const pressTarget = document.getElementById('press-target')!;
 	let holdStart = 0;
 	let pointerHeld = false;
 
-	async function completePress(holdSeconds: number): Promise<void> {
-		if (director.running) return;
-		const awarded = [...store.registerPress(), ...store.registerHold(holdSeconds)];
-		track('button_pressed', { count: store.data.luckyness });
-		screen.blank();
-		const fx = await director.play();
-		track('effect_played', { effect: fx });
+	// The one true charm celebration: sound, toast, grid entry, analytics,
+	// sparkle, progress. Every award path routes through here.
+	function celebrateCharms(awarded: Charm[]): void {
 		for (const charm of awarded) {
 			audio.play('charmAward');
 			charmsUI.showToast(charm);
@@ -139,8 +148,49 @@ async function boot(): Promise<void> {
 				colors: [0xfff3cf, 0xffd27a]
 			});
 		}
-		charmsUI.updateProgress();
-		screen.youAreNowLucky(store.data.luckyness, awarded.length > 0, fx ? QUIPS[fx] : undefined);
+		if (awarded.length) charmsUI.updateProgress();
+	}
+
+	// The Daily Luck Ritual: the first press of each calendar day gets a
+	// date-stamped announcement and a fortune instead of the usual quip.
+	// Deterministic per day — the cosmos does not reroll for refreshes.
+	const FORTUNES: readonly (readonly [string, string])[] = [
+		['FORTUNE FAVOURS', 'THE BOLD PRESS'],
+		['LUCK LEVEL:', 'SUSPICIOUS'],
+		['GOOD OMENS', 'DETECTED'],
+		['THE OWLS NOD', 'APPROVINGLY'],
+		['TODAY: YES.', 'DEFINITELY YES.'],
+		['A FOUND-PENNY', 'KIND OF DAY'],
+		['GREEN LIGHTS', 'ALL THE WAY'],
+		['THE UNIVERSE', 'OWES YOU ONE'],
+		['SEVENS ARE', 'FOLLOWING YOU'],
+		['YOUR STARS ARE', 'SHOWING OFF'],
+		['KISMET SAYS', 'HI'],
+		['LUCK FORECAST:', 'BLINDING'],
+		['TODAY BENDS', 'YOUR WAY'],
+		['DESTINY LEFT', 'THE DOOR OPEN']
+	];
+	const todaysFortune = () => FORTUNES[Math.floor(Date.now() / 86400000) % FORTUNES.length];
+
+	async function completePress(holdSeconds: number): Promise<void> {
+		if (director.running) return;
+		const isRitual = store.ritualAvailable();
+		if (isRitual) store.registerRitual();
+		const awarded = [...store.registerPress(), ...store.registerHold(holdSeconds)];
+		track('button_pressed', { count: store.data.luckyness, ritual: isRitual });
+		if (isRitual) {
+			const stamp = new Date()
+				.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+				.toUpperCase();
+			screen.sequence([["TODAY'S LUCK", stamp]]);
+			await new Promise((r) => setTimeout(r, 1300));
+		}
+		screen.blank();
+		const fx = await director.play();
+		track('effect_played', { effect: fx, ritual: isRitual });
+		celebrateCharms(awarded);
+		const quip = isRitual ? todaysFortune() : fx ? QUIPS[fx] : undefined;
+		screen.youAreNowLucky(store.data.luckyness, awarded.length > 0, quip);
 	}
 
 	// party trick: run any effect from the console without waiting for the
@@ -156,13 +206,7 @@ async function boot(): Promise<void> {
 			'Summoned an effect from the developer console. Curiosity is its own kind of luck.',
 			'🧙'
 		);
-		if (charm) {
-			audio.play('charmAward');
-			charmsUI.showToast(charm);
-			charmsUI.addCharm(charm);
-			charmsUI.updateProgress();
-			track('charm_awarded', { charm: charm.id });
-		}
+		if (charm) celebrateCharms([charm]);
 		screen.blank();
 		director.forced = name;
 		const fx = await director.play();
@@ -175,6 +219,8 @@ async function boot(): Promise<void> {
 	pressTarget.addEventListener('pointerdown', (e) => {
 		if (director.running) return;
 		e.preventDefault();
+		// without capture, dragging off before releasing strands the button down
+		try { pressTarget.setPointerCapture(e.pointerId); } catch { /* stale pointer */ }
 		charmsUI.hideToast(); // a new press clears the old celebration instantly
 		pointerHeld = true;
 		holdStart = performance.now();
@@ -194,12 +240,14 @@ async function boot(): Promise<void> {
 		pointerHeld = false;
 		machine.pressUp();
 	});
-	// keyboard activation
+	// keyboard activation — mirrors the pointer path (toast clear + haptic)
 	pressTarget.addEventListener('keydown', async (e) => {
 		if ((e.key === 'Enter' || e.key === ' ') && !director.running && !e.repeat) {
 			e.preventDefault();
+			charmsUI.hideToast();
 			await machine.pressDown();
 			audio.play('button');
+			haptics.vibrate(25);
 			machine.pressUp();
 			completePress(0.1);
 		}
@@ -240,11 +288,7 @@ async function boot(): Promise<void> {
 		} catch { /* user cancelled the share sheet */ }
 		if (shared) {
 			track('shared');
-			for (const charm of store.registerShare()) {
-				audio.play('charmAward');
-				charmsUI.showToast(charm);
-				charmsUI.addCharm(charm);
-			}
+			celebrateCharms(store.registerShare());
 		}
 	});
 
@@ -256,11 +300,7 @@ async function boot(): Promise<void> {
 		} catch { /* SW optional */ }
 	}
 	window.addEventListener('appinstalled', () => {
-		const awarded = store.registerInstall();
-		for (const charm of awarded) {
-			charmsUI.showToast(charm);
-			charmsUI.addCharm(charm);
-		}
+		celebrateCharms(store.registerInstall());
 		track('pwa_installed');
 	});
 }

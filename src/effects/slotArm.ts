@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { tween, delay } from '../core/anim';
-import { dimLights, flashPulse, shockwave } from './helpers';
+import { dimLights, flashPulse, shockwave, disposeObject } from './helpers';
 
 // Each 7 lands in its own casino reel window: deep maroon glass in a chunky
 // gold bezel with corner studs — one shared texture, three planes.
@@ -271,11 +271,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	stopReel(); // defensive — the reel already stopped itself
 	machine.faceSpin.rotation.z = 0;
 	scene.scene.remove(lever);
-	const disposed = new Set<THREE.BufferGeometry | THREE.Material>();
-	lever.traverse((o: THREE.Object3D & { geometry?: THREE.BufferGeometry; material?: THREE.Material }) => {
-		if (o.geometry && !disposed.has(o.geometry)) { o.geometry.dispose(); disposed.add(o.geometry); }
-		if (o.material && !disposed.has(o.material)) { o.material.dispose(); disposed.add(o.material); }
-	});
+	disposeObject(lever);
 	machine.setInnerGlow(0);
 	scene.fxLight.intensity = 0;
 	await restore(900);

@@ -42,12 +42,22 @@ export class AudioService {
 	muted: boolean;
 	tracks: Record<string, Howl>;
 	_noiseBuffer: AudioBuffer | null;
+	_loopStops: Set<SfxLoopStop>;
 
 	constructor() {
-		this.howl = new Howl({ src: ['/soundfx/makemelucky.mp3'], sprite: SPRITE, preload: true });
+		// preload: false — the 868KB sprite must not compete with boot for
+		// bandwidth; nothing can play before the first user gesture anyway.
+		// warm() kicks the download off once the loading screen clears.
+		this.howl = new Howl({ src: ['/soundfx/makemelucky.mp3'], sprite: SPRITE, preload: false });
 		this.muted = false;
 		this.tracks = {}; // lazily-built Howls, keyed by TRACKS name
 		this._noiseBuffer = null; // shared white-noise buffer for all the crunchy SFX
+		this._loopStops = new Set();
+	}
+
+	/** Start fetching the sprite in the background (idempotent). */
+	warm(): void {
+		if (this.howl.state() === 'unloaded') this.howl.load();
 	}
 
 	play(name: string): void {
@@ -283,7 +293,7 @@ export class AudioService {
 			carrier.start(t); lfo.start(t);
 
 			let stopped = false;
-			return (fadeMs = 300) => {
+			return this._trackLoop((fadeMs = 300) => {
 				if (stopped) return;
 				stopped = true;
 				const now = ctx.currentTime;
@@ -295,7 +305,7 @@ export class AudioService {
 					carrier.stop(end + 0.02); lfo.stop(end + 0.02);
 					carrier.onended = () => { try { carrier.disconnect(); lfo.disconnect(); lfoGain.disconnect(); out.disconnect(); } catch (e) {} };
 				} catch (e) {}
-			};
+			});
 		}
 
 		if (name === 'tickTock') {
@@ -312,13 +322,29 @@ export class AudioService {
 			}, 500); // 2Hz: tick … tock … tick … tock
 
 			let stopped = false;
-			return (fadeMs = 300) => { // fadeMs unused here — clicks are instantaneous
+			return this._trackLoop((fadeMs = 300) => { // fadeMs unused here — clicks are instantaneous
 				if (stopped) return;
 				stopped = true;
 				clearInterval(id);
-			};
+			});
 		}
 
 		return noop; // unknown loop name = no-op stop
+	}
+
+	// Every live loop registers its stop so a crashed effect can't leak one.
+	_trackLoop(stop: SfxLoopStop): SfxLoopStop {
+		const tracked: SfxLoopStop = (fadeMs) => {
+			this._loopStops.delete(tracked);
+			stop(fadeMs);
+		};
+		this._loopStops.add(tracked);
+		return tracked;
+	}
+
+	/** Safety net (crash recovery): stop every loop still running. */
+	stopAllLoops(fadeMs = 0): void {
+		for (const stop of [...this._loopStops]) stop(fadeMs);
+		this._loopStops.clear();
 	}
 }

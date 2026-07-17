@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import { tween, delay, rand } from '../core/anim';
-import { dimLights, flashPulse } from './helpers';
+import { dimLights, flashPulse, disposeObject } from './helpers';
 import type { EffectContext } from '../types';
 
 export const sound = 'luckySymbol';
@@ -156,7 +156,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	bg.scale.set(1, 1, 1);
 
 	scene.scene.remove(ball);
-	ball.geometry.dispose();
+	disposeObject(ball);
 
 	// JACKPOT
 	scene.shake(0.45);

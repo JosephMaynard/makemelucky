@@ -19,6 +19,7 @@ export interface LuckData {
 	vibrationOn: boolean;
 	firstUse: string;
 	lastVisit: string;
+	lastRitual: string; // ISO date of the last Daily Luck Ritual press
 	charms: Charm[]; // [{ id, title, description, icon, date }]
 }
 
@@ -64,6 +65,7 @@ function fresh(): LuckData {
 		vibrationOn: true,
 		firstUse: new Date().toISOString(),
 		lastVisit: new Date().toISOString(),
+		lastRitual: '',
 		charms: [] // [{ id, title, description, icon, date }]
 	};
 }
@@ -211,6 +213,17 @@ export class LuckStore {
 
 	nextPressCharm(): Charm | undefined {
 		return PRESS_CHARMS.find((def) => def.amount! > this.data.luckyness && !this.hasCharm(def.id));
+	}
+
+	/** The Daily Luck Ritual: the first press of each calendar day is special. */
+	ritualAvailable(): boolean {
+		if (!this.data.lastRitual) return true;
+		return new Date(this.data.lastRitual).toDateString() !== new Date().toDateString();
+	}
+
+	registerRitual(): void {
+		this.data.lastRitual = new Date().toISOString();
+		this.save();
 	}
 
 	setSound(on: boolean): void {

@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import { tween, delay, rand } from '../core/anim';
-import { dimLights, flashPulse, shockwave } from './helpers';
+import { dimLights, flashPulse, shockwave, disposeObject } from './helpers';
 import type { EffectContext } from '../types';
 
 export const sound = 'rimLight';
@@ -194,6 +194,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	stopHover();
 	scene.scene.remove(saucer.g, beam);
+	disposeObject(saucer.g); // hull, dome + 10 lamp geometries/materials
 	beam.geometry.dispose();
 	beamMat.dispose();
 	await flashPulse(machine, 0.6, 100, 700, 0xcdf5ea);

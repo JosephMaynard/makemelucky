@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import { tween, delay, rand } from '../core/anim';
-import { dimLights, flashPulse, shockwave } from './helpers';
+import { dimLights, flashPulse, shockwave, disposeObject } from './helpers';
 import type { EffectContext } from '../types';
 
 export const sound = 'luckySymbol';
@@ -134,7 +134,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	});
 
 	scene.scene.remove(shoe);
-	shoe.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+	disposeObject(shoe); // gold/dark materials are shared across several meshes — deduped
 	tween(600, 'outQuad', (v) => {
 		machine.setInnerGlow(0.55 * (1 - v));
 		scene.fxLight.intensity = 3.2 * (1 - v);

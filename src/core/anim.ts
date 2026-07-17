@@ -72,7 +72,21 @@ export function tween(
 }
 
 export function delay(ms: number) {
-	return new Promise<void>((resolve) => setTimeout(resolve, ms));
+	// In a background tab timers keep firing while frames freeze, so an effect
+	// could tear down blind mid-choreography. Hold resolution until we're
+	// visible again — on return, delays and tweens fast-forward together.
+	return new Promise<void>((resolve) => {
+		setTimeout(() => {
+			if (typeof document === 'undefined' || !document.hidden) return resolve();
+			const onVisible = () => {
+				if (!document.hidden) {
+					document.removeEventListener('visibilitychange', onVisible);
+					resolve();
+				}
+			};
+			document.addEventListener('visibilitychange', onVisible);
+		}, ms);
+	});
 }
 
 /** Linear interpolate */

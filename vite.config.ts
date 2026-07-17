@@ -9,7 +9,6 @@ export default defineConfig({
 	plugins: [
 		VitePWA({
 			registerType: 'autoUpdate',
-			includeAssets: ['favicon.ico', 'icons/*.png', 'fonts/*.woff', 'soundfx/*.mp3'],
 			manifest: {
 				name: 'Make Me Lucky',
 				short_name: 'Make Me Lucky',
@@ -27,11 +26,26 @@ export default defineConfig({
 				]
 			},
 			workbox: {
-				globPatterns: ['**/*.{js,css,html,png,jpg,woff,mp3,ico,svg,webmanifest}'],
+				globPatterns: ['**/*.{js,css,html,ico,svg}', 'fonts/*.woff*', 'icons/icon180.png'],
 				globIgnores: ['v1/**', 'v2/**'],
-				maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
 				navigateFallback: '/index.html',
-				navigateFallbackDenylist: [/^\/v1\//, /^\/v2\//]
+				navigateFallbackDenylist: [/^\/v1\//, /^\/v2\//],
+				runtimeCaching: [
+					{
+						urlPattern: /\/soundfx\/.*\.mp3$/,
+						handler: 'CacheFirst',
+						options: {
+							cacheName: 'soundfx',
+							expiration: {
+								maxEntries: 10,
+								maxAgeSeconds: 60 * 60 * 24 * 365
+							},
+							cacheableResponse: {
+								statuses: [0, 200]
+							}
+						}
+					}
+				]
 			}
 		})
 	]

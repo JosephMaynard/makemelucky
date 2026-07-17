@@ -15,11 +15,18 @@ function ordinal(day: number): string {
 	return 'th';
 }
 
-function formatDate(iso: string): string {
+// builds the "17th July 2026, 9:05" date fragment as real nodes (the <sup> is
+// ours, not user data, but we still avoid innerHTML for consistency)
+function formatDateFrag(iso: string): DocumentFragment {
+	const frag = document.createDocumentFragment();
 	const d = new Date(iso);
-	if (isNaN(+d)) return '';
+	if (isNaN(+d)) return frag;
 	const mins = String(d.getMinutes()).padStart(2, '0');
-	return `${d.getDate()}<sup>${ordinal(d.getDate())}</sup> ${monthNames[d.getMonth()]} ${d.getFullYear()}, ${d.getHours()}:${mins}`;
+	frag.append(String(d.getDate()));
+	const sup = document.createElement('sup');
+	sup.textContent = ordinal(d.getDate());
+	frag.append(sup, ` ${monthNames[d.getMonth()]} ${d.getFullYear()}, ${d.getHours()}:${mins}`);
+	return frag;
 }
 
 export class CharmsUI {
@@ -37,19 +44,40 @@ export class CharmsUI {
 
 	renderAll(): void {
 		this.container.innerHTML = '';
-		const charms = this.store.data.charms.slice().reverse(); // newest first
-		for (const charm of charms) this._append(charm);
+		// store order is oldest-first; _append prepends, so walking oldest→newest
+		// and prepending each leaves the newest charm on top (same as addCharm)
+		for (const charm of this.store.data.charms) this._append(charm);
 		this.updateProgress();
 	}
 
 	_append(charm: Charm): void {
 		const el = document.createElement('div');
 		el.className = 'charm';
-		const iconSize = String(charm.icon || '★').length > 2 ? 'font-size:16px' : '';
-		el.innerHTML =
-			`<div class="charm-icon" style="${iconSize}">${charm.icon || '★'}</div>` +
-			`<p><span class="charm-title">${charm.title}</span><br/>${charm.description}` +
-			`<span class="charm-date"><b>Awarded:</b> ${formatDate(charm.date!)}</span></p>`;
+
+		const icon = document.createElement('div');
+		icon.className = 'charm-icon';
+		if (String(charm.icon || '★').length > 2) icon.style.fontSize = '16px';
+		icon.textContent = charm.icon || '★';
+		el.appendChild(icon);
+
+		const p = document.createElement('p');
+		const title = document.createElement('span');
+		title.className = 'charm-title';
+		title.textContent = charm.title;
+		p.appendChild(title);
+		p.appendChild(document.createElement('br'));
+		p.appendChild(document.createTextNode(charm.description));
+
+		const dateSpan = document.createElement('span');
+		dateSpan.className = 'charm-date';
+		const b = document.createElement('b');
+		b.textContent = 'Awarded:';
+		dateSpan.appendChild(b);
+		dateSpan.appendChild(document.createTextNode(' '));
+		dateSpan.appendChild(formatDateFrag(charm.date!));
+		p.appendChild(dateSpan);
+
+		el.appendChild(p);
 		this.container.prepend(el);
 	}
 
@@ -69,9 +97,14 @@ export class CharmsUI {
 
 	showToast(charm: Charm): void {
 		this.toast.hidden = false;
-		this.toast.innerHTML =
-			`<span class="toast-kicker">✦ LUCKY CHARM EARNED ✦</span>` +
-			`<span class="toast-title">${charm.icon || '★'} ${charm.title}</span>`;
+		this.toast.innerHTML = '';
+		const kicker = document.createElement('span');
+		kicker.className = 'toast-kicker';
+		kicker.textContent = '✦ LUCKY CHARM EARNED ✦';
+		const title = document.createElement('span');
+		title.className = 'toast-title';
+		title.textContent = `${charm.icon || '★'} ${charm.title}`;
+		this.toast.append(kicker, title);
 		this.toast.classList.remove('show');
 		void this.toast.offsetWidth;
 		this.toast.classList.add('show');

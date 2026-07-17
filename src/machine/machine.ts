@@ -761,4 +761,18 @@ export class Machine {
 	buttonWorldPosition(target = new THREE.Vector3()): THREE.Vector3 {
 		return this.buttonGroup.getWorldPosition(target);
 	}
+
+	/** Crash recovery: snap every effect-mutated part back to its idle pose.
+	    Deliberately tween-free — a wedged machine must never stay wedged. */
+	resetToIdle(): void {
+		this._slideIris(this._irisDistance || 1, 0);
+		(this.backplate.children[0] as THREE.Mesh<THREE.BufferGeometry, THREE.Material>).material.opacity = 1;
+		this.setCentreOpacity(1);
+		this.portal.visible = false;
+		this._layoutClamps(0);
+		this.buttonGroup.position.z = 0;
+		this.setInnerGlow(0.2);
+		this.setOuterGlow(0.3, 0xffffff);
+		this.mechSpeed = 1;
+	}
 }

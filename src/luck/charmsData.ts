@@ -39,7 +39,11 @@ export const VISIT_CHARMS: Charm[] = [
 ];
 
 export const STREAK_CHARMS: Charm[] = [
-	{ id: 'week', amount: 7, icon: '📅', title: 'The Week of Luck!', description: 'Visit Make Me Lucky every day for a week.' }
+	{ id: 'streak3', amount: 3, icon: '🔥', title: 'Three-Day Flame!', description: 'Visit Make Me Lucky 3 days in a row. Officially a habit.' },
+	{ id: 'week', amount: 7, icon: '📅', title: 'The Week of Luck!', description: 'Visit Make Me Lucky every day for a week.' },
+	{ id: 'streak30', amount: 30, icon: '🌙', title: 'The Lucky Month!', description: 'Visit Make Me Lucky every day for thirty days. A full lunation of fortune.' },
+	{ id: 'streak88', amount: 88, icon: '8️⃣', title: 'Double Infinity!', description: '88 days in a row — the luckiest number, standing on its own shoulders.' },
+	{ id: 'streak365', amount: 365, icon: '🏆', title: 'A Year of Fortune!', description: 'Every single day for a year. At this point the luck visits YOU.' }
 ];
 
 export const SPECIAL_CHARMS: Charm[] = [
