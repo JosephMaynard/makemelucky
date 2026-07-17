@@ -21,7 +21,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 	machine.setInnerGlow(0, 0xd8e07a);
 	tween(2000, 'inQuad', (v) => machine.setInnerGlow(v * 0.35, 0xd8e07a));
 
-	// wandering flight: gentle pseudo-curl noise + a soft leash to the machine
+	// wandering flight: livelier curl noise, a slow carousel swirl around the
+	// machine, and pulsing eddies — plus the soft leash that keeps them close
 	let T = 0;
 	let attraction = 0.16;
 	const stopClock = scene.addUpdatable((dt) => (T += dt));
@@ -29,24 +30,26 @@ export async function play(ctx: EffectContext): Promise<void> {
 		const dx = x;
 		const dy = y + 0.32;
 		const dz = z - 0.5;
+		// the swarm slowly orbits the button, surging and relaxing
+		const swirl = 0.5 + Math.sin(T * 0.55) * 0.25;
 		return [
-			Math.sin(y * 2.6 + T * 1.4) * 1.1 - dx * attraction,
-			Math.sin(x * 2.2 + T * 1.1) * 0.9 - dy * attraction,
-			Math.cos(x * 1.8 + y * 1.3 + T * 0.9) * 0.5 - dz * attraction
+			Math.sin(y * 2.6 + T * 1.9) * 1.5 + Math.sin(z * 3.1 + T * 0.8) * 0.5 - dx * attraction - dy * swirl,
+			Math.sin(x * 2.2 + T * 1.5) * 1.25 + Math.cos(z * 2.4 + T * 1.2) * 0.4 - dy * attraction + dx * swirl,
+			Math.cos(x * 1.8 + y * 1.3 + T * 1.1) * 0.7 - dz * attraction
 		];
 	};
 
 	const swarm = particles.emitter({
 		texture: sprites.softDot,
-		count: 240,
-		emitRate: 80,
+		count: 400,
+		emitRate: 140,
 		origin: new THREE.Vector3(0, -0.32, 0.35),
 		originSpread: 1.2,
-		speed: [0.3, 0.9],
+		speed: [0.3, 1.1],
 		gravity: new THREE.Vector3(0, 0, 0),
 		drag: 0.97,
 		life: [4, 6.5],
-		size: [0.04, 0.1],
+		size: [0.06, 0.16],
 		colors: [0xd8e07a, 0xf5f0a0, 0x9fdc6a, 0xffe9ad],
 		fadeIn: 0.25,
 		field

@@ -283,29 +283,33 @@ export function createMachineFaceTextures(size = 2048): MachineFaceTextures {
 	R.fill();
 	R.restore();
 
-	// gold interlaced chain along the outer band — small overlapping links
+	// gold rings along the outer band — exactly three crisp, non-overlapping
+	// rings in each gap between medallions (the old 56-link chain piled up)
 	{
-		const n = 56;
+		const seg = 12;
 		const rMid = px(0.8825);
-		const rC = px(0.038);
-		for (let i = 0; i < n; i++) {
-			const ang = (i / n) * Math.PI * 2;
-			const x = c + Math.cos(ang) * rMid;
-			const y = c + Math.sin(ang) * rMid;
-			A.save();
-			A.strokeStyle = metalGrad(A, x - rC, y - rC, x + rC, y + rC, GOLD);
-			A.lineWidth = px(0.011);
-			A.beginPath();
-			A.arc(x, y, rC, 0, Math.PI * 2);
-			A.stroke();
-			A.restore();
-			H.save();
-			H.strokeStyle = '#e8e8e8';
-			H.lineWidth = px(0.011) * hs;
-			H.beginPath();
-			H.arc(x * hs, y * hs, rC * hs, 0, Math.PI * 2);
-			H.stroke();
-			H.restore();
+		const rC = px(0.04);
+		for (let i = 0; i < seg; i++) {
+			const base = ((i + 0.5) / seg) * Math.PI * 2;
+			for (let k = 1; k <= 3; k++) {
+				const ang = base + (k / 4) * ((Math.PI * 2) / seg);
+				const x = c + Math.cos(ang) * rMid;
+				const y = c + Math.sin(ang) * rMid;
+				A.save();
+				A.strokeStyle = metalGrad(A, x - rC, y - rC, x + rC, y + rC, GOLD);
+				A.lineWidth = px(0.011);
+				A.beginPath();
+				A.arc(x, y, rC, 0, Math.PI * 2);
+				A.stroke();
+				A.restore();
+				H.save();
+				H.strokeStyle = '#e8e8e8';
+				H.lineWidth = px(0.011) * hs;
+				H.beginPath();
+				H.arc(x * hs, y * hs, rC * hs, 0, Math.PI * 2);
+				H.stroke();
+				H.restore();
+			}
 		}
 		// triquetra medallion stamps over the chain — every knot rotated with its
 		// place on the ring, so they all lead the same way going clockwise
@@ -623,22 +627,8 @@ export function createButtonTextures(size = 1024): ButtonTextures {
 		ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.03})`;
 		ctx.fillRect(x, y, 1.5, 1.5);
 	}
-	// gold coin-dot border (the "ooooo" edge of the V2 button)
-	const n = 60;
-	const rEdge = cx * 0.92;
-	for (let i = 0; i < n; i++) {
-		const ang = (i / n) * Math.PI * 2;
-		const x = cx + Math.cos(ang) * rEdge;
-		const y = cx + Math.sin(ang) * rEdge;
-		const rg = ctx.createRadialGradient(x - 2, y - 2, 0, x, y, cx * 0.022);
-		rg.addColorStop(0, '#fff3cf');
-		rg.addColorStop(0.5, '#e5c26c');
-		rg.addColorStop(1, '#8a6a26');
-		ctx.fillStyle = rg;
-		ctx.beginPath();
-		ctx.arc(x, y, cx * 0.02, 0, Math.PI * 2);
-		ctx.fill();
-	}
+	// (the V2 "ooooo" coin-dot border is gone — it sat exactly on the dome's rim
+	// and sampled as a sawtooth; the red now runs clean to the gold trim)
 	// label
 	ctx.fillStyle = '#ffffff';
 	ctx.shadowColor = 'rgba(80,0,0,0.85)';

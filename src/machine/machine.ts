@@ -463,14 +463,35 @@ export class Machine {
 			this.mechGroup.add(cog);
 			this.cogs.push(cog);
 		}
-		// half-hidden big wheels peeking from under the bead ring
+		// half-hidden big wheels peeking from under the button's skirt
 		for (let i = 0; i < 3; i++) {
 			const wheel = new THREE.Mesh(makeGearGeometry(0.16, 16, 0.025), brass);
 			const ang = (i / 3) * Math.PI * 2 + 0.7;
-			wheel.position.set(Math.cos(ang) * R * 0.44, Math.sin(ang) * R * 0.44, 0.008);
+			wheel.position.set(Math.cos(ang) * R * 0.485, Math.sin(ang) * R * 0.485, 0.008);
 			wheel.userData.speed = 0.22 * (i % 2 ? 1 : -1);
 			this.mechGroup.add(wheel);
 			this.cogs.push(wheel);
+		}
+		// small idler pinions tucked between the main train, filling the window
+		for (let i = 0; i < 6; i++) {
+			const ang = ((i + 0.5) / 6) * Math.PI * 2 + 0.35;
+			const pinion = new THREE.Mesh(makeGearGeometry(i % 2 ? 0.052 : 0.068, i % 2 ? 7 : 9, 0.022), i % 2 ? steel : brass);
+			pinion.position.set(Math.cos(ang) * R * 0.53, Math.sin(ang) * R * 0.53, i % 2 ? 0.024 : 0.038);
+			pinion.rotation.z = Math.random() * Math.PI;
+			pinion.userData.speed = (i % 2 ? -1.3 : 1.05) * (0.85 + (i % 3) * 0.2);
+			const pinionHub = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.034, 10), centreGold);
+			pinionHub.rotation.x = Math.PI / 2;
+			pinion.add(pinionHub);
+			this.mechGroup.add(pinion);
+			this.cogs.push(pinion);
+		}
+		// plain support spans between the jewelled bridges — structure, not motion
+		for (let i = 0; i < 3; i++) {
+			const ang = (i / 3) * Math.PI * 2 + 1.35;
+			const span = new THREE.Mesh(new THREE.TorusGeometry(R * 0.545, 0.013, 8, 12, 0.26), steel);
+			span.rotation.z = ang - 0.13;
+			span.position.z = 0.046;
+			this.mechGroup.add(span);
 		}
 
 		// ornate gold bridges spanning the window, each set with a ruby jewel —

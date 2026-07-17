@@ -152,6 +152,9 @@ export async function play(ctx: EffectContext): Promise<void> {
 		// spin around the tube's own axis (local Y after the X-rotation)
 		tunnel!.tube.rotation.y += dt * 0.16;
 		tunnel!.wisps.rotation.y -= dt * 0.24;
+		// and the whole tunnel rolls gently around the flight axis — one lazy
+		// barrel roll a minute, well under seasickness speed
+		tunnel!.group.rotation.z += dt * 0.11;
 		for (const c of tunnel!.clouds) {
 			c.position.z += c.userData.speed * dt;
 			if (c.position.z > 4) {
@@ -212,6 +215,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	button.scale.setScalar(1);
 	scene.camera.remove(tunnel.group);
 	tunnel.group.visible = false;
+	tunnel.group.rotation.z = 0; // shared prop — reset the roll for the next ride
 	scene.scene.fog = null;
 	scene.scene.background = bg0;
 	machine.group.visible = true;
