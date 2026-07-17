@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { LuckStore } from '../src/luck/store';
 import { PRESS_CHARMS } from '../src/luck/charmsData';
 
@@ -130,5 +130,130 @@ describe('awarding', () => {
 		expect(store.registerShare()).toHaveLength(0);
 		expect(store.registerInstall().map((c) => c.id)).toEqual(['installed']);
 		expect(store.registerInstall()).toHaveLength(0);
+	});
+});
+
+describe('_trackVisit', () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('a second construction under an hour later does not count as a new visit', () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-01-01T10:00:00.000Z'));
+		const first = new LuckStore();
+		vi.setSystemTime(new Date('2026-01-01T10:30:00.000Z'));
+		const second = new LuckStore();
+		expect(second.data.visits).toBe(first.data.visits);
+		expect(second.data.streak).toBe(1);
+	});
+
+	it('a visit over an hour later the same day adds a visit but not a streak day', () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-01-01T09:00:00.000Z'));
+		const first = new LuckStore();
+		vi.setSystemTime(new Date('2026-01-01T12:00:00.000Z'));
+		const second = new LuckStore();
+		expect(second.data.visits).toBe(first.data.visits + 1);
+		expect(second.data.streak).toBe(1);
+	});
+
+	it('a visit the next calendar day increments the streak', () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-01-01T09:00:00.000Z'));
+		new LuckStore();
+		vi.setSystemTime(new Date('2026-01-02T09:30:00.000Z'));
+		const second = new LuckStore();
+		expect(second.data.streak).toBe(2);
+	});
+
+	it('a gap of two or more days resets the streak to 1', () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-01-01T09:00:00.000Z'));
+		new LuckStore();
+		vi.setSystemTime(new Date('2026-01-02T09:00:00.000Z'));
+		const second = new LuckStore();
+		expect(second.data.streak).toBe(2);
+		vi.setSystemTime(new Date('2026-01-04T09:00:00.000Z')); // skipped a day
+		const third = new LuckStore();
+		expect(third.data.streak).toBe(1);
+	});
+
+	it('hitting a 3-day streak awards streak3 exactly once, via newlyAwarded', () => {
+		vi.useFakeTimers();
+		let day = new Date('2026-01-01T09:00:00.000Z');
+		vi.setSystemTime(day);
+		let store = new LuckStore();
+		for (let i = 1; i < 3; i++) {
+			day = new Date(+day + 86400000);
+			vi.setSystemTime(day);
+			store = new LuckStore();
+		}
+		expect(store.data.streak).toBe(3);
+		expect(store.newlyAwarded.map((c) => c.id)).toContain('streak3');
+		expect(store.data.charms.filter((c) => c.id === 'streak3')).toHaveLength(1);
+	});
+
+	it('hitting a 7-day streak awards the week charm', () => {
+		vi.useFakeTimers();
+		let day = new Date('2026-01-01T09:00:00.000Z');
+		vi.setSystemTime(day);
+		let store = new LuckStore();
+		for (let i = 1; i < 7; i++) {
+			day = new Date(+day + 86400000);
+			vi.setSystemTime(day);
+			store = new LuckStore();
+		}
+		expect(store.data.streak).toBe(7);
+		expect(store.hasCharm('week')).toBe(true);
+	});
+
+	it('charms survive a reload (localStorage round-trip)', () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-01-01T09:00:00.000Z'));
+		const first = new LuckStore();
+		first.registerPress();
+		vi.setSystemTime(new Date('2026-01-02T09:00:00.000Z'));
+		const second = new LuckStore();
+		expect(second.hasCharm('beginnersLuck')).toBe(true);
+		expect(readSaved().charms.some((c: { id: string }) => c.id === 'beginnersLuck')).toBe(true);
+	});
+});
+
+describe('ritual', () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('is available on a fresh store', () => {
+		const store = new LuckStore();
+		expect(store.ritualAvailable()).toBe(true);
+	});
+
+	it('becomes unavailable after registerRitual', () => {
+		const store = new LuckStore();
+		store.registerRitual();
+		expect(store.ritualAvailable()).toBe(false);
+	});
+
+	it('becomes available again on the next calendar day', () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-01-01T09:00:00.000Z'));
+		const store = new LuckStore();
+		store.registerRitual();
+		expect(store.ritualAvailable()).toBe(false);
+		vi.setSystemTime(new Date('2026-01-02T09:00:00.000Z'));
+		expect(store.ritualAvailable()).toBe(true);
+	});
+
+	it('lastRitual persists through reload', () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date('2026-01-01T09:00:00.000Z'));
+		const first = new LuckStore();
+		first.registerRitual();
+		vi.setSystemTime(new Date('2026-01-01T09:30:00.000Z'));
+		const second = new LuckStore();
+		expect(second.data.lastRitual).toBe(first.data.lastRitual);
+		expect(second.ritualAvailable()).toBe(false);
 	});
 });

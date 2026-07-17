@@ -35,8 +35,9 @@
 		<meta name="apple-mobile-web-app-title" content="Make Me Lucky" />
 		<meta name="mobile-web-app-capable" content="yes" />
 
-		<link rel="preload" href="/fonts/RobotoSlab-Bold-webfont.woff" as="font" type="font/woff" crossorigin />
-		<link rel="preload" href="/fonts/RobotoSlab-Regular-webfont.woff" as="font" type="font/woff" crossorigin />
+		<link rel="preload" href="/fonts/RobotoSlab-Bold-webfont.woff2" as="font" type="font/woff2" crossorigin />
+		<link rel="preload" href="/fonts/RobotoSlab-Regular-webfont.woff2" as="font" type="font/woff2" crossorigin />
+		<link rel="preconnect" href="https://us.i.posthog.com" crossorigin />
 
 		<script type="application/ld+json">
 			{
@@ -51,19 +52,22 @@
 				"author": { "@type": "Person", "name": "Joseph Maynard" }
 			}
 		</script>
-		<script type="module" crossorigin src="/assets/index-BdC_E1YL.js"></script>
-		<link rel="stylesheet" crossorigin href="/assets/index-DIqNUAlG.css">
+		<script type="module" crossorigin src="/assets/index-CPvNKwAp.js"></script>
+		<link rel="stylesheet" crossorigin href="/assets/index-gB9xB6gY.css">
 	<link rel="manifest" href="/manifest.webmanifest"></head>
 	<body>
 		<!-- ============ HERO: the Luck Machine ============ -->
 		<header id="hero">
 			<canvas id="lucky-canvas" aria-hidden="true"></canvas>
 
-			<!-- The black glass message screen -->
-			<div id="screen-panel" role="status" aria-live="polite">
+			<!-- The black glass message screen. Perpetual idle-text cycling is purely
+			     decorative and NOT announced; #screen-live (below, visually hidden)
+			     is the actual live region for one-shot messages (welcome, charms, etc). -->
+			<div id="screen-panel">
 				<div id="screen-sparkle" aria-hidden="true"></div>
 				<div id="screen-text"><span class="line1">MAKE ME</span><span class="line2">LUCKY</span></div>
 			</div>
+			<div id="screen-live" class="visually-hidden" role="status" aria-live="polite"></div>
 
 			<!-- Accessible press target (the 3D button mirrors this) -->
 			<button id="press-target" aria-label="Press the Make Me Lucky button">

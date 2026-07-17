@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { initLottoPicker } from '../src/luck/lottoPicker';
+import { track } from '../src/services/analytics';
+
+// Stubbed so we can assert on calls without PostHog ever needing to be ready.
+vi.mock('../src/services/analytics', () => ({ track: vi.fn() }));
 
 // The picker's maths + PRNG live in module scope; we exercise them through the
 // public initLottoPicker() by driving the DOM it wires up.
@@ -26,6 +30,7 @@ const HTML = `
 beforeEach(() => {
 	localStorage.clear();
 	document.body.innerHTML = HTML;
+	vi.mocked(track).mockClear();
 });
 
 describe('initLottoPicker wiring', () => {
@@ -110,5 +115,65 @@ describe('initLottoPicker wiring', () => {
 		expect(() => initLottoPicker()).not.toThrow();
 		// defaults survive: C(50,5) * C(10,1) = 2,118,760 * 10
 		expect(document.getElementById('lng-chance')?.textContent).toBe('1 in 21,187,600');
+	});
+});
+
+describe('share button', () => {
+	it('does not exist before a draw', () => {
+		initLottoPicker();
+		expect(document.querySelector('.lng-share')).toBeNull();
+	});
+
+	it('appears after a draw, copies the expected text, and tracks the share', async () => {
+		const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+		// happy-dom has no navigator.share, so the clipboard branch is exercised by default
+
+		initLottoPicker();
+		const spin = document.getElementById('lng-spin') as HTMLButtonElement;
+		spin.click();
+
+		let shareBtn: HTMLButtonElement | null = null;
+		await vi.waitFor(
+			() => {
+				shareBtn = document.querySelector('.lng-share');
+				expect(shareBtn).toBeTruthy();
+				expect(document.getElementById('lng-status')?.textContent).toContain('resonance');
+			},
+			{ timeout: 4000, interval: 50 }
+		);
+		expect(shareBtn!.textContent).toBe('🍀 Share these numbers');
+
+		shareBtn!.click();
+		await vi.waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+
+		const text = writeText.mock.calls[0][0] as string;
+		// EuroMillions: 5 main + bonus 2, e.g. "My lucky numbers: 7, 19, 23, 31, 48 + bonus 3, 9 — EuroMillions, resonance 87%. Conjured at makemelucky.com 🍀"
+		expect(text).toMatch(
+			/^My lucky numbers: \d+(, \d+){4} \+ bonus \d+, \d+ — EuroMillions, resonance \d+%\. Conjured at makemelucky\.com 🍀$/
+		);
+		expect(track).toHaveBeenCalledWith('numbers_shared', { game: 'euromillions' });
+
+		// brief feedback, reverts after ~2s
+		expect(shareBtn!.textContent).toBe('🍀 Copied!');
+		await vi.waitFor(
+			() => expect(shareBtn!.textContent).toBe('🍀 Share these numbers'),
+			{ timeout: 3000, interval: 50 }
+		);
+	});
+
+	it('disappears when the game is switched (no stale draw to share)', async () => {
+		vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+		initLottoPicker();
+		const spin = document.getElementById('lng-spin') as HTMLButtonElement;
+		spin.click();
+		await vi.waitFor(() => expect(document.querySelector('.lng-share')).toBeTruthy(), {
+			timeout: 4000,
+			interval: 50
+		});
+
+		const select = document.getElementById('lng-game') as HTMLSelectElement;
+		select.value = 'lotto';
+		select.dispatchEvent(new Event('change'));
+		expect(document.querySelector('.lng-share')).toBeNull();
 	});
 });

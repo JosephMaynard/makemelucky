@@ -45,7 +45,9 @@ const VERT = /* glsl */ `
 export async function play(ctx: EffectContext): Promise<void> {
 	const { scene, machine, particles, sprites, glyphTextures, audio, haptics } = ctx;
 
-	const SUN = new THREE.Vector3(0.95, 1.5, -0.9);
+	// NOTE: the quilt backdrop lives at z=-0.75 — the whole eclipse set must
+	// sit in front of it or the sky show plays to an empty house
+	const SUN = new THREE.Vector3(0.95, 1.5, -0.45);
 
 	// ---- nightfall: the lounge reflections give way to a night sky
 	const restore = dimLights(scene, 0.14, 1600);
@@ -144,7 +146,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	particles.burst({
 		texture: sprites.star4,
 		count: 70,
-		origin: new THREE.Vector3(0, 0.8, -1.4),
+		origin: new THREE.Vector3(0, 0.8, -0.65),
 		originSpread: 5.2,
 		speed: [0, 0.04],
 		life: [2.2, 3.4],

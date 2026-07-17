@@ -586,6 +586,40 @@ export function initLottoPicker(): void {
 	let startPerf = 0;
 	let looping = false;
 
+	/* ---- last draw, kept for the share button (cheaper + more honest than
+	   parsing it back out of the rendered DOM / status line) ---- */
+	interface LastDraw {
+		game: string;
+		main: number[];
+		bonus: number[];
+		resonance: number;
+	}
+	let lastDraw: LastDraw | null = null;
+	const activeGameName = (): string => (currentGameKey === 'custom' ? 'Custom' : GAMES[currentGameKey].name);
+
+	async function shareNumbers(btn: HTMLButtonElement): Promise<void> {
+		if (!lastDraw) return;
+		const { game, main, bonus, resonance } = lastDraw;
+		const bonusPart = bonus.length ? ` + bonus ${bonus.join(', ')}` : '';
+		const text = `My lucky numbers: ${main.join(', ')}${bonusPart} — ${game}, resonance ${resonance}%. Conjured at makemelucky.com 🍀`;
+		let shared = false;
+		try {
+			if (navigator.share) {
+				await navigator.share({ text });
+				shared = true;
+			} else {
+				await navigator.clipboard.writeText(text);
+				shared = true;
+				const original = btn.textContent;
+				btn.textContent = '🍀 Copied!';
+				setTimeout(() => {
+					btn.textContent = original;
+				}, 2000);
+			}
+		} catch { /* user cancelled the share sheet / clipboard blocked */ }
+		if (shared) track('numbers_shared', { game: currentGameKey });
+	}
+
 	function ensureField(): void {
 		if (!fieldCanvas) {
 			fieldCanvas = document.createElement('canvas');
@@ -670,7 +704,7 @@ export function initLottoPicker(): void {
 	}
 
 	/* ---- render the drawn numbers as 3D orbs with numerological dossiers ---- */
-	function renderBalls(main: number[], bonus: number[]): void {
+	function renderBalls(main: number[], bonus: number[], resonance: number): void {
 		stopLoop();
 		orbs = [];
 		ripples = [];
@@ -734,6 +768,14 @@ export function initLottoPicker(): void {
 			});
 		});
 
+		lastDraw = { game: activeGameName(), main, bonus, resonance };
+		const shareBtn = document.createElement('button');
+		shareBtn.type = 'button';
+		shareBtn.className = 'lng-share';
+		shareBtn.textContent = '🍀 Share these numbers';
+		shareBtn.addEventListener('click', () => void shareNumbers(shareBtn));
+		resultEl!.appendChild(shareBtn);
+
 		// measure each orb's centre in luck-field pixels (relative to the section)
 		ensureField();
 		const box = root!.getBoundingClientRect();
@@ -770,6 +812,7 @@ export function initLottoPicker(): void {
 		fieldCtx = null;
 		resultEl.innerHTML = '';
 		statusEl.textContent = '';
+		lastDraw = null;
 		savePrefs();
 	});
 
@@ -780,11 +823,15 @@ export function initLottoPicker(): void {
 		spinBtn!.disabled = true;
 
 		try {
-			// cosmic theatre while the real entropy harvest runs
+			// cosmic theatre while the real entropy harvest runs — silence the live
+			// region so screen readers don't get 5 incantations read at them, only
+			// the final resonance line (restored below, before it's written)
+			statusEl!.setAttribute('aria-live', 'off');
 			for (const line of INCANTATIONS) {
 				statusEl!.textContent = line;
 				await wait(140);
 			}
+			statusEl!.setAttribute('aria-live', 'polite');
 			const seed = await cosmicSeed();
 			const cosmos = summonCosmos();
 			const foamSeed = (seed ^ Math.floor(cosmos() * 0x1_0000_0000)) >>> 0; // fold foam into the seed
@@ -794,14 +841,15 @@ export function initLottoPicker(): void {
 			const main = pickUnique(cfg.range, cfg.count, rng);
 			const bonus = cfg.bonusCount ? pickUnique(cfg.bonusRange, cfg.bonusCount, rng) : [];
 
-			renderBalls(main, bonus);
-			track('luck_numbers_spun', { game: currentGameKey, count: cfg.count });
-
-			// average resonance drives the field readout
+			// average resonance drives the field readout (and the share text)
 			const phase = lunarPhase(Date.now());
 			const avg = Math.round(
 				[...main, ...bonus].reduce((s, n) => s + luckResonance(n, phase), 0) / (main.length + bonus.length)
 			);
+
+			renderBalls(main, bonus, avg);
+			track('luck_numbers_spun', { game: currentGameKey, count: cfg.count });
+
 			await wait(main.length * 70 + 400);
 			statusEl!.textContent = `Luck-field resonance ${avg}% — ${fieldQuip(avg)}. 🍀`;
 		} catch {

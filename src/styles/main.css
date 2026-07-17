@@ -702,6 +702,29 @@ p + p {
 	font-size: 14px;
 	font-style: italic;
 }
+.lng-share {
+	display: block;
+	margin: 16px auto 0;
+	font-family: inherit;
+	font-weight: 700;
+	font-size: 13px;
+	color: hsl(var(--accent-h) 25% 14%);
+	background: linear-gradient(170deg, hsl(var(--accent-h) 75% 80%), hsl(var(--accent-h) 55% 58%));
+	border: 1.5px solid hsl(var(--accent-h) 40% 35%);
+	border-radius: 999px;
+	padding: 8px 18px;
+	cursor: pointer;
+	box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+	transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.lng-share:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 5px 14px rgba(0, 0, 0, 0.45), 0 0 14px hsl(var(--accent-h) 70% 65% / 0.4);
+}
+.lng-share:focus-visible {
+	outline: 3px solid var(--gold-bright);
+	outline-offset: 2px;
+}
 /* Orb + luck-field + ripple styling is injected from src/luck/lottoPicker.ts
    (kept in one file with the rest of the numerological weirdness). .lng-result
    sizing lives there too. */
