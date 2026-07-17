@@ -46,7 +46,11 @@ async function boot(): Promise<void> {
 
 	// the below-the-fold Luck Number Generator is self-contained; wire it up now
 	// so it works even before the WebGL scene finishes booting
-	initLottoPicker();
+	try {
+		initLottoPicker();
+	} catch {
+		// the generator must never take the core experience down with it
+	}
 
 	// wait for Roboto Slab so the canvas-painted button label uses it
 	try {

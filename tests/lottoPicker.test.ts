@@ -79,16 +79,36 @@ describe('initLottoPicker wiring', () => {
 		const main = nums.slice(0, 5);
 		const bonus = nums.slice(5);
 		expect(new Set(main).size).toBe(5); // unique
+		expect(new Set(bonus).size).toBe(2); // unique
 		expect([...main]).toEqual([...main].sort((a, b) => a - b)); // sorted
 		for (const n of main) expect(n).toBeGreaterThanOrEqual(1), expect(n).toBeLessThanOrEqual(50);
 		for (const n of bonus) expect(n).toBeGreaterThanOrEqual(1), expect(n).toBeLessThanOrEqual(12);
 		expect(fetchSpy).not.toHaveBeenCalled(); // the DDoS stunt is gone for good
 	});
 
-	it('clamps absurd custom settings instead of throwing', () => {
+	it('clamps absurd custom settings instead of throwing', async () => {
 		localStorage.setItem('lotto-prefs', JSON.stringify({ gameKey: 'custom', custom: { range: 3, count: 10, bonusRange: 0, bonusCount: 5 } }));
 		expect(() => initLottoPicker()).not.toThrow();
 		const spin = document.getElementById('lng-spin') as HTMLButtonElement;
-		expect(() => spin.click()).not.toThrow();
+		spin.click();
+		// a completed spin proves the clamp held the whole way through:
+		// count clamped to range (3 balls), bonus clamped away entirely
+		await vi.waitFor(
+			() => {
+				expect(document.querySelectorAll('#lng-result .lng-ball').length).toBe(3);
+				expect(document.getElementById('lng-status')?.textContent).toContain('resonance');
+			},
+			{ timeout: 4000, interval: 50 }
+		);
+	});
+
+	it('ignores malformed persisted custom values and falls back to defaults', () => {
+		localStorage.setItem(
+			'lotto-prefs',
+			JSON.stringify({ gameKey: 'custom', custom: { range: 50.5, count: 'abc', bonusRange: null } })
+		);
+		expect(() => initLottoPicker()).not.toThrow();
+		// defaults survive: C(50,5) * C(10,1) = 2,118,760 * 10
+		expect(document.getElementById('lng-chance')?.textContent).toBe('1 in 21,187,600');
 	});
 });

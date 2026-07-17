@@ -32,8 +32,8 @@ interface Game {
 const GAMES: Record<string, Game> = {
 	euromillions: { name: 'EuroMillions', themeHue: 220, config: { range: 50, count: 5, bonusRange: 12, bonusCount: 2 } },
 	lotto: { name: 'UK National', themeHue: 120, config: { range: 59, count: 6, bonusRange: 1, bonusCount: 0 } },
-	megamillions: { name: 'Mega Millions', themeHue: 25, config: { range: 70, count: 5, bonusRange: 25, bonusCount: 1 } },
-	ozlotto: { name: 'Oz Lotto', themeHue: 80, config: { range: 45, count: 7, bonusRange: 1, bonusCount: 0 } },
+	megamillions: { name: 'Mega Millions', themeHue: 25, config: { range: 70, count: 5, bonusRange: 24, bonusCount: 1 } },
+	ozlotto: { name: 'Oz Lotto', themeHue: 80, config: { range: 47, count: 7, bonusRange: 1, bonusCount: 0 } },
 	powerball: { name: 'Powerball USA', themeHue: 345, config: { range: 69, count: 5, bonusRange: 26, bonusCount: 1 } },
 	powerballAus: { name: 'Powerball AUS', themeHue: 200, config: { range: 35, count: 7, bonusRange: 20, bonusCount: 1 } },
 	setForLife: { name: 'Set For Life UK', themeHue: 285, config: { range: 47, count: 5, bonusRange: 10, bonusCount: 1 } }
@@ -502,7 +502,13 @@ export function initLottoPicker(): void {
 			custom?: Partial<GameConfig>;
 		};
 		if (saved.gameKey && (saved.gameKey === 'custom' || GAMES[saved.gameKey])) currentGameKey = saved.gameKey;
-		if (saved.custom) customConfig = saved.custom;
+		// only whole numbers survive — anything else would blow up BigInt in nChooseK
+		if (saved.custom && typeof saved.custom === 'object') {
+			for (const key of Object.values(ID_MAP)) {
+				const v = saved.custom[key];
+				if (typeof v === 'number' && Number.isInteger(v)) customConfig[key] = v;
+			}
+		}
 	} catch { /* corrupt prefs — start fresh */ }
 
 	const rangeEls = Object.keys(ID_MAP).map((id) => ({
@@ -584,6 +590,7 @@ export function initLottoPicker(): void {
 		if (!fieldCanvas) {
 			fieldCanvas = document.createElement('canvas');
 			fieldCanvas.className = 'lng-luckfield';
+			fieldCanvas.setAttribute('aria-hidden', 'true'); // pure decoration
 			root!.appendChild(fieldCanvas); // covers the whole section, behind the content
 			fieldCtx = fieldCanvas.getContext('2d');
 		}
@@ -687,6 +694,8 @@ export function initLottoPicker(): void {
 
 			const ball = document.createElement('div');
 			ball.className = 'lng-ball';
+			ball.setAttribute('role', 'img'); // the golden bonus ring is paint-only, so say it out loud
+			ball.setAttribute('aria-label', `${isBonus ? 'Bonus' : 'Main'} number ${n}`);
 			ball.style.setProperty('--delay', `${i * 70}ms`);
 
 			const canvas = document.createElement('canvas');
@@ -770,32 +779,37 @@ export function initLottoPicker(): void {
 		spinning = true;
 		spinBtn!.disabled = true;
 
-		// cosmic theatre while the real entropy harvest runs
-		for (const line of INCANTATIONS) {
-			statusEl!.textContent = line;
-			await wait(140);
+		try {
+			// cosmic theatre while the real entropy harvest runs
+			for (const line of INCANTATIONS) {
+				statusEl!.textContent = line;
+				await wait(140);
+			}
+			const seed = await cosmicSeed();
+			const cosmos = summonCosmos();
+			const foamSeed = (seed ^ Math.floor(cosmos() * 0x1_0000_0000)) >>> 0; // fold foam into the seed
+			const rng = mulberry32(foamSeed);
+
+			const cfg = getActiveConfig();
+			const main = pickUnique(cfg.range, cfg.count, rng);
+			const bonus = cfg.bonusCount ? pickUnique(cfg.bonusRange, cfg.bonusCount, rng) : [];
+
+			renderBalls(main, bonus);
+			track('luck_numbers_spun', { game: currentGameKey, count: cfg.count });
+
+			// average resonance drives the field readout
+			const phase = lunarPhase(Date.now());
+			const avg = Math.round(
+				[...main, ...bonus].reduce((s, n) => s + luckResonance(n, phase), 0) / (main.length + bonus.length)
+			);
+			await wait(main.length * 70 + 400);
+			statusEl!.textContent = `Luck-field resonance ${avg}% — ${fieldQuip(avg)}. 🍀`;
+		} catch {
+			statusEl!.textContent = 'The cosmos misfired — try another spin. 🍀';
+		} finally {
+			spinBtn!.disabled = false;
+			spinning = false;
 		}
-		const seed = await cosmicSeed();
-		const cosmos = summonCosmos();
-		const foamSeed = (seed ^ Math.floor(cosmos() * 0x1_0000_0000)) >>> 0; // fold foam into the seed
-		const rng = mulberry32(foamSeed);
-
-		const cfg = getActiveConfig();
-		const main = pickUnique(cfg.range, cfg.count, rng);
-		const bonus = cfg.bonusCount ? pickUnique(cfg.bonusRange, cfg.bonusCount, rng) : [];
-
-		renderBalls(main, bonus);
-		track('luck_numbers_spun', { game: currentGameKey, count: cfg.count });
-
-		// average resonance drives the field readout
-		const phase = lunarPhase(Date.now());
-		const avg = Math.round(
-			[...main, ...bonus].reduce((s, n) => s + luckResonance(n, phase), 0) / (main.length + bonus.length)
-		);
-		await wait(main.length * 70 + 400);
-		statusEl!.textContent = `Luck-field resonance ${avg}% — ${fieldQuip(avg)}. 🍀`;
-		spinBtn!.disabled = false;
-		spinning = false;
 	}
 	spinBtn.addEventListener('click', () => void spin());
 	addEventListener('resize', () => {
