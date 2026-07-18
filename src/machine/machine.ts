@@ -261,7 +261,7 @@ function buildClamp(_gold: THREE.Material, _silver: THREE.Material, darkMetal: T
 		}
 	}
 
-	// ---- central boss: a turned gold stack with a knurl, collar and screw
+	// ---- central boss: a turned gold stack, all one metal — no trim bands
 	const boss = lathe(
 		[
 			[0.125, 0], [0.125, 0.014], [0.108, 0.022], // base flange
@@ -273,11 +273,6 @@ function buildClamp(_gold: THREE.Material, _silver: THREE.Material, darkMetal: T
 	);
 	boss.position.z = 0.045;
 	g.add(boss);
-	// knurled grip band around the drum (many facets, flat-shaded on purpose)
-	const knurl = new THREE.Mesh(new THREE.CylinderGeometry(0.099, 0.099, 0.02, 36, 1), silver);
-	knurl.rotation.x = Math.PI / 2;
-	knurl.position.z = 0.086;
-	g.add(knurl);
 	// no screws up here — the crown of the boss is a pearl in a gold collar
 	const collarRing = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.011, 10, 28), gold);
 	collarRing.position.z = 0.128;
@@ -285,28 +280,8 @@ function buildClamp(_gold: THREE.Material, _silver: THREE.Material, darkMetal: T
 	crown.position.z = 0.135;
 	g.add(collarRing, crown);
 
-	// faceted diamonds around the flange where the screws used to be
-	const diamond = new THREE.MeshPhysicalMaterial({
-		color: 0xf6faff,
-		metalness: 0,
-		roughness: 0.02,
-		clearcoat: 1,
-		clearcoatRoughness: 0,
-		envMapIntensity: 3.2,
-		emissive: 0x8899bb,
-		emissiveIntensity: 0.22,
-		flatShading: true // hard facets = the sparkle
-	});
-	for (let i = 0; i < 4; i++) {
-		const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-		const gem = new THREE.Mesh(new THREE.IcosahedronGeometry(0.017, 0), diamond);
-		gem.rotation.set(i * 1.3, i * 0.8, i * 2.1); // varied facets catch varied light
-		gem.position.set(Math.cos(a) * 0.108, Math.sin(a) * 0.108, 0.1); // proud of the deck
-		g.add(gem);
-	}
-
-	// He-Man crossguard: two mirrored ribs sweeping around the boss, each
-	// tipped with a ball finial — the Power Sword's curves in miniature
+	// He-Man crossguard: two mirrored ribs sweeping around the boss. Ends are
+	// capped in the same gold — quiet curves, no bead clutter.
 	const ribR = 0.1;
 	const ribArc = 2.7;
 	for (const side of [1, -1]) {
@@ -316,9 +291,9 @@ function buildClamp(_gold: THREE.Material, _silver: THREE.Material, darkMetal: T
 		rib.position.z = 0.08;
 		g.add(rib);
 		for (const t of [start, start + ribArc]) {
-			const finial = new THREE.Mesh(new THREE.SphereGeometry(0.019, 14, 10), pearl);
-			finial.position.set(Math.cos(t) * ribR, Math.sin(t) * ribR, 0.08);
-			g.add(finial);
+			const cap = new THREE.Mesh(new THREE.SphereGeometry(0.011, 10, 8), gold);
+			cap.position.set(Math.cos(t) * ribR, Math.sin(t) * ribR, 0.08);
+			g.add(cap);
 		}
 	}
 
