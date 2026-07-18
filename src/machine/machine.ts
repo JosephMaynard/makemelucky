@@ -7,159 +7,294 @@ import type { SpriteSet } from '../gfx/textures';
 
 const QUADRANT_ANGLES = [Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.75];
 
-function makeGearGeometry(radius = 0.09, teeth = 12, depth = 0.03): THREE.ExtrudeGeometry {
-	const shape = new THREE.Shape();
-	const inner = radius * 0.78;
-	for (let i = 0; i < teeth * 2; i++) {
-		const r = i % 2 === 0 ? radius : inner;
-		const a0 = (i / (teeth * 2)) * Math.PI * 2;
-		const a1 = ((i + 1) / (teeth * 2)) * Math.PI * 2;
-		if (i === 0) shape.moveTo(Math.cos(a0) * r, Math.sin(a0) * r);
-		shape.lineTo(Math.cos(a0) * r, Math.sin(a0) * r);
-		shape.lineTo(Math.cos(a1) * r, Math.sin(a1) * r);
-	}
-	shape.closePath();
-	const hole = new THREE.Path();
-	hole.absarc(0, 0, radius * 0.3, 0, Math.PI * 2, true);
-	shape.holes.push(hole);
-	return new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+/* ---------- gears that actually mesh ----------
+   Real gearing rules, simplified: gears can only mesh if they share a tooth
+   `module` (m). Pitch radius = m·T/2, centre distance = sum of pitch radii,
+   and the partner turns at -w·T₁/T₂. Get those right and the teeth interlock
+   like a watch; get them wrong and it's the old flat cog soup. */
+
+interface GearOpts {
+	module: number;
+	teeth: number;
+	depth: number;
+	hubRadius?: number;
+	web?: 'solid' | 'pierced' | 'spoked';
 }
 
-function angularArmGeometry(wBase: number, wTip: number, l: number, depth: number): THREE.ExtrudeGeometry {
-	// tapered, chamfered strut — long axis along -Y, base at origin
+function gearGeometry({ module: m, teeth, depth, hubRadius, web = 'solid' }: GearOpts): THREE.ExtrudeGeometry {
+	const rPitch = (m * teeth) / 2;
+	const rTip = rPitch + m * 0.72;
+	const rRoot = rPitch - m * 0.95;
+	const rHub = hubRadius ?? Math.max(rRoot * 0.18, 0.014);
+	const pitch = (Math.PI * 2) / teeth;
+	const wRoot = pitch * 0.26; // tooth half-width at root — gaps stay generous
+	const wTip = pitch * 0.15; // …narrowing to the tip, so partners slot in
+
 	const s = new THREE.Shape();
-	s.moveTo(-wBase / 2, 0.04);
-	s.lineTo(wBase / 2, 0.04);
-	s.lineTo(wTip / 2, -l);
-	s.lineTo(-wTip / 2, -l);
+	for (let i = 0; i < teeth; i++) {
+		const a = i * pitch;
+		s.absarc(0, 0, rRoot, a - pitch / 2, a - wRoot, false);
+		s.lineTo(Math.cos(a - wTip) * rTip, Math.sin(a - wTip) * rTip);
+		s.absarc(0, 0, rTip, a - wTip, a + wTip, false);
+		s.lineTo(Math.cos(a + wRoot) * rRoot, Math.sin(a + wRoot) * rRoot);
+	}
 	s.closePath();
-	return new THREE.ExtrudeGeometry(s, {
+
+	const bore = new THREE.Path();
+	bore.absarc(0, 0, rHub, 0, Math.PI * 2, true);
+	s.holes.push(bore);
+
+	if (web === 'pierced') {
+		// a ring of drilled lightening holes, like the reference wheelwork
+		const n = Math.max(5, Math.round(teeth / 3));
+		const rp = (rRoot + rHub) / 2;
+		const hr = Math.min((rRoot - rHub) * 0.3, rp * Math.sin(Math.PI / n) * 0.62);
+		for (let i = 0; i < n; i++) {
+			const a = (i / n) * Math.PI * 2;
+			const hole = new THREE.Path();
+			hole.absarc(Math.cos(a) * rp, Math.sin(a) * rp, hr, 0, Math.PI * 2, true);
+			s.holes.push(hole);
+		}
+	} else if (web === 'spoked') {
+		// four sector cut-outs leaving a cross of spokes
+		const ri = rHub + m * 1.1;
+		const ro = rRoot - m * 1.2;
+		if (ro > ri) {
+			for (let i = 0; i < 4; i++) {
+				const a0 = (i / 4) * Math.PI * 2 + 0.3;
+				const a1 = a0 + Math.PI / 2 - 0.6;
+				const hole = new THREE.Path();
+				hole.absarc(0, 0, ri, a0, a1, false);
+				hole.lineTo(Math.cos(a1) * ro, Math.sin(a1) * ro);
+				hole.absarc(0, 0, ro, a1, a0, true);
+				hole.closePath();
+				s.holes.push(hole);
+			}
+		}
+	}
+
+	const geo = new THREE.ExtrudeGeometry(s, {
 		depth,
 		bevelEnabled: true,
-		bevelThickness: 0.014,
-		bevelSize: 0.014,
-		bevelSegments: 1 // single segment = crisp chamfer, not a rounded sausage
+		bevelThickness: 0.0035,
+		bevelSize: 0.0035,
+		bevelSegments: 1,
+		curveSegments: 5
 	});
+	geo.translate(0, 0, -depth / 2);
+	return geo;
 }
 
-/** Three-pronged angular clamp plate outline: one long prong gripping inward
- *  (-y), two short braced prongs angled back and outward. */
-function clampPlateGeometry(): THREE.ExtrudeGeometry {
+interface MeshedGear {
+	x: number;
+	y: number;
+	rot: number;
+	teeth: number;
+	speed: number;
+}
+
+/** Rotation + speed for a gear meshing with `parent` at centre (cx, cy).
+ *  The half-tooth phase offset makes the teeth interlock; the -T₁/T₂ ratio
+ *  keeps them interlocked forever. */
+function meshWith(parent: MeshedGear, cx: number, cy: number, teeth: number): MeshedGear {
+	const phi = Math.atan2(cy - parent.y, cx - parent.x);
+	const fracP = ((phi - parent.rot) * parent.teeth) / (2 * Math.PI);
+	const rot = phi + Math.PI - ((2 * Math.PI) / teeth) * (0.5 - (fracP - Math.floor(fracP)));
+	return { x: cx, y: cy, rot, teeth, speed: (-parent.speed * parent.teeth) / teeth };
+}
+
+/** Close a point list into a Shape with rounded corners — the single biggest
+ *  antidote to the low-poly look: every silhouette edge becomes a curve that
+ *  catches an env-map highlight. */
+function roundedShape(pts: THREE.Vector2[], radius: number): THREE.Shape {
+	const s = new THREE.Shape();
+	const n = pts.length;
+	for (let i = 0; i < n; i++) {
+		const prev = pts[(i - 1 + n) % n];
+		const v = pts[i];
+		const next = pts[(i + 1) % n];
+		const r = Math.min(radius, v.distanceTo(prev) / 2.6, v.distanceTo(next) / 2.6);
+		const pIn = v.clone().add(prev.clone().sub(v).setLength(r));
+		const pOut = v.clone().add(next.clone().sub(v).setLength(r));
+		if (i === 0) s.moveTo(pIn.x, pIn.y);
+		else s.lineTo(pIn.x, pIn.y);
+		s.quadraticCurveTo(v.x, v.y, pOut.x, pOut.y);
+	}
+	s.closePath();
+	return s;
+}
+
+/** Three-pronged clamp plate outline: one long prong gripping inward (-y),
+ *  two short braced prongs angled back and outward. Waisted between prongs so
+ *  it reads as a designed casting, not a star cut from sheet. */
+function clampPlatePoints(scale = 1): THREE.Vector2[] {
 	const prongs = [
-		{ a: -Math.PI / 2, len: 0.42, wBase: 0.23, wTip: 0.12 }, // main, toward the button
-		{ a: Math.PI * 0.26, len: 0.24, wBase: 0.17, wTip: 0.1 },
-		{ a: Math.PI * 0.74, len: 0.24, wBase: 0.17, wTip: 0.1 }
+		{ a: -Math.PI / 2, len: 0.42, wBase: 0.2, wTip: 0.115 }, // main, toward the button
+		{ a: Math.PI * 0.26, len: 0.24, wBase: 0.15, wTip: 0.095 },
+		{ a: Math.PI * 0.74, len: 0.24, wBase: 0.15, wTip: 0.095 }
 	];
 	const pts: THREE.Vector2[] = [];
-	for (const p of prongs) {
+	for (let i = 0; i < prongs.length; i++) {
+		const p = prongs[i];
 		const dir = new THREE.Vector2(Math.cos(p.a), Math.sin(p.a));
 		const perp = new THREE.Vector2(-dir.y, dir.x);
 		pts.push(
-			new THREE.Vector2().addScaledVector(dir, 0.09).addScaledVector(perp, p.wBase / 2),
+			new THREE.Vector2().addScaledVector(dir, 0.1).addScaledVector(perp, p.wBase / 2),
 			new THREE.Vector2().addScaledVector(dir, p.len).addScaledVector(perp, p.wTip / 2),
 			new THREE.Vector2().addScaledVector(dir, p.len).addScaledVector(perp, -p.wTip / 2),
-			new THREE.Vector2().addScaledVector(dir, 0.09).addScaledVector(perp, -p.wBase / 2)
+			new THREE.Vector2().addScaledVector(dir, 0.1).addScaledVector(perp, -p.wBase / 2)
 		);
 	}
-	const s = new THREE.Shape();
-	pts.forEach((p, i) => (i === 0 ? s.moveTo(p.x, p.y) : s.lineTo(p.x, p.y)));
-	s.closePath();
-	return new THREE.ExtrudeGeometry(s, {
-		depth: 0.05,
+	return pts.map((v) => v.multiplyScalar(scale));
+}
+
+function clampPlateGeometry(scale = 1, depth = 0.045): THREE.ExtrudeGeometry {
+	return new THREE.ExtrudeGeometry(roundedShape(clampPlatePoints(scale), 0.05), {
+		depth,
 		bevelEnabled: true,
-		bevelThickness: 0.016,
-		bevelSize: 0.016,
-		bevelSegments: 1 // crisp chamfer
+		bevelThickness: 0.02,
+		bevelSize: 0.02,
+		bevelSegments: 3, // soft machined edge, not a chamfered sticker
+		curveSegments: 6
 	});
 }
 
-/** Angular tri-prong clamp: bold gold plate like the V2 original, dressed with
- *  silver hex hardware and gem-set brace tips. */
-function buildClamp(gold: THREE.Material, silver: THREE.Material, darkMetal: THREE.Material): THREE.Group {
+/** Turned-metal profile (a lathe) — collars, fillets and steps like the parts
+ *  came off a watchmaker's lathe rather than a box of primitives. */
+function lathe(profile: [number, number][], mat: THREE.Material, segments = 28): THREE.Mesh {
+	const m = new THREE.Mesh(
+		new THREE.LatheGeometry(profile.map(([r, y]) => new THREE.Vector2(r, y)), segments),
+		mat
+	);
+	m.rotation.x = Math.PI / 2; // lathe axis → z
+	return m;
+}
+
+/** Tri-prong clamp, rebuilt as jewellery: rounded castings with soft bevels,
+ *  lathe-turned hardware, a working piston down the gripping arm and pearls to
+ *  match the face. Its own polished materials — the shared face metals are too
+ *  rough for parts this close to the camera. */
+function buildClamp(_gold: THREE.Material, _silver: THREE.Material, darkMetal: THREE.Material): THREE.Group {
 	const g = new THREE.Group();
-	const gemMat = new THREE.MeshPhysicalMaterial({
-		color: 0xcfe2f8,
-		metalness: 0,
-		roughness: 0.06,
-		clearcoat: 1,
-		envMapIntensity: 2.4,
-		emissive: 0x36495e,
-		emissiveIntensity: 0.4
+
+	const gold = new THREE.MeshPhysicalMaterial({
+		color: 0xd8ae4e, metalness: 1, roughness: 0.22, envMapIntensity: 1.7, clearcoat: 0.35, clearcoatRoughness: 0.25
+	});
+	const goldDeep = new THREE.MeshStandardMaterial({ color: 0x8a6a28, metalness: 1, roughness: 0.42, envMapIntensity: 1.2 });
+	const silver = new THREE.MeshPhysicalMaterial({
+		color: 0xcfd6dc, metalness: 1, roughness: 0.16, envMapIntensity: 1.9, clearcoat: 0.3, clearcoatRoughness: 0.2
+	});
+	const pearl = new THREE.MeshPhysicalMaterial({
+		color: 0xcfe2f8, metalness: 0, roughness: 0.06, clearcoat: 1, envMapIntensity: 2.4,
+		emissive: 0x36495e, emissiveIntensity: 0.4
 	});
 
-	const hex = (r: number, h: number, mat: THREE.Material, x: number, y: number, z: number) => {
-		const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.08, h, 6), mat);
-		m.rotation.x = Math.PI / 2;
-		m.position.set(x, y, z);
-		g.add(m);
-		return m;
-	};
+	// ---- body: dark seat, then the gold casting with soft rounded bevels
+	const seat = new THREE.Mesh(clampPlateGeometry(1.045, 0.02), darkMetal);
+	seat.position.z = -0.016;
+	const plate = new THREE.Mesh(clampPlateGeometry(1, 0.045), gold);
+	// a slimmer raised deck on top makes the casting read as two machined layers
+	const deck = new THREE.Mesh(clampPlateGeometry(0.82, 0.02), goldDeep);
+	deck.position.z = 0.052;
+	g.add(seat, plate, deck);
 
-	// dark under-plate then the bold gold tri-prong plate (a slim pinstripe
-	// outline, not a cartoon border)
-	const under = new THREE.Mesh(clampPlateGeometry(), darkMetal);
-	under.scale.set(1.05, 1.05, 0.35);
-	under.position.z = -0.012;
-	const plate = new THREE.Mesh(clampPlateGeometry(), gold);
-	g.add(under, plate);
+	// ---- the gripping arm: recessed channel, piston rod, guide collars
+	const channelShape = roundedShape([
+		new THREE.Vector2(-0.042, -0.1),
+		new THREE.Vector2(0.042, -0.1),
+		new THREE.Vector2(0.026, -0.365),
+		new THREE.Vector2(-0.026, -0.365)
+	], 0.024);
+	const channel = new THREE.Mesh(
+		new THREE.ExtrudeGeometry(channelShape, { depth: 0.012, bevelEnabled: false, curveSegments: 6 }),
+		darkMetal
+	);
+	channel.position.z = 0.062;
+	g.add(channel);
 
-	// silver spine inlay running down the gripping prong
-	const spine = new THREE.Mesh(angularArmGeometry(0.07, 0.035, 0.31, 0.014), silver);
-	spine.position.set(0, -0.05, 0.062);
-	g.add(spine);
-
-	// tip hardware — stops at the gold ring, never over the button cap (the
-	// cap sinks on press and would reveal the tip's underside)
-	hex(0.065, 0.045, silver, 0, -0.375, 0.045);
-	const tipDome = new THREE.Mesh(new THREE.SphereGeometry(0.024, 14, 10), silver);
-	tipDome.position.set(0, -0.375, 0.072);
-	g.add(tipDome);
-
-	// intricate silver inlay across the bare gold: fillets tracing the main
-	// prong's edges, ladder bands across it, and a strip down each brace
-	const strip = (w: number, l: number, x: number, y: number, rz: number, z = 0.066) => {
-		const m = new THREE.Mesh(new THREE.BoxGeometry(w, l, 0.008), silver);
-		m.position.set(x, y, z);
-		m.rotation.z = rz;
-		g.add(m);
-		return m;
-	};
-	strip(0.011, 0.42, 0.068, -0.155, -0.1); // edge fillets, tapering with the prong
-	strip(0.011, 0.42, -0.068, -0.155, 0.1);
-	strip(0.13, 0.011, 0, -0.15, 0); // ladder bands under the spine
-	strip(0.115, 0.011, 0, -0.235, 0);
-	strip(0.1, 0.011, 0, -0.315, 0);
-	for (const side of [-1, 1]) {
-		const a = Math.PI * (0.5 + side * 0.24);
-		strip(0.011, 0.13, Math.cos(a) * 0.17, Math.sin(a) * 0.17, a - Math.PI / 2);
+	const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.0135, 0.0135, 0.27, 14), silver);
+	rod.position.set(0, -0.235, 0.077);
+	g.add(rod);
+	for (const y of [-0.16, -0.27]) {
+		const guide = lathe([[0.016, -0.011], [0.03, -0.008], [0.033, 0], [0.03, 0.008], [0.016, 0.011]], gold, 20);
+		guide.position.set(0, y, 0.077);
+		g.add(guide);
 	}
 
-	// gem-set hexes on the two brace prongs
+	// ---- gripper foot: turned ferrule + rounded pad, stopping shy of the cap
+	const ferrule = lathe(
+		[[0.014, -0.03], [0.05, -0.026], [0.056, -0.012], [0.044, -0.004], [0.052, 0.006], [0.038, 0.02], [0.0, 0.026]],
+		silver
+	);
+	ferrule.position.set(0, -0.375, 0.06);
+	g.add(ferrule);
+	const pad = new THREE.Mesh(new THREE.CapsuleGeometry(0.02, 0.05, 6, 14), goldDeep);
+	pad.rotation.z = Math.PI / 2;
+	pad.position.set(0, -0.408, 0.045);
+	g.add(pad);
+
+	// ---- brace prongs: turned collars holding pearls, echoing the face ring
 	for (const side of [-1, 1]) {
 		const a = Math.PI * (0.5 + side * 0.24);
 		const ex = Math.cos(a) * 0.19;
 		const ey = Math.sin(a) * 0.19;
-		hex(0.055, 0.04, silver, ex, ey, 0.05);
-		const gem = new THREE.Mesh(new THREE.SphereGeometry(0.027, 14, 10), gemMat);
-		gem.position.set(ex, ey, 0.082);
+		const collar = lathe(
+			[[0.016, -0.02], [0.052, -0.016], [0.058, -0.002], [0.046, 0.008], [0.034, 0.014], [0.0, 0.018]],
+			silver
+		);
+		collar.position.set(ex, ey, 0.062);
+		g.add(collar);
+		const gem = new THREE.Mesh(new THREE.SphereGeometry(0.032, 18, 14), pearl);
+		gem.position.set(ex, ey, 0.092);
 		g.add(gem);
 	}
 
-	// central boss: octagonal gold block, silver hex plate, gold collar, dome screw
-	const boss = new THREE.Mesh(new THREE.CylinderGeometry(0.098, 0.112, 0.05, 8), gold);
-	boss.rotation.x = Math.PI / 2;
-	boss.rotation.y = Math.PI / 8;
-	boss.position.z = 0.06;
+	// ---- rivet line down each edge of the main arm — machined, purposeful
+	for (const side of [-1, 1]) {
+		for (let i = 0; i < 3; i++) {
+			const y = -0.14 - i * 0.085;
+			const w = 0.075 - i * 0.012;
+			const rivet = new THREE.Mesh(new THREE.SphereGeometry(0.0115, 10, 8), silver);
+			rivet.scale.z = 0.55;
+			rivet.position.set(side * w, y, 0.068);
+			g.add(rivet);
+		}
+	}
+
+	// ---- central boss: a turned gold stack with a knurl, collar and screw
+	const boss = lathe(
+		[
+			[0.125, 0], [0.125, 0.014], [0.108, 0.022], // base flange
+			[0.095, 0.03], [0.095, 0.052], // drum
+			[0.075, 0.06], [0.062, 0.062], // shoulder
+			[0.05, 0.07], [0.048, 0.082], [0.0, 0.09] // cap swell
+		],
+		gold
+	);
+	boss.position.z = 0.045;
 	g.add(boss);
-	hex(0.062, 0.03, silver, 0, 0, 0.095);
-	const collar = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.011, 8, 24), gold);
-	collar.position.z = 0.112;
-	const screw = new THREE.Mesh(new THREE.SphereGeometry(0.03, 16, 12), darkMetal);
-	screw.position.z = 0.116;
-	const slot = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.012, 0.006), gold);
-	slot.position.z = 0.143;
+	// knurled grip band around the drum (many facets, flat-shaded on purpose)
+	const knurl = new THREE.Mesh(new THREE.CylinderGeometry(0.099, 0.099, 0.02, 36, 1), silver);
+	knurl.rotation.x = Math.PI / 2;
+	knurl.position.z = 0.086;
+	g.add(knurl);
+	const collarRing = new THREE.Mesh(new THREE.TorusGeometry(0.052, 0.01, 10, 28), gold);
+	collarRing.position.z = 0.128;
+	const screwDome = new THREE.Mesh(new THREE.SphereGeometry(0.03, 18, 14), darkMetal);
+	screwDome.scale.z = 0.7;
+	screwDome.position.z = 0.13;
+	const slot = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.01, 0.005), gold);
+	slot.position.z = 0.152;
 	slot.rotation.z = Math.PI / 4;
-	g.add(collar, screw, slot);
+	g.add(collarRing, screwDome, slot);
+	// four dome screws holding the flange down
+	for (let i = 0; i < 4; i++) {
+		const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+		const s = new THREE.Mesh(new THREE.SphereGeometry(0.013, 10, 8), darkMetal);
+		s.scale.z = 0.55;
+		s.position.set(Math.cos(a) * 0.108, Math.sin(a) * 0.108, 0.062);
+		g.add(s);
+	}
 
 	return g;
 }
@@ -324,15 +459,6 @@ export class Machine {
 			frame.position.z = 0.07;
 			quadrant.add(frame);
 
-			// hex-bolt greebles at the painted stud positions
-			for (const rr of [0.595, 0.745]) {
-				const ang = QUADRANT_ANGLES[q] + Math.PI / 4; // one per quadrant edge region
-				const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.032, 0.028, 6), gold);
-				bolt.rotation.x = Math.PI / 2;
-				bolt.position.set(Math.cos(ang) * R * rr, Math.sin(ang) * R * rr, 0.095);
-				quadrant.add(bolt);
-			}
-
 			this.faceSpin.add(quadrant);
 			quadrant.userData.dir = new THREE.Vector2(
 				Math.cos(QUADRANT_ANGLES[q]),
@@ -427,16 +553,6 @@ export class Machine {
 		deepPlate.position.z = -0.035;
 		this.mechGroup.add(deepPlate);
 
-		// big slow dark wheels on the deep layer
-		for (let i = 0; i < 4; i++) {
-			const wheel = new THREE.Mesh(makeGearGeometry(0.135, 18, 0.02), darkIron);
-			const ang = (i / 4) * Math.PI * 2 + 0.4;
-			wheel.position.set(Math.cos(ang) * R * 0.505, Math.sin(ang) * R * 0.505, -0.014);
-			wheel.userData.speed = 0.16 * (i % 2 ? 1 : -1);
-			this.mechGroup.add(wheel);
-			this.cogs.push(wheel);
-		}
-
 		// mid plate with a working aperture (ring segments leaving gaps)
 		for (let s = 0; s < 4; s++) {
 			const seg = new THREE.Mesh(
@@ -447,44 +563,86 @@ export class Machine {
 			this.mechGroup.add(seg);
 		}
 
-		// main brass/steel gear train
-		const N_COGS = 9;
-		for (let i = 0; i < N_COGS; i++) {
-			const big = i % 2 === 0;
-			const radius = big ? 0.088 : 0.062;
-			const cog = new THREE.Mesh(makeGearGeometry(radius, big ? 11 : 8, 0.028), big ? brass : steel);
-			const ang = (i / N_COGS) * Math.PI * 2;
-			cog.position.set(Math.cos(ang) * R * 0.515, Math.sin(ang) * R * 0.515, big ? 0.018 : 0.032);
-			cog.rotation.z = Math.random() * Math.PI;
-			cog.userData.speed = (big ? 0.5 : -0.85) * (0.8 + (i % 3) * 0.2);
-			const hub = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.24, radius * 0.24, 0.04, 12), centreGold);
-			hub.rotation.x = Math.PI / 2;
-			cog.add(hub);
-			this.mechGroup.add(cog);
-			this.cogs.push(cog);
+		// ---------- the gear train: ONE designed mechanism, repeated 4×.
+		// A pierced brass wheel drives a spoked steel wheel drives a solid gold
+		// pinion — same tooth module throughout, centres one pitch-sum apart,
+		// phases solved by meshWith(), speeds locked to the -T₁/T₂ ratio. The
+		// teeth interlock and counter-rotate like the real thing.
+		const MODULE = 0.0128;
+		const Rc = R * 0.515; // the arc the train rides
+		const TRAIN = [
+			{ teeth: 18, web: 'pierced' as const, depth: 0.03 },
+			{ teeth: 11, web: 'spoked' as const, depth: 0.026 },
+			{ teeth: 8, web: 'solid' as const, depth: 0.024 }
+		];
+		const trainGeos = TRAIN.map((t) => gearGeometry({ module: MODULE, teeth: t.teeth, depth: t.depth, web: t.web }));
+		const bigWheelGeo = gearGeometry({ module: MODULE, teeth: 28, depth: 0.018, web: 'pierced', hubRadius: 0.03 });
+		const pitchR = (t: number) => (MODULE * t) / 2;
+		// angular steps along the arc so adjacent pitch circles kiss exactly
+		const stepAngle = (tA: number, tB: number) =>
+			2 * Math.asin((pitchR(tA) + pitchR(tB) + MODULE * 0.02) / (2 * Rc));
+
+		for (let q = 0; q < 4; q++) {
+			// centred in the open window between the diagonal clamps
+			const a0 = QUADRANT_ANGLES[q] + Math.PI / 4 - 0.24;
+			const angles = [
+				a0,
+				a0 + stepAngle(TRAIN[0].teeth, TRAIN[1].teeth),
+				a0 + stepAngle(TRAIN[0].teeth, TRAIN[1].teeth) + stepAngle(TRAIN[1].teeth, TRAIN[2].teeth)
+			];
+			const centers = angles.map((a) => ({ x: Math.cos(a) * Rc, y: Math.sin(a) * Rc }));
+
+			// solve the chain: A is the driver, B meshes with A, C meshes with B
+			let spec: MeshedGear = { x: centers[0].x, y: centers[0].y, rot: a0, teeth: TRAIN[0].teeth, speed: 0.55 };
+			const mats = [brass, steel, centreGold];
+			spec.rot += q * 0.7; // each quadrant's unit starts at its own phase
+			for (let i = 0; i < 3; i++) {
+				if (i > 0) spec = meshWith(spec, centers[i].x, centers[i].y, TRAIN[i].teeth);
+				const cog = new THREE.Mesh(trainGeos[i], mats[i]);
+				cog.position.set(spec.x, spec.y, 0.02);
+				cog.rotation.z = spec.rot;
+				cog.userData.speed = spec.speed;
+				this.mechGroup.add(cog);
+				this.cogs.push(cog);
+
+				// arbor behind, hub cap in front — every wheel sits on a real axle
+				const arbor = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.08, 10), darkIron);
+				arbor.rotation.x = Math.PI / 2;
+				arbor.position.set(spec.x, spec.y, -0.01);
+				this.mechGroup.add(arbor);
+				const cap = new THREE.Mesh(new THREE.SphereGeometry(0.02, 12, 8), i === 1 ? ruby : centreGold);
+				cap.scale.z = 0.6;
+				cap.position.set(spec.x, spec.y, 0.038);
+				this.mechGroup.add(cap);
+
+				// the driver carries a big slow wheel on the same arbor, one
+				// layer down — wheel-and-pinion, the way real movements stack
+				if (i === 0) {
+					const wheel = new THREE.Mesh(bigWheelGeo, darkIron);
+					wheel.position.set(spec.x, spec.y, -0.016);
+					wheel.rotation.z = spec.rot * 0.5;
+					wheel.userData.speed = spec.speed; // same arbor, same spin
+					this.mechGroup.add(wheel);
+					this.cogs.push(wheel);
+				}
+			}
+
+			// a watchmaker's bridge spanning the unit, dome-screwed at each end
+			const span = Math.hypot(centers[2].x - centers[0].x, centers[2].y - centers[0].y);
+			const bridge = new THREE.Mesh(new THREE.BoxGeometry(span + 0.1, 0.05, 0.012), plateMatMid);
+			bridge.position.set((centers[0].x + centers[2].x) / 2, (centers[0].y + centers[2].y) / 2, -0.002);
+			bridge.rotation.z = Math.atan2(centers[2].y - centers[0].y, centers[2].x - centers[0].x);
+			this.mechGroup.add(bridge);
+			for (const end of [centers[0], centers[2]]) {
+				const screw = new THREE.Mesh(new THREE.SphereGeometry(0.012, 10, 8), steel);
+				screw.scale.z = 0.55;
+				const out = Math.hypot(end.x, end.y);
+				screw.position.set((end.x / out) * (out + 0.055), (end.y / out) * (out + 0.055), 0.005);
+				this.mechGroup.add(screw);
+			}
 		}
-		// half-hidden big wheels peeking from under the button's skirt
-		for (let i = 0; i < 3; i++) {
-			const wheel = new THREE.Mesh(makeGearGeometry(0.16, 16, 0.025), brass);
-			const ang = (i / 3) * Math.PI * 2 + 0.7;
-			wheel.position.set(Math.cos(ang) * R * 0.485, Math.sin(ang) * R * 0.485, 0.008);
-			wheel.userData.speed = 0.22 * (i % 2 ? 1 : -1);
-			this.mechGroup.add(wheel);
-			this.cogs.push(wheel);
-		}
-		// small idler pinions tucked between the main train, filling the window
-		for (let i = 0; i < 6; i++) {
-			const ang = ((i + 0.5) / 6) * Math.PI * 2 + 0.35;
-			const pinion = new THREE.Mesh(makeGearGeometry(i % 2 ? 0.052 : 0.068, i % 2 ? 7 : 9, 0.022), i % 2 ? steel : brass);
-			pinion.position.set(Math.cos(ang) * R * 0.53, Math.sin(ang) * R * 0.53, i % 2 ? 0.024 : 0.038);
-			pinion.rotation.z = Math.random() * Math.PI;
-			pinion.userData.speed = (i % 2 ? -1.3 : 1.05) * (0.85 + (i % 3) * 0.2);
-			const pinionHub = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.034, 10), centreGold);
-			pinionHub.rotation.x = Math.PI / 2;
-			pinion.add(pinionHub);
-			this.mechGroup.add(pinion);
-			this.cogs.push(pinion);
-		}
+		// (the old randomly-phased idler pinions are gone — every visible tooth
+		// now belongs to a solved, meshing train)
 		// plain support spans between the jewelled bridges — structure, not motion
 		for (let i = 0; i < 3; i++) {
 			const ang = (i / 3) * Math.PI * 2 + 1.35;
