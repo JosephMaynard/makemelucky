@@ -112,8 +112,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 	disposeObject(cork);
 
 	// clink-clink — a toast among friends
-	audio.sfx('ding', { pitch: 1.3, gain: 0.7 });
-	delay(260).then(() => audio.sfx('ding', { pitch: 1.5, gain: 0.6 }));
+	audio.sfx('gong', { pitch: 2.2, gain: 0.4 }); // small bright bells, long ring — glasses touched
+	delay(260).then(() => audio.sfx('gong', { pitch: 2.5, gain: 0.35 }));
 	await luckyWord(ctx, {
 		text: 'CHEERS!',
 		color: 0xffd27a,

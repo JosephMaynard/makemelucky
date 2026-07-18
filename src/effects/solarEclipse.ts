@@ -158,7 +158,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	// ---- THE DIAMOND RING. One blinding point on the trailing edge.
 	const edge = SUN.clone().add(new THREE.Vector3(0.24, 0.2, 0.1));
-	audio.sfx('chime', { pitch: 1.4, gain: 1.1 });
+	audio.sfx('gong', { pitch: 1.1, gain: 1.15 }); // the diamond ring tolls
 	audio.sfx('zap', { pitch: 1.6, gain: 0.5 });
 	scene.shake(0.65);
 	haptics.vibrate([20, 30, 90]);

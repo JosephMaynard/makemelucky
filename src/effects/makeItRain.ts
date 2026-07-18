@@ -125,7 +125,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// ---- finale: the rain simply dries up — last notes flutter away and fade
 	recycling = false;
 	coinDrizzle.stop();
-	audio.sfx('chime');
+	audio.sfx('gong', { pitch: 1.15, gain: 0.7 });
 	haptics.vibrate([30, 30, 80]);
 	await tween(1000, 'inQuad', (v) => (billMat.opacity = 1 - v));
 	stopSim();

@@ -63,7 +63,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	await delay(2400);
 
 	// ---- condensation: the smoke thins as the words gather out of it
-	audio.sfx('chime', { pitch: 0.9, gain: 0.8 });
+	audio.sfx('gong', { pitch: 1.35, gain: 0.5 });
 	smoke.stop();
 	haptics.vibrate(25);
 	await luckyWord(ctx, {

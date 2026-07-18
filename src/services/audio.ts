@@ -13,6 +13,7 @@ export type SfxName =
 	| 'clang'
 	| 'gulp'
 	| 'chime'
+	| 'gong'
 	| 'zap';
 
 // A running loop's stop handle. fadeMs eases the loop out before it ends.
@@ -43,6 +44,7 @@ export class AudioService {
 	tracks: Record<string, Howl>;
 	_noiseBuffer: AudioBuffer | null;
 	_loopStops: Set<SfxLoopStop>;
+	_reverbSend: GainNode | null;
 
 	constructor() {
 		// preload: false — the 868KB sprite must not compete with boot for
@@ -53,6 +55,7 @@ export class AudioService {
 		this.tracks = {}; // lazily-built Howls, keyed by TRACKS name
 		this._noiseBuffer = null; // shared white-noise buffer for all the crunchy SFX
 		this._loopStops = new Set();
+		this._reverbSend = null; // lazily-built cathedral for the gong to ring in
 	}
 
 	/** Start fetching the sprite in the background (idempotent). */
@@ -124,10 +127,36 @@ export class AudioService {
 		return buffer;
 	}
 
+	// Procedural reverb: a 2.8s exponentially-decaying stereo noise impulse
+	// response through a ConvolverNode. Hanging the wet path off masterGain
+	// keeps the global mute in charge of the cathedral too.
+	_getReverbSend(ctx: AudioContext): GainNode {
+		if (this._reverbSend) return this._reverbSend;
+		const len = Math.floor(ctx.sampleRate * 2.8);
+		const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+		for (let ch = 0; ch < 2; ch++) {
+			const d = ir.getChannelData(ch);
+			for (let i = 0; i < len; i++) {
+				// slightly different decay per channel widens the tail
+				d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.7 + ch * 0.4);
+			}
+		}
+		const conv = ctx.createConvolver();
+		conv.buffer = ir;
+		const send = ctx.createGain();
+		const wet = ctx.createGain();
+		wet.gain.value = 0.55;
+		send.connect(conv);
+		conv.connect(wet).connect(Howler.masterGain);
+		this._reverbSend = send;
+		return send;
+	}
+
 	// A single oscillator "blip": a tone that glides freq0→freq1 while its gain
 	// swells to `peak` and exponentially decays to silence over `dur` seconds.
 	// Returns { osc, gain } so callers can stack partials or keep references.
-	_blip(ctx: AudioContext, { type = 'sine', freq0, freq1 = freq0, peak = 0.2, dur = 0.25, attack = 0.005, detune = 0, when = 0 }: { type?: OscillatorType; freq0: number; freq1?: number; peak?: number; dur?: number; attack?: number; detune?: number; when?: number }): { osc: OscillatorNode; gain: GainNode } {
+	// `out` reroutes the voice (e.g. through the reverb send); defaults dry.
+	_blip(ctx: AudioContext, { type = 'sine', freq0, freq1 = freq0, peak = 0.2, dur = 0.25, attack = 0.005, detune = 0, when = 0, out }: { type?: OscillatorType; freq0: number; freq1?: number; peak?: number; dur?: number; attack?: number; detune?: number; when?: number; out?: AudioNode }): { osc: OscillatorNode; gain: GainNode } {
 		const t = ctx.currentTime + when;
 		const osc = ctx.createOscillator();
 		const gain = ctx.createGain();
@@ -139,7 +168,7 @@ export class AudioService {
 		gain.gain.setValueAtTime(0.0001, t);
 		gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), t + attack);
 		gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-		osc.connect(gain).connect(Howler.masterGain);
+		osc.connect(gain).connect(out ?? Howler.masterGain);
 		osc.start(t);
 		osc.stop(t + dur + 0.02);
 		osc.onended = () => { try { osc.disconnect(); gain.disconnect(); } catch (e) {} };
@@ -253,6 +282,42 @@ export class AudioService {
 				this._blip(ctx, { type: 'sine', freq0: f,       peak: 0.2 * g,  dur: 1.2,  attack: 0.004 });
 				this._blip(ctx, { type: 'sine', freq0: f * 2.7, peak: 0.1 * g,  dur: 0.9,  attack: 0.004 });
 				this._blip(ctx, { type: 'sine', freq0: f * 5.4, peak: 0.05 * g, dur: 0.6,  attack: 0.004 });
+				break;
+			}
+			case 'gong': { // church-bell DONG: the classic inharmonic partial
+				// stack (hum, prime, tierce, quint, nominal + shimmer), each
+				// slightly detuned so the partials beat against each other,
+				// a bronze strike transient, and a long ride in the reverb.
+				const f = 105 * p; // strike note
+				const send = this._getReverbSend(ctx);
+				const voice = ctx.createGain();
+				voice.gain.value = 1;
+				voice.connect(Howler.masterGain);
+				voice.connect(send);
+				const partials: [number, number, number][] = [
+					[0.5, 0.42, 4.4], // hum — outlasts everything
+					[1.0, 0.4, 3.5], // prime
+					[1.2, 0.26, 2.7], // tierce (the minor-third mournfulness)
+					[1.5, 0.18, 2.3], // quint
+					[2.0, 0.26, 1.9], // nominal
+					[2.67, 0.11, 1.3],
+					[3.01, 0.07, 1.0],
+					[4.16, 0.045, 0.7] // top shimmer
+				];
+				for (const [ratio, peak, dur] of partials) {
+					this._blip(ctx, {
+						type: 'sine',
+						freq0: f * ratio,
+						peak: peak * g,
+						dur,
+						attack: 0.003,
+						detune: (Math.random() - 0.5) * 9,
+						out: voice
+					});
+				}
+				// the bronze clang of the strike itself
+				this._noiseBurst(ctx, { filterType: 'bandpass', freq0: f * 3.2, Q: 1.6, peak: 0.2 * g, dur: 0.09, attack: 0.002 });
+				this._blip(ctx, { type: 'square', freq0: f * 2.67, peak: 0.05 * g, dur: 0.25, attack: 0.002, out: voice });
 				break;
 			}
 			case 'zap': { // sawtooth 1800→200Hz + a touch of noise

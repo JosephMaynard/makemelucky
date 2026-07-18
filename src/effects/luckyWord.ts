@@ -205,7 +205,7 @@ export async function luckyWord(ctx: EffectContext, opts: LuckyWordOptions = {})
 
 	tween(500, 'outQuad', (v) => (mat.uniforms.uOpacity.value = v));
 	await tween(gather, 'linear', (v) => (P = v));
-	audio.sfx('chime', { pitch: 1.1 });
+	audio.sfx('gong', { pitch: 1.25, gain: 0.85 }); // the word lands with a proper bell
 	haptics.vibrate([15, 25, 40]);
 	await delay(hold);
 

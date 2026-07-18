@@ -136,7 +136,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 			});
 		})
 	);
-	audio.sfx('chime', { pitch: 1.2 });
+	audio.sfx('gong', { pitch: 1.4, gain: 0.7 });
 
 	// LUCKY ROLL! everything comes up gold
 	await delay(500);

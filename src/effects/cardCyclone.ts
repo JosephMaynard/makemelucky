@@ -158,7 +158,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 			});
 		})
 	);
-	audio.sfx('chime');
+	audio.sfx('gong', { pitch: 1.2, gain: 0.7 });
 
 	// hold the winning hand, sparkling
 	scene.shake(0.25);

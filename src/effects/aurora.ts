@@ -111,7 +111,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	await delay(2100);
 
 	// the crescendo: the whole sky surges once — bright, then breathless
-	ctx.audio.sfx('chime', { pitch: 0.75, gain: 0.9 });
+	ctx.audio.sfx('gong', { pitch: 0.8, gain: 0.55 }); // deep, distant, serene
 	scene.shake(0.18); // barely a tremor; this one stays serene
 	haptics.vibrate(20);
 	tween(900, 'inOutQuad', (v) => {
