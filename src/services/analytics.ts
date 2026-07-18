@@ -17,7 +17,7 @@ export function initAnalytics(): void {
 		disable_surveys: true
 	});
 	ready = true;
-	observeSectionViews(['luck-numbers', 'lucky-charms']);
+	observeSectionViews(['luck-numbers', 'lucky-charms', 'luck-dossier']);
 }
 
 export function track(event: string, props?: Record<string, unknown>): void {

@@ -20,6 +20,7 @@ import { QUIPS } from './ui/quips';
 import { LuckStore } from './luck/store';
 import type { Charm } from './luck/charmsData';
 import { initLottoPicker } from './luck/lottoPicker';
+import { initDossier } from './luck/dossier';
 import { AudioService } from './services/audio';
 import { Haptics } from './services/haptics';
 import { initAnalytics, track } from './services/analytics';
@@ -48,12 +49,27 @@ async function boot(): Promise<void> {
 	const charmsUI = new CharmsUI(store);
 	charmsUI.renderAll();
 
-	// the below-the-fold Luck Number Generator is self-contained; wire it up now
-	// so it works even before the WebGL scene finishes booting
+	// the below-the-fold features are self-contained; wire them up now so they
+	// work even before the WebGL scene finishes booting
 	try {
 		initLottoPicker();
 	} catch {
 		// the generator must never take the core experience down with it
+	}
+	try {
+		initDossier({
+			onFirstDossier: () => {
+				const charm = store.awardSpecial(
+					'stargazer',
+					'Cosmically Documented',
+					'Compiled a Birthday Dossier. The stars now have you on file. (Your device does. The stars know nothing.)',
+					'🔭'
+				);
+				if (charm) celebrateCharms([charm]);
+			}
+		});
+	} catch {
+		// same rule: the dossier never takes the machine down with it
 	}
 
 	// wait for Roboto Slab so the canvas-painted button label uses it

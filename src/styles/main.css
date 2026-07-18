@@ -616,10 +616,16 @@ p + p {
 	font-family: inherit;
 	font-size: 16px;
 	color: var(--text);
-	background: linear-gradient(165deg, rgba(38, 66, 34, 0.55), rgba(10, 20, 10, 0.75));
+	/* custom chevron: the native arrow sat awkwardly on the gradient */
+	appearance: none;
+	-webkit-appearance: none;
+	background:
+		url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'><path d='M1 1l6 6 6-6' fill='none' stroke='%23c9a959' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>")
+			no-repeat right 16px center,
+		linear-gradient(165deg, rgba(38, 66, 34, 0.55), rgba(10, 20, 10, 0.75));
 	border: 1.5px solid rgba(201, 169, 89, 0.5);
 	border-radius: 12px;
-	padding: 12px 14px;
+	padding: 12px 42px 12px 14px;
 	cursor: pointer;
 	width: 100%;
 }
@@ -728,6 +734,132 @@ p + p {
 /* Orb + luck-field + ripple styling is injected from src/luck/lottoPicker.ts
    (kept in one file with the rest of the numerological weirdness). .lng-result
    sizing lives there too. */
+
+/* --- Birthday Dossier --- */
+
+.dossier-privacy {
+	border: 1.5px solid rgba(201, 169, 89, 0.5);
+	border-radius: 12px;
+	padding: 12px 16px;
+	background: rgba(10, 20, 10, 0.5);
+}
+.dossier-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 16px;
+	margin: 18px 0;
+}
+.dossier-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	flex: 1 1 220px;
+}
+.dossier-field label {
+	color: var(--gold);
+	font-size: 14.5px;
+}
+.dossier-optional {
+	color: var(--text-dim);
+	font-size: 12.5px;
+}
+.dossier-input {
+	font-family: inherit;
+	font-size: 16px;
+	color: var(--text);
+	background: linear-gradient(165deg, rgba(38, 66, 34, 0.55), rgba(10, 20, 10, 0.75));
+	border: 1.5px solid rgba(201, 169, 89, 0.5);
+	border-radius: 12px;
+	padding: 12px 14px;
+	width: 100%;
+	color-scheme: dark;
+}
+.dossier-input:focus-visible {
+	outline: 3px solid var(--gold-bright);
+	outline-offset: 2px;
+}
+.dossier-card {
+	border: 1.5px solid rgba(201, 169, 89, 0.55);
+	border-radius: 16px;
+	padding: 22px 24px;
+	background: linear-gradient(160deg, #24331b, #101c0c);
+	box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+	animation: dossier-in 0.5s cubic-bezier(0.2, 1.2, 0.5, 1) backwards;
+}
+@keyframes dossier-in {
+	from { opacity: 0; transform: translateY(14px) scale(0.98); }
+}
+.dossier-title {
+	color: var(--gold-bright);
+	letter-spacing: 0.06em;
+	margin: 0 0 14px;
+	font-size: 17px;
+}
+.dossier-list {
+	list-style: none;
+	margin: 0 0 16px;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.dossier-row {
+	display: grid;
+	grid-template-columns: 130px 1fr;
+	gap: 2px 14px;
+	border-bottom: 1px dashed rgba(201, 169, 89, 0.25);
+	padding-bottom: 8px;
+}
+.dossier-key {
+	color: var(--gold);
+	font-size: 13.5px;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+.dossier-value {
+	color: var(--text);
+	font-weight: 700;
+}
+.dossier-note {
+	grid-column: 2;
+	color: var(--text-dim);
+	font-size: 13.5px;
+	font-style: italic;
+}
+.dossier-scope {
+	color: var(--text);
+	line-height: 1.55;
+}
+.dossier-lucky {
+	color: var(--gold-bright);
+}
+.dossier-small {
+	color: var(--text-dim);
+	font-size: 13px;
+	font-style: italic;
+}
+.dossier-burn {
+	font-family: inherit;
+	font-size: 14.5px;
+	color: var(--text);
+	background: none;
+	border: 1.5px solid rgba(201, 89, 89, 0.55);
+	border-radius: 10px;
+	padding: 8px 14px;
+	cursor: pointer;
+}
+.dossier-burn:hover {
+	background: rgba(80, 20, 20, 0.35);
+}
+@media (max-width: 480px) {
+	.dossier-row {
+		grid-template-columns: 1fr;
+	}
+	.dossier-note {
+		grid-column: 1;
+	}
+}
 
 /* --- Promo cards --- */
 

@@ -29,14 +29,26 @@ interface Game {
 	config: GameConfig;
 }
 
+// Formats verified against official sources, July 2026. Games whose bonus ball
+// is drawn from the SAME pool as the main draw (UK Bonus Ball, Oz supps, La
+// Primitiva's Complementario) are modeled main-draw-only — our bonus pool is
+// independent. NOTE: EuroMillions has a format change slated for 30 Sept 2026.
 const GAMES: Record<string, Game> = {
+	canadaLottoMax: { name: 'Lotto Max CAN', themeHue: 330, config: { range: 52, count: 7, bonusRange: 1, bonusCount: 0 } },
+	euroJackpot: { name: 'EuroJackpot', themeHue: 40, config: { range: 50, count: 5, bonusRange: 12, bonusCount: 2 } },
 	euromillions: { name: 'EuroMillions', themeHue: 220, config: { range: 50, count: 5, bonusRange: 12, bonusCount: 2 } },
+	franceLoto: { name: 'French Loto', themeHue: 250, config: { range: 49, count: 5, bonusRange: 10, bonusCount: 1 } },
+	germanyLotto: { name: 'German Lotto 6aus49', themeHue: 55, config: { range: 49, count: 6, bonusRange: 10, bonusCount: 1 } },
+	japanLoto7: { name: 'Japan Loto 7', themeHue: 190, config: { range: 37, count: 7, bonusRange: 1, bonusCount: 0 } },
+	laPrimitiva: { name: 'La Primitiva ES', themeHue: 0, config: { range: 49, count: 6, bonusRange: 10, bonusCount: 1 } },
 	lotto: { name: 'UK National', themeHue: 120, config: { range: 59, count: 6, bonusRange: 1, bonusCount: 0 } },
 	megamillions: { name: 'Mega Millions', themeHue: 25, config: { range: 70, count: 5, bonusRange: 24, bonusCount: 1 } },
+	megaSena: { name: 'Mega-Sena BR', themeHue: 145, config: { range: 60, count: 6, bonusRange: 1, bonusCount: 0 } },
 	ozlotto: { name: 'Oz Lotto', themeHue: 80, config: { range: 47, count: 7, bonusRange: 1, bonusCount: 0 } },
 	powerball: { name: 'Powerball USA', themeHue: 345, config: { range: 69, count: 5, bonusRange: 26, bonusCount: 1 } },
 	powerballAus: { name: 'Powerball AUS', themeHue: 200, config: { range: 35, count: 7, bonusRange: 20, bonusCount: 1 } },
-	setForLife: { name: 'Set For Life UK', themeHue: 285, config: { range: 47, count: 5, bonusRange: 10, bonusCount: 1 } }
+	setForLife: { name: 'Set For Life UK', themeHue: 285, config: { range: 47, count: 5, bonusRange: 10, bonusCount: 1 } },
+	southAfricaLotto: { name: 'SA Lotto', themeHue: 305, config: { range: 52, count: 6, bonusRange: 1, bonusCount: 0 } }
 };
 const DEFAULT_CUSTOM: GameConfig = { range: 50, count: 5, bonusRange: 10, bonusCount: 1 };
 
@@ -447,6 +459,11 @@ function ensureStyle(): void {
 .lng-result { position: relative; margin-top: 16px; min-height: 96px; }
 .lng-ball-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; position: relative; z-index: 1; }
 .lng-ball-cell { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.lng-ball-divider {
+	align-self: stretch; width: 2px; margin: 4px 6px;
+	background: linear-gradient(180deg, transparent, rgba(240,212,136,0.55), transparent);
+	border-radius: 1px;
+}
 .lng-ball {
 	position: relative; width: 62px; height: 62px;
 	filter: drop-shadow(0 6px 10px rgba(0,0,0,0.55));
@@ -720,6 +737,13 @@ export function initLottoPicker(): void {
 
 		all.forEach((n, i) => {
 			const isBonus = i >= main.length;
+			// a quiet gold seam between the main draw and the bonus balls
+			if (isBonus && i === main.length) {
+				const divider = document.createElement('div');
+				divider.className = 'lng-ball-divider';
+				divider.setAttribute('aria-hidden', 'true');
+				row.appendChild(divider);
+			}
 			const num = numerology(n, phase);
 
 			const cell = document.createElement('div');

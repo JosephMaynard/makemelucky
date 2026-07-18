@@ -52,8 +52,8 @@
 				"author": { "@type": "Person", "name": "Joseph Maynard" }
 			}
 		</script>
-		<script type="module" crossorigin src="/assets/index-CPvNKwAp.js"></script>
-		<link rel="stylesheet" crossorigin href="/assets/index-gB9xB6gY.css">
+		<script type="module" crossorigin src="/assets/index-DhLu5At9.js"></script>
+		<link rel="stylesheet" crossorigin href="/assets/index-DPhS6C0D.css">
 	<link rel="manifest" href="/manifest.webmanifest"></head>
 	<body>
 		<!-- ============ HERO: the Luck Machine ============ -->
@@ -164,6 +164,35 @@
 					<p id="lng-status" class="lng-status" role="status" aria-live="polite"></p>
 					<div id="lng-result" class="lng-result" aria-live="polite"></div>
 				</div>
+			</section>
+
+			<section class="content-section" id="luck-dossier">
+				<h2>The Birthday Dossier</h2>
+				<p>
+					Your birthday is a matter of cosmic record: a star sign, a lunar animal, an officially assigned gemstone
+					and a flower you have possibly never met. Enter it below and the machine will compile your complete luck
+					dossier, with today's forecast attached. The astronomical facts are real and carefully checked. What they
+					<em>mean</em> is decorative, in the grand tradition.
+				</p>
+				<p class="dossier-privacy">
+					🔒 <strong>Everything here is computed on your device, by your device, for your device.</strong>
+					Your birthday and name are never transmitted anywhere — no server, no analytics, nobody. The cosmos
+					operates strictly offline.
+				</p>
+				<div class="dossier-controls">
+					<div class="dossier-field">
+						<label for="dossier-dob">Your date of birth</label>
+						<input id="dossier-dob" type="date" class="dossier-input" />
+					</div>
+					<div class="dossier-field">
+						<label for="dossier-name">Your name <span class="dossier-optional">(optional — stage names welcome)</span></label>
+						<input id="dossier-name" type="text" class="dossier-input" maxlength="80" autocomplete="off" placeholder="The Bearer" />
+					</div>
+					<button id="dossier-go" class="lng-spin" type="button">📜 Compile my dossier</button>
+				</div>
+				<div id="dossier-out" class="dossier-out"></div>
+				<p><button id="dossier-burn" class="dossier-burn" type="button" hidden>🔥 Burn my dossier</button></p>
+				<p class="dossier-small">Astrological data: real. Its predictive power: decorative.</p>
 			</section>
 
 			<section class="content-section" id="about">

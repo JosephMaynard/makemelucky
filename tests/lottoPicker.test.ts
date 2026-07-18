@@ -54,6 +54,21 @@ describe('initLottoPicker wiring', () => {
 		expect(document.getElementById('lng-chance')?.textContent).toBe('1 in 45,057,474');
 	});
 
+	it('knows the 2026 international lineup with verified odds', () => {
+		initLottoPicker();
+		const select = document.getElementById('lng-game') as HTMLSelectElement;
+		const expectOdds = (key: string, odds: string) => {
+			select.value = key;
+			select.dispatchEvent(new Event('change'));
+			expect(document.getElementById('lng-chance')?.textContent).toBe(odds);
+		};
+		expectOdds('germanyLotto', '1 in 139,838,160'); // C(49,6) × 10
+		expectOdds('megaSena', '1 in 50,063,860'); // C(60,6)
+		expectOdds('canadaLottoMax', '1 in 133,784,560'); // C(52,7) — 7/52 since Apr 2026
+		expectOdds('japanLoto7', '1 in 10,295,472'); // C(37,7)
+		expectOdds('franceLoto', '1 in 19,068,840'); // C(49,5) × 10
+	});
+
 	it('reveals the custom controls only for the custom game', () => {
 		initLottoPicker();
 		const select = document.getElementById('lng-game') as HTMLSelectElement;
