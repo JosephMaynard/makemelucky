@@ -278,22 +278,48 @@ function buildClamp(_gold: THREE.Material, _silver: THREE.Material, darkMetal: T
 	knurl.rotation.x = Math.PI / 2;
 	knurl.position.z = 0.086;
 	g.add(knurl);
-	const collarRing = new THREE.Mesh(new THREE.TorusGeometry(0.052, 0.01, 10, 28), gold);
+	// no screws up here — the crown of the boss is a pearl in a gold collar
+	const collarRing = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.011, 10, 28), gold);
 	collarRing.position.z = 0.128;
-	const screwDome = new THREE.Mesh(new THREE.SphereGeometry(0.03, 18, 14), darkMetal);
-	screwDome.scale.z = 0.7;
-	screwDome.position.z = 0.13;
-	const slot = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.01, 0.005), gold);
-	slot.position.z = 0.152;
-	slot.rotation.z = Math.PI / 4;
-	g.add(collarRing, screwDome, slot);
-	// four dome screws holding the flange down
+	const crown = new THREE.Mesh(new THREE.SphereGeometry(0.034, 20, 16), pearl);
+	crown.position.z = 0.135;
+	g.add(collarRing, crown);
+
+	// faceted diamonds around the flange where the screws used to be
+	const diamond = new THREE.MeshPhysicalMaterial({
+		color: 0xf6faff,
+		metalness: 0,
+		roughness: 0.02,
+		clearcoat: 1,
+		clearcoatRoughness: 0,
+		envMapIntensity: 3.2,
+		emissive: 0x8899bb,
+		emissiveIntensity: 0.22,
+		flatShading: true // hard facets = the sparkle
+	});
 	for (let i = 0; i < 4; i++) {
 		const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-		const s = new THREE.Mesh(new THREE.SphereGeometry(0.013, 10, 8), darkMetal);
-		s.scale.z = 0.55;
-		s.position.set(Math.cos(a) * 0.108, Math.sin(a) * 0.108, 0.062);
-		g.add(s);
+		const gem = new THREE.Mesh(new THREE.IcosahedronGeometry(0.017, 0), diamond);
+		gem.rotation.set(i * 1.3, i * 0.8, i * 2.1); // varied facets catch varied light
+		gem.position.set(Math.cos(a) * 0.108, Math.sin(a) * 0.108, 0.1); // proud of the deck
+		g.add(gem);
+	}
+
+	// He-Man crossguard: two mirrored ribs sweeping around the boss, each
+	// tipped with a ball finial — the Power Sword's curves in miniature
+	const ribR = 0.1;
+	const ribArc = 2.7;
+	for (const side of [1, -1]) {
+		const start = side === 1 ? -1.31 : Math.PI - (-1.31 + ribArc);
+		const rib = new THREE.Mesh(new THREE.TorusGeometry(ribR, 0.011, 10, 26, ribArc), gold);
+		rib.rotation.z = start;
+		rib.position.z = 0.08;
+		g.add(rib);
+		for (const t of [start, start + ribArc]) {
+			const finial = new THREE.Mesh(new THREE.SphereGeometry(0.019, 14, 10), pearl);
+			finial.position.set(Math.cos(t) * ribR, Math.sin(t) * ribR, 0.08);
+			g.add(finial);
+		}
 	}
 
 	return g;
@@ -521,15 +547,6 @@ export class Machine {
 		const darkIron = fadeable(new THREE.MeshStandardMaterial({ color: 0x2a2f38, metalness: 0.95, roughness: 0.5 }));
 		const plateMatDeep = fadeable(new THREE.MeshStandardMaterial({ color: 0x0b0d12, metalness: 0.9, roughness: 0.6 }));
 		const plateMatMid = fadeable(new THREE.MeshStandardMaterial({ color: 0x161a22, metalness: 0.9, roughness: 0.52 }));
-		const ruby = fadeable(new THREE.MeshPhysicalMaterial({
-			color: 0xb01030,
-			metalness: 0,
-			roughness: 0.05,
-			clearcoat: 1,
-			emissive: 0x600515,
-			emissiveIntensity: 0.6
-		}));
-
 		const centreGeo = new THREE.RingGeometry(R * 0.26, R * 0.478, 64, 2);
 		planarUV(centreGeo, R);
 		const centreRing = new THREE.Mesh(centreGeo, centreFaceMat);
@@ -570,75 +587,78 @@ export class Machine {
 		// teeth interlock and counter-rotate like the real thing.
 		const MODULE = 0.0128;
 		const Rc = R * 0.515; // the arc the train rides
-		const TRAIN = [
-			{ teeth: 18, web: 'pierced' as const, depth: 0.03 },
-			{ teeth: 11, web: 'spoked' as const, depth: 0.026 },
-			{ teeth: 8, web: 'solid' as const, depth: 0.024 }
-		];
-		const trainGeos = TRAIN.map((t) => gearGeometry({ module: MODULE, teeth: t.teeth, depth: t.depth, web: t.web }));
+		const GEAR_A = { teeth: 18, geo: gearGeometry({ module: MODULE, teeth: 18, depth: 0.03, web: 'pierced' }) };
+		const GEAR_B = { teeth: 11, geo: gearGeometry({ module: MODULE, teeth: 11, depth: 0.026, web: 'spoked' }) };
+		const GEAR_C = { teeth: 8, geo: gearGeometry({ module: MODULE, teeth: 8, depth: 0.024, web: 'solid' }) };
 		const bigWheelGeo = gearGeometry({ module: MODULE, teeth: 28, depth: 0.018, web: 'pierced', hubRadius: 0.03 });
 		const pitchR = (t: number) => (MODULE * t) / 2;
 		// angular steps along the arc so adjacent pitch circles kiss exactly
 		const stepAngle = (tA: number, tB: number) =>
 			2 * Math.asin((pitchR(tA) + pitchR(tB) + MODULE * 0.02) / (2 * Rc));
+		const AB = stepAngle(GEAR_A.teeth, GEAR_B.teeth);
+		const BC = stepAngle(GEAR_B.teeth, GEAR_C.teeth);
+
+		const placeGear = (spec: MeshedGear, def: { geo: THREE.ExtrudeGeometry }, mat: THREE.Material) => {
+			const cog = new THREE.Mesh(def.geo, mat);
+			cog.position.set(spec.x, spec.y, 0.02);
+			cog.rotation.z = spec.rot;
+			cog.userData.speed = spec.speed;
+			this.mechGroup.add(cog);
+			this.cogs.push(cog);
+			// arbor behind, metallic cap in front — every wheel on a real axle
+			const arbor = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.08, 10), darkIron);
+			arbor.rotation.x = Math.PI / 2;
+			arbor.position.set(spec.x, spec.y, -0.01);
+			this.mechGroup.add(arbor);
+			const cap = new THREE.Mesh(new THREE.SphereGeometry(0.02, 12, 8), steel);
+			cap.scale.z = 0.6;
+			cap.position.set(spec.x, spec.y, 0.038);
+			this.mechGroup.add(cap);
+		};
 
 		for (let q = 0; q < 4; q++) {
-			// centred in the open window between the diagonal clamps
-			const a0 = QUADRANT_ANGLES[q] + Math.PI / 4 - 0.24;
-			const angles = [
-				a0,
-				a0 + stepAngle(TRAIN[0].teeth, TRAIN[1].teeth),
-				a0 + stepAngle(TRAIN[0].teeth, TRAIN[1].teeth) + stepAngle(TRAIN[1].teeth, TRAIN[2].teeth)
-			];
-			const centers = angles.map((a) => ({ x: Math.cos(a) * Rc, y: Math.sin(a) * Rc }));
+			// a symmetric five-wheel chain — C‑B‑A‑B‑C — centred in the open
+			// window between the diagonal clamps, spanning most of the gap
+			const a0 = QUADRANT_ANGLES[q] + Math.PI / 4;
+			const A: MeshedGear = {
+				x: Math.cos(a0) * Rc,
+				y: Math.sin(a0) * Rc,
+				rot: a0 + q * 0.7, // each quadrant's unit starts at its own phase
+				teeth: GEAR_A.teeth,
+				speed: 0.55
+			};
+			placeGear(A, GEAR_A, brass);
+			// the driver carries a big slow wheel on the same arbor, one layer
+			// down — wheel-and-pinion, the way real movements stack
+			const wheel = new THREE.Mesh(bigWheelGeo, darkIron);
+			wheel.position.set(A.x, A.y, -0.016);
+			wheel.rotation.z = A.rot * 0.5;
+			wheel.userData.speed = A.speed; // same arbor, same spin
+			this.mechGroup.add(wheel);
+			this.cogs.push(wheel);
 
-			// solve the chain: A is the driver, B meshes with A, C meshes with B
-			let spec: MeshedGear = { x: centers[0].x, y: centers[0].y, rot: a0, teeth: TRAIN[0].teeth, speed: 0.55 };
-			const mats = [brass, steel, centreGold];
-			spec.rot += q * 0.7; // each quadrant's unit starts at its own phase
-			for (let i = 0; i < 3; i++) {
-				if (i > 0) spec = meshWith(spec, centers[i].x, centers[i].y, TRAIN[i].teeth);
-				const cog = new THREE.Mesh(trainGeos[i], mats[i]);
-				cog.position.set(spec.x, spec.y, 0.02);
-				cog.rotation.z = spec.rot;
-				cog.userData.speed = spec.speed;
-				this.mechGroup.add(cog);
-				this.cogs.push(cog);
-
-				// arbor behind, hub cap in front — every wheel sits on a real axle
-				const arbor = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.08, 10), darkIron);
-				arbor.rotation.x = Math.PI / 2;
-				arbor.position.set(spec.x, spec.y, -0.01);
-				this.mechGroup.add(arbor);
-				const cap = new THREE.Mesh(new THREE.SphereGeometry(0.02, 12, 8), i === 1 ? ruby : centreGold);
-				cap.scale.z = 0.6;
-				cap.position.set(spec.x, spec.y, 0.038);
-				this.mechGroup.add(cap);
-
-				// the driver carries a big slow wheel on the same arbor, one
-				// layer down — wheel-and-pinion, the way real movements stack
-				if (i === 0) {
-					const wheel = new THREE.Mesh(bigWheelGeo, darkIron);
-					wheel.position.set(spec.x, spec.y, -0.016);
-					wheel.rotation.z = spec.rot * 0.5;
-					wheel.userData.speed = spec.speed; // same arbor, same spin
-					this.mechGroup.add(wheel);
-					this.cogs.push(wheel);
-				}
+			for (const side of [-1, 1]) {
+				const aB = a0 + side * AB;
+				const B = meshWith(A, Math.cos(aB) * Rc, Math.sin(aB) * Rc, GEAR_B.teeth);
+				placeGear(B, GEAR_B, steel);
+				const aC = aB + side * BC;
+				const C = meshWith(B, Math.cos(aC) * Rc, Math.sin(aC) * Rc, GEAR_C.teeth);
+				placeGear(C, GEAR_C, centreGold);
 			}
 
-			// a watchmaker's bridge spanning the unit, dome-screwed at each end
-			const span = Math.hypot(centers[2].x - centers[0].x, centers[2].y - centers[0].y);
-			const bridge = new THREE.Mesh(new THREE.BoxGeometry(span + 0.1, 0.05, 0.012), plateMatMid);
-			bridge.position.set((centers[0].x + centers[2].x) / 2, (centers[0].y + centers[2].y) / 2, -0.002);
-			bridge.rotation.z = Math.atan2(centers[2].y - centers[0].y, centers[2].x - centers[0].x);
+			// a curved watchmaker's bridge behind the whole chain, pinned at
+			// the ends — structure the eye can hang the movement on
+			const span = 2 * (AB + BC) + 0.16;
+			const bridge = new THREE.Mesh(new THREE.TorusGeometry(Rc, 0.016, 10, 22, span), plateMatMid);
+			bridge.rotation.z = a0 - span / 2;
+			bridge.position.z = -0.004;
 			this.mechGroup.add(bridge);
-			for (const end of [centers[0], centers[2]]) {
-				const screw = new THREE.Mesh(new THREE.SphereGeometry(0.012, 10, 8), steel);
-				screw.scale.z = 0.55;
-				const out = Math.hypot(end.x, end.y);
-				screw.position.set((end.x / out) * (out + 0.055), (end.y / out) * (out + 0.055), 0.005);
-				this.mechGroup.add(screw);
+			for (const side of [-1, 1]) {
+				const aEnd = a0 + side * (span / 2);
+				const pin = new THREE.Mesh(new THREE.SphereGeometry(0.012, 10, 8), steel);
+				pin.scale.z = 0.55;
+				pin.position.set(Math.cos(aEnd) * Rc, Math.sin(aEnd) * Rc, 0.006);
+				this.mechGroup.add(pin);
 			}
 		}
 		// (the old randomly-phased idler pinions are gone — every visible tooth
@@ -652,25 +672,8 @@ export class Machine {
 			this.mechGroup.add(span);
 		}
 
-		// ornate gold bridges spanning the window, each set with a ruby jewel —
-		// the signature of an expensive movement
-		for (let i = 0; i < 5; i++) {
-			const ang = (i / 5) * Math.PI * 2 + 0.25;
-			const bridge = new THREE.Group();
-			const arm = new THREE.Mesh(new THREE.TorusGeometry(R * 0.515, 0.017, 10, 14, 0.34), centreGold);
-			arm.rotation.z = ang - 0.17;
-			bridge.add(arm);
-			// jewel bearing in a gold collar at the bridge centre
-			const collar = new THREE.Mesh(new THREE.TorusGeometry(0.026, 0.011, 8, 18), centreGold);
-			collar.position.set(Math.cos(ang) * R * 0.515, Math.sin(ang) * R * 0.515, 0);
-			bridge.add(collar);
-			const jewel = new THREE.Mesh(new THREE.SphereGeometry(0.02, 14, 10), ruby);
-			jewel.position.copy(collar.position);
-			jewel.position.z = 0.012;
-			bridge.add(jewel);
-			bridge.position.z = 0.052;
-			this.mechGroup.add(bridge);
-		}
+		// (the old five ruby-set bridges are gone — five red dots over four
+		// windows never sat right, and the train carries its own bridges now)
 
 		// balance wheel — oscillates back and forth like a heartbeat
 		this.balance = new THREE.Group();
@@ -681,7 +684,7 @@ export class Machine {
 		const spoke2 = spoke.clone();
 		spoke2.rotation.z = Math.PI / 2;
 		this.balance.add(spoke2);
-		const balJewel = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), ruby);
+		const balJewel = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), steel);
 		balJewel.position.z = 0.014;
 		this.balance.add(balJewel);
 		this.balance.position.set(Math.cos(-0.9) * R * 0.515, Math.sin(-0.9) * R * 0.515, 0.04);
