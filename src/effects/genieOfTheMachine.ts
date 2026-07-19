@@ -72,7 +72,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 		colorB: 0xbf9aff,
 		y: 0.95,
 		gather: 1100,
-		hold: 1500,
+		hold: 1800,
 		scatter: 500
 	});
 

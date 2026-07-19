@@ -54,7 +54,7 @@ export async function luckyWord(ctx: EffectContext, opts: LuckyWordOptions = {})
 		color = 0xffd27a,
 		colorB = 0xfff3cf,
 		gather = 1500,
-		hold = 1500,
+		hold = 1800,
 		scatter = 900,
 		width = 3.1,
 		y: yPos = -0.1, // straight across the middle, over the button
@@ -64,8 +64,17 @@ export async function luckyWord(ctx: EffectContext, opts: LuckyWordOptions = {})
 	const { scene, sprites, textures, haptics, audio } = ctx;
 
 	let pts = textPoints(text);
-	while (pts.length > 2000) pts = pts.filter((_, i) => i % 2 === 0);
+	while (pts.length > 2600) pts = pts.filter((_, i) => i % 2 === 0);
 	const n = pts.length;
+	// actual glyph bounds (canvas px) — the cloud sizes itself to the ink,
+	// not to the canvas, so its padding comes out even on every side
+	let minX = 512, maxX = 0, minY = 160, maxY = 0;
+	for (const [px, py] of pts) {
+		if (px < minX) minX = px;
+		if (px > maxX) maxX = px;
+		if (py < minY) minY = py;
+		if (py > maxY) maxY = py;
+	}
 	// never wider than the visible frame (phones are narrow)
 	const cam = scene.camera;
 	const visW = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * (5.35 - z) * cam.aspect * 2;
@@ -162,8 +171,12 @@ export async function luckyWord(ctx: EffectContext, opts: LuckyWordOptions = {})
 		baseW: number;
 		baseH: number;
 	}
-	const wordW = 512 * scale;
-	const wordH = Math.max(0.74, 160 * scale * 0.96);
+	const textW = Math.max(0.6, (maxX - minX) * scale);
+	const textH = Math.max(0.3, (maxY - minY) * scale);
+	const cloudCX = ((minX + maxX) / 2 - 256) * scale;
+	const cloudCY = yPos + (80 - (minY + maxY) / 2) * scale;
+	const pad = textH * 0.55; // equal breathing room on every side
+	const bandH = textH + 2 * pad;
 	const cloud = new THREE.Group();
 	cloud.visible = wantStrip;
 	const puffs: THREE.Sprite[] = [];
@@ -182,9 +195,12 @@ export async function luckyWord(ctx: EffectContext, opts: LuckyWordOptions = {})
 		s.renderOrder = 8; // under the motes, over everything else
 		// spread along the strip's length with jitter; a couple ride the ends
 		const u = (i + 0.5) / N_PUFFS + rand(-0.04, 0.04);
-		const baseW = rand(0.75, 1.15) * wordH * 2.1;
-		const baseH = baseW * rand(0.42, 0.58); // squashed — ovals, not blobs
-		s.position.set((u - 0.5) * wordW * 1.08, yPos + rand(-0.12, 0.12) * wordH, z - 0.03 - i * 0.002);
+		const baseH = rand(0.85, 1.1) * bandH;
+		const baseW = baseH * rand(1.7, 2.3); // squashed — ovals, not blobs
+		// outermost puff edges land ~one pad beyond the ink, matching the top
+		// and bottom margins instead of overshooting the ends
+		const halfSpan = Math.max(0.2, textW / 2 + pad - baseW / 2);
+		s.position.set(cloudCX + (u * 2 - 1) * halfSpan, cloudCY + rand(-0.3, 0.3) * pad, z - 0.03 - i * 0.002);
 		s.scale.set(baseW, baseH, 1);
 		s.userData = {
 			delay: rand(0, 0.55), // each puff arrives on its own cue…

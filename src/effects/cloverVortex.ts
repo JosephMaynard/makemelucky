@@ -100,7 +100,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 		width: 2.6,
 		y: 0.9,
 		gather: 1300,
-		hold: 1100,
+		hold: 1400,
 		strip: false // a strip behind a clover just looks like a lost road sign
 	});
 	await flashPulse(machine, 1, 80, 850, 0x8af284);

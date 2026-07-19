@@ -119,7 +119,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 		color: 0xffd27a,
 		colorB: 0xfff6e0,
 		y: 0.95,
-		hold: 1400
+		hold: 1700
 	});
 
 	// ---- last call: fizz settles, lights come home

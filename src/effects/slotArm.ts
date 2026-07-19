@@ -97,7 +97,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	const lever = buildLever();
 	const cam = scene.camera;
 	const halfW = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * (5.35 - 0.78) * cam.aspect;
-	const pivotX = Math.min(1.95, halfW - 0.45);
+	const pivotX = Math.min(1.52, halfW - 0.45); // snug against the rim on desktop, not adrift
 	lever.position.set(pivotX + 1.75, -0.1, 0.78);
 	scene.scene.add(lever);
 	haptics.vibrate(20);
