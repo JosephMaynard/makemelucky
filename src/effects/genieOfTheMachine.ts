@@ -105,10 +105,12 @@ export async function play(ctx: EffectContext): Promise<void> {
 	sprinkle(c2, 45);
 	// radius matched to the portal sky disc (R·0.98): the proven bound that
 	// keeps a backing INSIDE the outer rim band from every viewport
+	// parented INSIDE machine.group like the portal sky disc — the machine
+	// lives at scene y=-0.32, so scene-space discs sit visibly off-centre
 	const voidMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false });
 	const voidDisc = new THREE.Mesh(new THREE.CircleGeometry(1.3, 64), voidMat);
 	voidDisc.position.set(0, 0, -0.2);
-	scene.scene.add(voidDisc);
+	machine.group.add(voidDisc);
 	// a second, stars-only layer counter-rotating in front: the sky swirls
 	const cv2 = document.createElement('canvas');
 	cv2.width = cv2.height = 256;
@@ -116,7 +118,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	const starMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv2), transparent: true, depthWrite: false });
 	const starDisc = new THREE.Mesh(new THREE.CircleGeometry(1.3, 64), starMat);
 	starDisc.position.set(0, 0, -0.19);
-	scene.scene.add(starDisc);
+	machine.group.add(starDisc);
 
 	const opening = machine.openIris(0.45, 1200);
 	machine.portal.visible = false; // openIris shows the sky; overrule it same-frame
@@ -262,7 +264,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	stopDance();
 	stopClock();
-	scene.scene.remove(genie, voidDisc, starDisc);
+	scene.scene.remove(genie);
+	machine.group.remove(voidDisc, starDisc);
 	voidDisc.geometry.dispose();
 	voidMat.map!.dispose();
 	voidMat.dispose();
