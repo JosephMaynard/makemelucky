@@ -79,24 +79,42 @@ export async function play(ctx: EffectContext): Promise<void> {
 	cv.width = cv.height = 256;
 	const c2 = cv.getContext('2d')!;
 	// big enough to blanket the machine's entire footprint — the iris parts
-	// and quadrant gaps must only ever reveal THIS, never the leather wall
+	// and quadrant gaps must only ever reveal THIS, never the leather wall.
+	// The rim ALPHA-fades to nothing, so the void dissolves into dark before
+	// it can poke a hard edge past the machine's silhouette.
 	const grad = c2.createRadialGradient(128, 128, 6, 128, 128, 128);
-	grad.addColorStop(0, '#2b1048'); // nebula glow directly behind the button…
-	grad.addColorStop(0.3, '#1c0b33');
-	grad.addColorStop(0.55, '#0a0418');
-	grad.addColorStop(1, '#020108'); // …dying to nothing at the rim
+	grad.addColorStop(0, 'rgba(43, 16, 72, 1)'); // nebula glow behind the button…
+	grad.addColorStop(0.3, 'rgba(28, 11, 51, 1)');
+	grad.addColorStop(0.55, 'rgba(10, 4, 24, 1)');
+	grad.addColorStop(0.82, 'rgba(3, 1, 10, 0.9)');
+	grad.addColorStop(1, 'rgba(2, 1, 8, 0)'); // …dissolving to nothing at the rim
 	c2.fillStyle = grad;
 	c2.fillRect(0, 0, 256, 256);
-	c2.fillStyle = '#b9a6ff';
-	for (let i = 0; i < 70; i++) {
-		c2.globalAlpha = 0.2 + Math.random() * 0.6;
-		c2.fillRect(Math.random() * 256, Math.random() * 256, 1.5, 1.5);
-	}
-	c2.globalAlpha = 1;
-	const voidMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv) });
-	const voidDisc = new THREE.Mesh(new THREE.CircleGeometry(1.5, 64), voidMat);
+	const sprinkle = (ctx2d: CanvasRenderingContext2D, count: number) => {
+		ctx2d.fillStyle = '#b9a6ff';
+		for (let i = 0; i < count; i++) {
+			// polar placement, kept inside the fade so rotating stars never
+			// cross a visible edge
+			const a = Math.random() * Math.PI * 2;
+			const r = Math.sqrt(Math.random()) * 100;
+			ctx2d.globalAlpha = (0.2 + Math.random() * 0.6) * (1 - r / 128);
+			ctx2d.fillRect(128 + Math.cos(a) * r, 128 + Math.sin(a) * r, 1.5, 1.5);
+		}
+		ctx2d.globalAlpha = 1;
+	};
+	sprinkle(c2, 45);
+	const voidMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false });
+	const voidDisc = new THREE.Mesh(new THREE.CircleGeometry(1.45, 64), voidMat);
 	voidDisc.position.set(0, 0, -0.2);
 	scene.scene.add(voidDisc);
+	// a second, stars-only layer counter-rotating in front: the sky swirls
+	const cv2 = document.createElement('canvas');
+	cv2.width = cv2.height = 256;
+	sprinkle(cv2.getContext('2d')!, 55);
+	const starMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv2), transparent: true, depthWrite: false });
+	const starDisc = new THREE.Mesh(new THREE.CircleGeometry(1.45, 64), starMat);
+	starDisc.position.set(0, 0, -0.19);
+	scene.scene.add(starDisc);
 
 	const opening = machine.openIris(0.45, 1200);
 	machine.portal.visible = false; // openIris shows the sky; overrule it same-frame
@@ -134,6 +152,9 @@ export async function play(ctx: EffectContext): Promise<void> {
 		for (const r of ribbons) r.material.uniforms.uTime.value = t;
 		genie.rotation.y = t * 0.5; // the whole braid slowly revolves…
 		genie.rotation.z = Math.sin(t * 0.7) * 0.07; // …and sways on its hips
+		// the void's two star layers counter-rotate — a slow parallax swirl
+		voidDisc.rotation.z += dt * 0.05;
+		starDisc.rotation.z -= dt * 0.12;
 	});
 
 	// sharp streaks of light orbiting the column — escaping glow, not smoke
@@ -239,10 +260,13 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	stopDance();
 	stopClock();
-	scene.scene.remove(genie, voidDisc);
+	scene.scene.remove(genie, voidDisc, starDisc);
 	voidDisc.geometry.dispose();
 	voidMat.map!.dispose();
 	voidMat.dispose();
+	starDisc.geometry.dispose();
+	starMat.map!.dispose();
+	starMat.dispose();
 	for (const r of ribbons) {
 		r.geometry.dispose();
 		r.material.dispose();
