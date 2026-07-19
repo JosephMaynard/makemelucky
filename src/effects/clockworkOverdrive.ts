@@ -9,7 +9,7 @@ import { createClockRingTexture } from '../gfx/textures';
 import type { EffectContext } from '../types';
 
 export const sound = 'spinningRim';
-export const duration = 9000;
+export const duration = 10600;
 
 let clockTex: THREE.CanvasTexture | null = null;
 
@@ -96,19 +96,36 @@ export async function play(ctx: EffectContext): Promise<void> {
 			hourHand.rotation.z = hourHand.rotation.z * (1 - v);
 		})
 	]);
-	haptics.vibrate([80, 50, 80, 50, 220]);
-	scene.shake(0.6);
-	shockwave(scene.scene, new THREE.Vector3(0, -0.32, 0.4), { color: 0xfff3cf, maxScale: 6, duration: 900 });
-	particles.burst({
-		texture: sprites.star4,
-		count: 80,
-		origin: new THREE.Vector3(0, -0.32, 0.5),
-		speed: [1.5, 4.5],
-		life: [0.6, 1.4],
-		size: [0.04, 0.12],
-		colors: [0xffd27a, 0xfff3cf, 0xffffff]
-	});
-	await flashPulse(machine, 1, 80, 900, 0xffe9ad);
+	// …and the clock STRIKES. Three tower bongs on the same deep note, the way
+	// a real clock tower counts an hour, each one rattling the whole scene.
+	for (let strike = 0; strike < 3; strike++) {
+		const first = strike === 0;
+		audio.sfx('gong', { pitch: 0.9, gain: first ? 1.15 : 1.0 });
+		haptics.vibrate(first ? [80, 50, 220] : [40, 30, 120]);
+		scene.shake(first ? 0.6 : 0.35);
+		shockwave(scene.scene, new THREE.Vector3(0, -0.32, 0.4), {
+			color: 0xfff3cf,
+			maxScale: first ? 6 : 4.5,
+			duration: 900
+		});
+		particles.burst({
+			texture: sprites.star4,
+			count: first ? 80 : 40,
+			origin: new THREE.Vector3(0, -0.32, 0.5),
+			speed: [1.5, 4.5],
+			life: [0.6, 1.4],
+			size: [0.04, 0.12],
+			colors: [0xffd27a, 0xfff3cf, 0xffffff]
+		});
+		flashPulse(machine, first ? 1 : 0.7, 80, 600, 0xffe9ad);
+		// the hands shudder with every bong
+		tween(520, 'outElastic', (v) => {
+			const kick = (1 - v) * 0.06;
+			minuteHand.rotation.z = kick;
+			hourHand.rotation.z = kick * 0.5;
+		});
+		await delay(strike < 2 ? 800 : 550);
+	}
 
 	// time settles back down
 	stopTick(400);
