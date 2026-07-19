@@ -19,6 +19,7 @@ export const PRESS_CHARMS: Charm[] = [
 	{ id: 'sweetLuck', amount: 16, icon: '16', title: 'Super Sweet Luck!', description: 'Press the Make Me Lucky button 16 times.' },
 	{ id: 'luckyUniverse', amount: 42, icon: '42', title: 'Luck of the Universe and Everything!', description: 'Press the Make Me Lucky button 42 times.' },
 	{ id: 'halfCentury', amount: 50, icon: '50', title: 'Half Century of Luck!', description: 'Press the Make Me Lucky button 50 times.' },
+	{ id: 'sixSeven', amount: 67, icon: '67', title: 'SIX SEVEN!', description: 'Press the Make Me Lucky button 67 times, then say it out loud while doing the hands. You have to. In memory of the stupidest meme of 2025.' },
 	{ id: 'hotLuck', amount: 69, icon: '69', title: 'Hot Luck!', description: 'Press the Make Me Lucky button 69 times.' },
 	{ id: 'wealthyx2', amount: 88, icon: '88', title: 'Wealthy Wealthy!', description: 'Two times the prosperity. Press the Make Me Lucky button 88 times.' },
 	{ id: 'eternalLuck', amount: 99, icon: '99', title: 'Eternal Luckyness!', description: 'Press the Make Me Lucky button 99 times.' },

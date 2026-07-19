@@ -257,3 +257,20 @@ describe('ritual', () => {
 		expect(second.ritualAvailable()).toBe(false);
 	});
 });
+
+describe('the SIX SEVEN charm', () => {
+	it('awards at exactly 67 presses, exactly once', () => {
+		const store = new LuckStore();
+		let awarded: string[] = [];
+		for (let i = 0; i < 67; i++) awarded = store.registerPress().map((c) => c.id);
+		expect(awarded).toEqual(['sixSeven']); // the 67th press, and only the 67th
+		expect(store.hasCharm('sixSeven')).toBe(true);
+		expect(store.registerPress().map((c) => c.id)).toEqual([]); // 68: mercifully silent
+		expect(store.data.charms.filter((c) => c.id === 'sixSeven')).toHaveLength(1);
+	});
+
+	it('sits in ascending press order so nextPressCharm() stays truthful', () => {
+		const amounts = PRESS_CHARMS.map((c) => c.amount!);
+		expect(amounts).toEqual([...amounts].sort((a, b) => a - b));
+	});
+});
