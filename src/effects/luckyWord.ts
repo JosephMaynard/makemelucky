@@ -1,6 +1,8 @@
 // Shared set-piece: scattered motes from all over the screen drift together to
-// spell a word (or one giant glyph) across the middle of the screen, a smoked-
-// glass strip fading in behind it for contrast, then everything bursts apart.
+// spell a word (or one giant glyph) across the middle of the screen, a dark
+// cloud of overlapping puffs gathering behind it for contrast — each puff
+// arriving, breathing and leaving on its own clock — then everything bursts
+// apart.
 
 import * as THREE from 'three';
 import { tween, delay, rand } from '../core/anim';
@@ -33,25 +35,6 @@ function textPoints(text: string): [number, number][] {
 	return pts;
 }
 
-// smoked-glass backdrop: black rounded strip with feathered edges
-let stripTexCache: THREE.CanvasTexture | null = null;
-export function stripTexture(): THREE.CanvasTexture {
-	if (stripTexCache) return stripTexCache;
-	const cv = document.createElement('canvas');
-	cv.width = 512;
-	cv.height = 128;
-	const c = cv.getContext('2d')!;
-	c.filter = 'blur(7px)';
-	c.fillStyle = '#000';
-	c.beginPath();
-	c.roundRect(24, 22, 464, 84, 34);
-	c.fill();
-	c.fill();
-	c.fill(); // stacked fills = dense core, feathered edge — no border, pure smoke
-	stripTexCache = new THREE.CanvasTexture(cv);
-	return stripTexCache;
-}
-
 export interface LuckyWordOptions {
 	text?: string;
 	color?: THREE.ColorRepresentation;
@@ -78,7 +61,7 @@ export async function luckyWord(ctx: EffectContext, opts: LuckyWordOptions = {})
 		z = 1.25,
 		strip: wantStrip = true
 	} = opts;
-	const { scene, sprites, haptics, audio } = ctx;
+	const { scene, sprites, textures, haptics, audio } = ctx;
 
 	let pts = textPoints(text);
 	while (pts.length > 2000) pts = pts.filter((_, i) => i % 2 === 0);
@@ -167,21 +150,55 @@ export async function luckyWord(ctx: EffectContext, opts: LuckyWordOptions = {})
 	points.renderOrder = 9; // the word floats over everything
 	scene.scene.add(points);
 
-	// the backdrop strip: starts big and invisible, shrinks + fades in as the
-	// letters land, and leaves the same way
-	const stripGeo = new THREE.PlaneGeometry(512 * scale * 1.06, Math.max(0.74, 160 * scale * 0.96));
-	const stripMat = new THREE.MeshBasicMaterial({
-		map: stripTexture(),
-		transparent: true,
-		opacity: 0,
-		depthTest: false,
-		depthWrite: false
-	});
-	const strip = new THREE.Mesh(stripGeo, stripMat);
-	strip.renderOrder = 8; // just under the motes
-	strip.position.set(0, yPos, z - 0.03);
-	strip.visible = wantStrip;
-	scene.scene.add(strip);
+	// the backdrop: a dark cloud of overlapping oval puffs behind the letters.
+	// Each puff has its own arrival time, density, drift and slow breathing, so
+	// the backing reads as weather that gathered for the occasion, not a strip.
+	interface Puff {
+		delay: number;
+		peak: number;
+		wobbleF: number;
+		wobbleP: number;
+		drift: number;
+		baseW: number;
+		baseH: number;
+	}
+	const wordW = 512 * scale;
+	const wordH = Math.max(0.74, 160 * scale * 0.96);
+	const cloud = new THREE.Group();
+	cloud.visible = wantStrip;
+	const puffs: THREE.Sprite[] = [];
+	const N_PUFFS = 22;
+	for (let i = 0; i < N_PUFFS; i++) {
+		const m = new THREE.SpriteMaterial({
+			map: textures.cloudSprite,
+			color: 0x04060a,
+			transparent: true,
+			opacity: 0,
+			depthTest: false,
+			depthWrite: false,
+			rotation: rand(-0.3, 0.3)
+		});
+		const s = new THREE.Sprite(m);
+		s.renderOrder = 8; // under the motes, over everything else
+		// spread along the strip's length with jitter; a couple ride the ends
+		const u = (i + 0.5) / N_PUFFS + rand(-0.04, 0.04);
+		const baseW = rand(0.75, 1.15) * wordH * 2.1;
+		const baseH = baseW * rand(0.42, 0.58); // squashed — ovals, not blobs
+		s.position.set((u - 0.5) * wordW * 1.08, yPos + rand(-0.12, 0.12) * wordH, z - 0.03 - i * 0.002);
+		s.scale.set(baseW, baseH, 1);
+		s.userData = {
+			delay: rand(0, 0.55), // each puff arrives on its own cue…
+			peak: rand(0.8, 1.0), // …at its own density
+			wobbleF: rand(0.4, 1.2), // …and breathes at its own pace
+			wobbleP: rand(0, Math.PI * 2),
+			drift: rand(-0.06, 0.06),
+			baseW,
+			baseH
+		} satisfies Puff;
+		cloud.add(s);
+		puffs.push(s);
+	}
+	scene.scene.add(cloud);
 
 	// gather: every mote drifts from its scatter position to its letter pixel
 	const ease = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -197,10 +214,16 @@ export async function luckyWord(ctx: EffectContext, opts: LuckyWordOptions = {})
 			positions[i * 3 + 2] = start[i * 3 + 2] + (target[i * 3 + 2] - start[i * 3 + 2]) * p;
 		}
 		geo.attributes.position.needsUpdate = true;
-		// strip slips in only just before the words become readable
-		const s = ease(Math.min(1, Math.max(0, (P - 0.72) / 0.28)));
-		stripMat.opacity = 0.9 * s;
-		strip.scale.setScalar(1.35 - 0.35 * s);
+		// the cloud gathers puff by puff just before the words become readable
+		for (const s of puffs) {
+			const u = s.userData as Puff;
+			const arrive = ease(Math.min(1, Math.max(0, (P - 0.55 - u.delay * 0.45) / 0.22)));
+			const breathe = 0.86 + 0.14 * Math.sin(shimmerT * u.wobbleF + u.wobbleP);
+			s.material.opacity = u.peak * arrive * breathe;
+			s.position.x += u.drift * dt; // the whole bank creeps, cloud-like
+			const swell = 1.25 - 0.25 * arrive + 0.02 * Math.sin(shimmerT * u.wobbleF * 1.7 + u.wobbleP);
+			s.scale.set(u.baseW * swell, u.baseH * swell, 1);
+		}
 	});
 
 	tween(500, 'outQuad', (v) => (mat.uniforms.uOpacity.value = v));
@@ -227,15 +250,19 @@ export async function luckyWord(ctx: EffectContext, opts: LuckyWordOptions = {})
 	});
 	await tween(scatter, 'inQuad', (v) => {
 		mat.uniforms.uOpacity.value = 1 - v;
-		// the strip is gone almost immediately — visible only while the text is
-		const sOut = Math.min(1, v / 0.4);
-		stripMat.opacity = 0.9 * (1 - sOut);
-		strip.scale.setScalar(1 + 0.35 * sOut);
+		// the cloud breaks up the way it formed: puff by puff, each thinning
+		// and swelling away on its own cue
+		for (const s of puffs) {
+			const u = s.userData as Puff;
+			const leave = Math.min(1, Math.max(0, (v - u.delay * 0.3) / 0.45));
+			s.material.opacity = u.peak * (1 - leave);
+			const swell = 1 + 0.4 * leave;
+			s.scale.set(u.baseW * swell, u.baseH * swell, 1);
+		}
 	});
 	stopScatter();
-	scene.scene.remove(points, strip);
+	scene.scene.remove(points, cloud);
 	geo.dispose();
 	mat.dispose();
-	stripGeo.dispose();
-	stripMat.dispose(); // texture is cached module-wide, keep it
+	for (const s of puffs) s.material.dispose(); // cloudSprite texture is shared — keep it
 }

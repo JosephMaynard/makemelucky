@@ -45,6 +45,9 @@ export class AudioService {
 	_noiseBuffer: AudioBuffer | null;
 	_loopStops: Set<SfxLoopStop>;
 	_reverbSend: GainNode | null;
+	_dongData: ArrayBuffer | null;
+	_dongBuffer: AudioBuffer | null;
+	_dongDecoding: boolean;
 
 	constructor() {
 		// preload: false — the 868KB sprite must not compete with boot for
@@ -56,14 +59,40 @@ export class AudioService {
 		this._noiseBuffer = null; // shared white-noise buffer for all the crunchy SFX
 		this._loopStops = new Set();
 		this._reverbSend = null; // lazily-built cathedral for the gong to ring in
+		this._dongData = null; // the real church bell, fetched raw…
+		this._dongBuffer = null; // …and decoded once Web Audio wakes up
+		this._dongDecoding = false;
 	}
 
-	/** Start fetching the sprite in the background (idempotent). */
+	/** Start fetching the sprite + the church bell in the background (idempotent). */
 	warm(): void {
 		if (this.howl.state() === 'unloaded') this.howl.load();
+		if (!this._dongData && !this._dongBuffer) {
+			fetch('/soundfx/dong.mp3')
+				.then((r) => (r.ok ? r.arrayBuffer() : null))
+				.then((buf) => (this._dongData = buf))
+				.catch(() => { /* offline / blocked — the synth bell fills in */ });
+		}
+	}
+
+	// Decode the bell as soon as we have both the bytes and a live context.
+	// Called from the hot paths so the first gong finds a ready buffer.
+	_ensureDongDecoded(): void {
+		const ctx = Howler.ctx;
+		if (!ctx || !this._dongData || this._dongBuffer || this._dongDecoding) return;
+		this._dongDecoding = true;
+		// decodeAudioData detaches the buffer — hand it over and forget it
+		const data = this._dongData;
+		this._dongData = null;
+		ctx.decodeAudioData(
+			data,
+			(decoded) => (this._dongBuffer = decoded),
+			() => { /* corrupt download — the synth bell fills in */ }
+		);
 	}
 
 	play(name: string): void {
+		this._ensureDongDecoded(); // the button press wakes the bell
 		if (!name || this.muted) return;
 		if (SPRITE[name]) {
 			this.howl.play(name);
@@ -284,10 +313,26 @@ export class AudioService {
 				this._blip(ctx, { type: 'sine', freq0: f * 5.4, peak: 0.05 * g, dur: 0.6,  attack: 0.004 });
 				break;
 			}
-			case 'gong': { // church-bell DONG: the classic inharmonic partial
-				// stack (hum, prime, tierce, quint, nominal + shimmer), each
-				// slightly detuned so the partials beat against each other,
-				// a bronze strike transient, and a long ride in the reverb.
+			case 'gong': { // church-bell DONG — the real recording, pitched with
+				// playbackRate and sent through the cathedral reverb. `pitch`
+				// keeps working: 1 = as recorded, 2+ = small bright bell.
+				this._ensureDongDecoded();
+				if (this._dongBuffer) {
+					const t = ctx.currentTime;
+					const src = ctx.createBufferSource();
+					src.buffer = this._dongBuffer;
+					src.playbackRate.value = p;
+					const gn = ctx.createGain();
+					gn.gain.value = 0.9 * g;
+					src.connect(gn);
+					gn.connect(Howler.masterGain);
+					gn.connect(this._getReverbSend(ctx));
+					src.start(t);
+					src.onended = () => { try { src.disconnect(); gn.disconnect(); } catch (e) {} };
+					break;
+				}
+				// fallback while the mp3 is still fetching (or offline pre-cache):
+				// a synthesized bell — the classic inharmonic partial stack.
 				const f = 105 * p; // strike note
 				const send = this._getReverbSend(ctx);
 				const voice = ctx.createGain();
