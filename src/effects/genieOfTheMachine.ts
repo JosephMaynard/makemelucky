@@ -72,14 +72,33 @@ export async function play(ctx: EffectContext): Promise<void> {
 		glowCol.setHSL((0.45 + T * 0.09) % 1, 0.85, 0.6);
 		machine.setInnerGlow(0.45 + Math.sin(T * 2.1) * 0.18, glowCol);
 	});
-	await machine.openIris(0.45, 1200);
-	// the portal's daytime sky is portalDrop's trick — the genie rises out of
-	// a black void instead
-	machine.portal.visible = false;
-	const voidMat = new THREE.MeshBasicMaterial({ color: 0x05030c });
+	// the void behind the iris: not the portal's daytime sky (that's
+	// portalDrop's trick), but a violet-throated dark with its own stars —
+	// in place BEFORE the iris cracks, so it's all you ever see inside
+	const cv = document.createElement('canvas');
+	cv.width = cv.height = 256;
+	const c2 = cv.getContext('2d')!;
+	const grad = c2.createRadialGradient(128, 128, 10, 128, 128, 128);
+	grad.addColorStop(0, '#000006');
+	grad.addColorStop(0.55, '#0a0418');
+	grad.addColorStop(0.85, '#1c0b33');
+	grad.addColorStop(1, '#2b1048');
+	c2.fillStyle = grad;
+	c2.fillRect(0, 0, 256, 256);
+	c2.fillStyle = '#b9a6ff';
+	for (let i = 0; i < 40; i++) {
+		c2.globalAlpha = 0.25 + Math.random() * 0.6;
+		c2.fillRect(Math.random() * 256, Math.random() * 256, 1.5, 1.5);
+	}
+	c2.globalAlpha = 1;
+	const voidMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv) });
 	const voidDisc = new THREE.Mesh(new THREE.CircleGeometry(0.8, 48), voidMat);
 	voidDisc.position.set(0, 0, -0.2);
 	scene.scene.add(voidDisc);
+
+	const opening = machine.openIris(0.45, 1200);
+	machine.portal.visible = false; // openIris shows the sky; overrule it same-frame
+	await opening;
 	// reflections go neon only AFTER the dim settles — never two hands on
 	// environmentIntensity at once
 	scene.crossfadeEnvironment('neon', 800);
@@ -220,6 +239,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	stopClock();
 	scene.scene.remove(genie, voidDisc);
 	voidDisc.geometry.dispose();
+	voidMat.map!.dispose();
 	voidMat.dispose();
 	for (const r of ribbons) {
 		r.geometry.dispose();
