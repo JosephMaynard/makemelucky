@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { initDossier, lifePath, nameNumber, dailyHoroscope } from '../src/luck/dossier';
+import { initDossier, lifePath, nameNumber, dailyHoroscope, personalSeed } from '../src/luck/dossier';
 import { track } from '../src/services/analytics';
 
 // Stubbed so we can assert on calls — and on what is never in them.
@@ -74,12 +74,23 @@ describe('numerology', () => {
 });
 
 describe('the horoscope engine', () => {
-	it('is deterministic per sign per day', () => {
+	it('is deterministic per bearer per day', () => {
 		expect(dailyHoroscope(4, 20654)).toEqual(dailyHoroscope(4, 20654));
 	});
 
-	it('formats the lucky time as HH:MM', () => {
-		expect(dailyHoroscope(0, 1).luckyTime).toMatch(/^([01]\d|2[0-3]):[0-5]\d$/);
+	it('personalises the seed by full birth date and name', () => {
+		const a = personalSeed('1990-04-25', 'Joseph');
+		expect(a).toBe(personalSeed('1990-04-25', 'Joseph')); // stable
+		expect(a).toBe(personalSeed('1990-04-25', '  joseph ')); // case/space-insensitive
+		expect(a).not.toBe(personalSeed('1990-04-25', 'Josephine')); // name matters
+		expect(a).not.toBe(personalSeed('1991-04-25', 'Joseph')); // year matters
+		expect(a).not.toBe(personalSeed('1990-04-26', 'Joseph')); // day matters
+	});
+
+	it('formats the lucky time as HH:MM and always stamps a closer', () => {
+		const scope = dailyHoroscope(0, 1);
+		expect(scope.luckyTime).toMatch(/^([01]\d|2[0-3]):[0-5]\d$/);
+		expect(scope.closer.length).toBeGreaterThan(10);
 	});
 });
 

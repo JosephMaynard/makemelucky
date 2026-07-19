@@ -119,6 +119,11 @@ export async function play(ctx: EffectContext): Promise<void> {
 	const starDisc = new THREE.Mesh(new THREE.CircleGeometry(1.3, 64), starMat);
 	starDisc.position.set(0, 0, -0.19);
 	machine.group.add(starDisc);
+	// the sky is already turning while the iris opens — never a frozen frame
+	const stopSwirl = scene.addUpdatable((dt) => {
+		voidDisc.rotation.z += dt * 0.05;
+		starDisc.rotation.z -= dt * 0.12;
+	});
 
 	const opening = machine.openIris(0.45, 1200);
 	machine.portal.visible = false; // openIris shows the sky; overrule it same-frame
@@ -156,9 +161,6 @@ export async function play(ctx: EffectContext): Promise<void> {
 		for (const r of ribbons) r.material.uniforms.uTime.value = t;
 		genie.rotation.y = t * 0.5; // the whole braid slowly revolves…
 		genie.rotation.z = Math.sin(t * 0.7) * 0.07; // …and sways on its hips
-		// the void's two star layers counter-rotate — a slow parallax swirl
-		voidDisc.rotation.z += dt * 0.05;
-		starDisc.rotation.z -= dt * 0.12;
 	});
 
 	// sharp streaks of light orbiting the column — escaping glow, not smoke
@@ -263,6 +265,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	await machine.closeIris(700);
 
 	stopDance();
+	stopSwirl();
 	stopClock();
 	scene.scene.remove(genie);
 	machine.group.remove(voidDisc, starDisc);

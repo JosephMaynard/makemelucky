@@ -243,18 +243,40 @@ const LUCKY_OBJECTS: readonly string[] = [
 	'a green light you didn’t have to earn'
 ];
 
+// closing stamps — one per dossier, chosen by the same personal seed
+const CLOSERS: readonly string[] = [
+	'Compiled for the bearer alone. The cosmos does not photocopy.',
+	'No two dossiers are alike. Yours has been filed under W, for Whimsy.',
+	'The owls proofread this personally. Two approved; the third abstained.',
+	'Printed on imaginary vellum, in an edition of one.',
+	'Your stars were consulted individually. Several were surprised to be asked.',
+	'Accuracy guaranteed for exactly one bearer: you.'
+];
+
 export interface Horoscope {
 	omen: string;
 	hedge: string;
 	advice: string;
 	luckyObject: string;
 	luckyTime: string;
+	closer: string;
 }
 
-/** Deterministic per sign per day — everyone sharing your sign shares your
- *  fate today, which is exactly how this industry has always worked. */
-export function dailyHoroscope(signIndex: number, dayIndex: number): Horoscope {
-	const rng = mulberry32((signIndex + 1) * 0x9e3779b9 + dayIndex);
+/** A stable little hash of the bearer's own particulars — full birth date and
+ *  name — so the forecast belongs to THEM, not to a twelfth of humanity. */
+export function personalSeed(dob: string, name: string): number {
+	let h = 0x811c9dc5;
+	for (const ch of `${dob}|${name.trim().toLowerCase()}`) {
+		h ^= ch.charCodeAt(0);
+		h = Math.imul(h, 0x01000193);
+	}
+	return h >>> 0;
+}
+
+/** Deterministic per bearer per day — same person, same day, same fate.
+ *  Different person, different fate. The cosmos keeps individual files. */
+export function dailyHoroscope(seed: number, dayIndex: number): Horoscope {
+	const rng = mulberry32((seed ^ Math.imul(dayIndex, 0x9e3779b9)) >>> 0);
 	const pick = <T>(arr: readonly T[]): T => arr[Math.floor(rng() * arr.length)];
 	const h = Math.floor(rng() * 24);
 	const m = Math.floor(rng() * 60);
@@ -263,7 +285,8 @@ export function dailyHoroscope(signIndex: number, dayIndex: number): Horoscope {
 		hedge: pick(HEDGES),
 		advice: pick(ADVICE),
 		luckyObject: pick(LUCKY_OBJECTS),
-		luckyTime: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+		luckyTime: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
+		closer: pick(CLOSERS)
 	};
 }
 
@@ -330,8 +353,7 @@ export function initDossier(opts: { onFirstDossier?: () => void } = {}): void {
 		const zodiac = chineseZodiacFor(date);
 		const lp = lifePath(date);
 		const nn = name ? nameNumber(name) : 0;
-		const signIdx = STAR_SIGNS.indexOf(sign);
-		const scope = dailyHoroscope(signIdx, Math.floor(Date.now() / 86400000));
+		const scope = dailyHoroscope(personalSeed(dob, name), Math.floor(Date.now() / 86400000));
 
 		out!.textContent = '';
 		const card = document.createElement('div');
@@ -364,10 +386,15 @@ export function initDossier(opts: { onFirstDossier?: () => void } = {}): void {
 		lucky.textContent = `Lucky object: ${scope.luckyObject}. Lucky time: ${scope.luckyTime}.`;
 		card.appendChild(lucky);
 
-		const share = document.createElement('p');
-		share.className = 'dossier-small';
-		share.textContent = `This forecast is shared with everyone born under ${sign.name}. Fortune-wise, you’re a co-op.`;
-		card.appendChild(share);
+		const closer = document.createElement('p');
+		closer.className = 'dossier-small';
+		closer.textContent = scope.closer;
+		card.appendChild(closer);
+
+		const tomorrow = document.createElement('p');
+		tomorrow.className = 'dossier-small';
+		tomorrow.textContent = 'A fresh forecast is issued at midnight, local time. Check back tomorrow — the cosmos keeps office hours.';
+		card.appendChild(tomorrow);
 
 		out!.appendChild(card);
 		burnBtn!.hidden = false;
@@ -404,7 +431,7 @@ export function initDossier(opts: { onFirstDossier?: () => void } = {}): void {
 		out!.textContent = '';
 		const p = document.createElement('p');
 		p.className = 'dossier-small';
-		p.textContent = 'Dossier burned. The cosmos has already forgotten you were ever born. (So has this device.)';
+		p.textContent = 'Record struck. This device has already forgotten you. (The cosmos never knew.)';
 		out!.appendChild(p);
 		burnBtn.hidden = true;
 		track('dossier_burned'); // again: event only, no payload

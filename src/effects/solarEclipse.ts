@@ -83,7 +83,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	scene.scene.add(sunGroup);
 
 	// ---- the moon: a matte-black disc with the faintest cool rim
-	const moonMat = new THREE.MeshBasicMaterial({ color: 0x05060a });
+	const moonMat = new THREE.MeshBasicMaterial({ color: 0x05060a, transparent: true });
 	const moon = new THREE.Mesh(new THREE.CircleGeometry(0.36, 64), moonMat);
 	const moonStart = new THREE.Vector3(SUN.x - 2.4, SUN.y + 1.5, SUN.z + 0.06);
 	moon.position.copy(moonStart);
@@ -178,7 +178,9 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// ---- the moon moves on; light floods back golden.
 	// NOTE: crossfadeEnvironment and dimLights' restore both tween
 	// environmentIntensity, so they run strictly in sequence, never together.
-	const moonEnd = new THREE.Vector3(SUN.x + 2.6, SUN.y - 1.3, moonStart.z);
+	// far enough to clear even an ultrawide frustum — no parked moon at the
+	// screen edge on laptop aspect ratios
+	const moonEnd = new THREE.Vector3(SUN.x + 4.6, SUN.y - 2.1, moonStart.z);
 	scene.crossfadeEnvironment('gold', 900); // done well before restore() below
 	audio.sfx('swoosh', { pitch: 0.7, gain: 0.7 });
 	await tween(2300, 'inOutQuad', (v) => {
@@ -190,12 +192,13 @@ export async function play(ctx: EffectContext): Promise<void> {
 	await restore(1200);
 	scene.crossfadeEnvironment('lounge', 1500); // settles during the outro below
 
-	// ---- sunset on demand: everything bows out
+	// ---- sunset on demand: everything bows out (moon included, belt-and-braces)
 	await Promise.all([
 		tween(1000, 'inOutQuad', (v) => {
 			coreMat.opacity = 0.95 * (1 - v);
 			coronaMat.uniforms.uIntensity.value = 0.25 * (1 - v);
 			glyphMat.opacity = 0.36 * (1 - v);
+			moonMat.opacity = 1 - v;
 			scene.fxLight.intensity = 5 * (1 - v);
 			machine.setInnerGlow(0.35 * (1 - v), 0xffd27a);
 		})
