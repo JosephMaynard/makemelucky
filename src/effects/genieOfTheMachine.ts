@@ -78,21 +78,23 @@ export async function play(ctx: EffectContext): Promise<void> {
 	const cv = document.createElement('canvas');
 	cv.width = cv.height = 256;
 	const c2 = cv.getContext('2d')!;
-	const grad = c2.createRadialGradient(128, 128, 10, 128, 128, 128);
-	grad.addColorStop(0, '#000006');
+	// big enough to blanket the machine's entire footprint — the iris parts
+	// and quadrant gaps must only ever reveal THIS, never the leather wall
+	const grad = c2.createRadialGradient(128, 128, 6, 128, 128, 128);
+	grad.addColorStop(0, '#2b1048'); // nebula glow directly behind the button…
+	grad.addColorStop(0.3, '#1c0b33');
 	grad.addColorStop(0.55, '#0a0418');
-	grad.addColorStop(0.85, '#1c0b33');
-	grad.addColorStop(1, '#2b1048');
+	grad.addColorStop(1, '#020108'); // …dying to nothing at the rim
 	c2.fillStyle = grad;
 	c2.fillRect(0, 0, 256, 256);
 	c2.fillStyle = '#b9a6ff';
-	for (let i = 0; i < 40; i++) {
-		c2.globalAlpha = 0.25 + Math.random() * 0.6;
+	for (let i = 0; i < 70; i++) {
+		c2.globalAlpha = 0.2 + Math.random() * 0.6;
 		c2.fillRect(Math.random() * 256, Math.random() * 256, 1.5, 1.5);
 	}
 	c2.globalAlpha = 1;
 	const voidMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv) });
-	const voidDisc = new THREE.Mesh(new THREE.CircleGeometry(0.8, 48), voidMat);
+	const voidDisc = new THREE.Mesh(new THREE.CircleGeometry(1.5, 64), voidMat);
 	voidDisc.position.set(0, 0, -0.2);
 	scene.scene.add(voidDisc);
 
