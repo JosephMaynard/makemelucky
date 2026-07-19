@@ -84,9 +84,9 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// it can poke a hard edge past the machine's silhouette.
 	const grad = c2.createRadialGradient(128, 128, 6, 128, 128, 128);
 	grad.addColorStop(0, 'rgba(43, 16, 72, 1)'); // nebula glow behind the button…
-	grad.addColorStop(0.3, 'rgba(28, 11, 51, 1)');
-	grad.addColorStop(0.55, 'rgba(10, 4, 24, 1)');
-	grad.addColorStop(0.82, 'rgba(3, 1, 10, 0.9)');
+	grad.addColorStop(0.35, 'rgba(28, 11, 51, 1)');
+	grad.addColorStop(0.62, 'rgba(10, 4, 24, 1)');
+	grad.addColorStop(0.85, 'rgba(3, 1, 10, 0.85)');
 	grad.addColorStop(1, 'rgba(2, 1, 8, 0)'); // …dissolving to nothing at the rim
 	c2.fillStyle = grad;
 	c2.fillRect(0, 0, 256, 256);
@@ -103,8 +103,10 @@ export async function play(ctx: EffectContext): Promise<void> {
 		ctx2d.globalAlpha = 1;
 	};
 	sprinkle(c2, 45);
+	// radius matched to the portal sky disc (R·0.98): the proven bound that
+	// keeps a backing INSIDE the outer rim band from every viewport
 	const voidMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false });
-	const voidDisc = new THREE.Mesh(new THREE.CircleGeometry(1.45, 64), voidMat);
+	const voidDisc = new THREE.Mesh(new THREE.CircleGeometry(1.3, 64), voidMat);
 	voidDisc.position.set(0, 0, -0.2);
 	scene.scene.add(voidDisc);
 	// a second, stars-only layer counter-rotating in front: the sky swirls
@@ -112,7 +114,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	cv2.width = cv2.height = 256;
 	sprinkle(cv2.getContext('2d')!, 55);
 	const starMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv2), transparent: true, depthWrite: false });
-	const starDisc = new THREE.Mesh(new THREE.CircleGeometry(1.45, 64), starMat);
+	const starDisc = new THREE.Mesh(new THREE.CircleGeometry(1.3, 64), starMat);
 	starDisc.position.set(0, 0, -0.19);
 	scene.scene.add(starDisc);
 

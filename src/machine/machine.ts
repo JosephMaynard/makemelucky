@@ -405,7 +405,7 @@ export class Machine {
 		this.portal = new THREE.Group();
 		this.portal.position.z = -0.42;
 		const skyMat = new THREE.MeshBasicMaterial({ map: textures.sky });
-		this.skyDisc = new THREE.Mesh(new THREE.CircleGeometry(R * 0.98, 64), skyMat);
+		this.skyDisc = new THREE.Mesh(new THREE.CircleGeometry(R * 1.0, 64), skyMat);
 		this.portal.add(this.skyDisc);
 		this.portalClouds = [];
 		for (let i = 0; i < 3; i++) {
