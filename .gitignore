@@ -3,3 +3,4 @@ node_modules
 dist
 screen_shots
 .vercel
+.DS_Store
