@@ -5,7 +5,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { createEnvironmentScene, type EnvironmentName } from '../gfx/environment';
-import { tween, updateTweens } from './anim';
+import { tween, tweensActive, updateTweens } from './anim';
 
 // Final grade: gentle vignette + animated film grain over the tone-mapped
 // image. uVignette is driven up by dimLights so dark effects feel graded
@@ -78,6 +78,11 @@ export class LuckyScene {
 	clock: THREE.Clock;
 	elapsed: number;
 	_onResize: () => void;
+	/** Extra full-rate demand the scene can't see itself (the director sets this). */
+	busyCheck: (() => boolean) | null;
+	_focused: boolean;
+	_canvasVisible: boolean;
+	_lastRender: number;
 
 	constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
@@ -85,7 +90,10 @@ export class LuckyScene {
 
 		this.renderer = new THREE.WebGLRenderer({
 			canvas,
-			antialias: true,
+			// Everything renders through the EffectComposer's (non-MSAA) targets,
+			// so canvas MSAA never touches visible geometry — it only multisamples
+			// the final full-screen blit, a pure per-frame resolve cost.
+			antialias: false,
 			powerPreference: 'high-performance',
 			stencil: false
 		});
@@ -180,6 +188,28 @@ export class LuckyScene {
 		this.clock = new THREE.Clock();
 		this.elapsed = 0;
 
+		// Power governor inputs: full frame rate is reserved for moments that
+		// earn it (effects, shake, tweens, parallax chasing the pointer). The
+		// idle scene breathes slowly enough that 30fps is indistinguishable,
+		// and on ProMotion displays that's a 4x cut in GPU work.
+		this.busyCheck = null;
+		this._focused = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
+		this._canvasVisible = true;
+		this._lastRender = 0;
+		window.addEventListener('focus', () => { this._focused = true; });
+		window.addEventListener('blur', () => { this._focused = false; });
+		if ('IntersectionObserver' in window) {
+			new IntersectionObserver(
+				([entry]) => {
+					this._canvasVisible = entry.isIntersecting;
+				},
+				// the #content anchor scroll parks the canvas exactly edge-to-edge
+				// with the viewport, which still counts as intersecting (ratio 0)
+				// and fires no further events — shrink the root so it doesn't
+				{ rootMargin: '-1px' }
+			).observe(canvas);
+		}
+
 		this._onResize = () => this.resize();
 		window.addEventListener('resize', this._onResize);
 		this.resize();
@@ -218,9 +248,34 @@ export class LuckyScene {
 	}
 
 	tick() {
+		const now = performance.now();
+
+		// ---- power governor: decide whether this rAF callback earns a frame.
+		// Anything that visibly moves fast holds native refresh; the idle scene
+		// (slow camera breathe, light drift, grain) renders at 30fps; blurred
+		// windows tick over gently; an off-screen canvas renders nothing.
+		const busy =
+			this.trauma > 0 ||
+			tweensActive() ||
+			(this.busyCheck ? this.busyCheck() : false) ||
+			this.parallax.distanceToSquared(this.parallaxTarget) > 4e-6;
+		let interval: number; // ms between frames; 0 = native refresh
+		if (!this._canvasVisible) {
+			// scrolled away: running choreography must keep advancing so its
+			// promises resolve on time, but nothing needs drawing at idle
+			interval = busy ? 1000 / 30 : Infinity;
+		} else if (!this._focused) {
+			interval = busy ? 1000 / 30 : 1000 / 12;
+		} else {
+			interval = busy ? 0 : 1000 / 30;
+		}
+		// the 4ms grace stops a frame landing just under the bar and stalling
+		// for a whole extra vsync
+		if (now - this._lastRender < interval - 4) return;
+		this._lastRender = now;
+
 		const dt = Math.min(this.clock.getDelta(), 0.066);
 		this.elapsed += dt;
-		const now = performance.now();
 
 		updateTweens(now);
 
@@ -259,8 +314,14 @@ export class LuckyScene {
 		for (const fn of this.updatables) fn(dt, this.elapsed);
 
 		(this.filmPass.uniforms as typeof FilmGradeShader.uniforms).uTime.value = this.elapsed;
-		this.composer.render();
-		this._monitorQuality(dt, now);
+		if (this._canvasVisible) this.composer.render();
+		if (interval === 0) {
+			this._monitorQuality(dt, now);
+		} else {
+			// capped frames would read as "low fps" and wrongly degrade quality
+			this._fpsSamples.length = 0;
+			this._lastQualityCheck = now;
+		}
 	}
 
 	/** Lazily bake (and cache) a PMREM environment for the named palette. */

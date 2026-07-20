@@ -116,6 +116,19 @@ async function boot(): Promise<void> {
 
 	const ctx: EffectContext = { scene, machine, particles, lightning, sprites, glyphTextures, textures, audio, haptics };
 	const director = new Director(ctx);
+	// effects hold full frame rate for their whole run, including the delay()
+	// gaps between tweens where particles are still flying
+	scene.busyCheck = () => director.running;
+
+	// the drifting glow blobs behind #content are 80px-blurred and huge — pause
+	// their animations while the section is off-screen so the compositor stays
+	// quiet when the hero fills the viewport
+	const content = document.getElementById('content');
+	if (content && 'IntersectionObserver' in window) {
+		new IntersectionObserver(([entry]) => {
+			content.classList.toggle('in-view', entry.isIntersecting);
+		}).observe(content);
+	}
 
 	// debug hooks: ?fx=powerSurge forces an effect
 	const params = new URLSearchParams(location.search);
@@ -131,7 +144,11 @@ async function boot(): Promise<void> {
 	await nextFrame();
 
 	// ---- reveal
-	document.getElementById('loading')?.classList.add('done');
+	const loading = document.getElementById('loading');
+	loading?.classList.add('done');
+	// remove it once faded — a merely-transparent overlay keeps its spinner
+	// animation (and a compositor layer) alive forever
+	setTimeout(() => loading?.remove(), 1000);
 	audio.warm(); // boot's done with the bandwidth — fetch the sound sprite now
 	track('page_loaded', { visits: store.data.visits, luckyness: store.data.luckyness });
 	screen.welcome(store.data.visits > 1, store.data.streak);

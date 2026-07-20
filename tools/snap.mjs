@@ -23,9 +23,14 @@ page.on('console', (m) => {
 page.on('pageerror', (e) => console.log('[pageerror]', e.message));
 
 await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
-await page.waitForFunction(() => document.getElementById('loading')?.classList.contains('done'), {
-	timeout: 20000
-});
+// boot removes #loading shortly after fading it, so "gone" also means done
+await page.waitForFunction(
+	() => {
+		const el = document.getElementById('loading');
+		return !el || el.classList.contains('done');
+	},
+	{ timeout: 20000 }
+);
 await new Promise((r) => setTimeout(r, 1200)); // let welcome text + idle settle
 
 if (pressFlag === '--press') {

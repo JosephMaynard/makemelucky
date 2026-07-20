@@ -36,6 +36,12 @@ interface Tween {
 
 const active = new Set<Tween>();
 
+/** True while any tween is mid-flight — the scene's power governor uses this
+ *  to hold full frame rate whenever choreography is animating. */
+export function tweensActive(): boolean {
+	return active.size > 0;
+}
+
 /** Advance all running tweens. Called once per frame by the scene loop. */
 export function updateTweens(now: number) {
 	for (const tw of active) {

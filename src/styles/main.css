@@ -469,6 +469,9 @@ body {
 	top: 2%;
 	left: -16%;
 	animation: drift-a 26s ease-in-out infinite alternate;
+	/* paused until scrolled into view (main.ts toggles .in-view) — these huge
+	   blurred layers otherwise keep the compositor busy behind the hero */
+	animation-play-state: paused;
 }
 #content::after {
 	width: 64vw;
@@ -477,6 +480,11 @@ body {
 	top: 38%;
 	right: -22%;
 	animation: drift-b 34s ease-in-out infinite alternate;
+	animation-play-state: paused;
+}
+#content.in-view::before,
+#content.in-view::after {
+	animation-play-state: running;
 }
 @keyframes drift-a {
 	to { transform: translate(26vw, 42%) scale(1.3); }
