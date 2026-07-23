@@ -5,4 +5,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://makemelucky.com/sitemap.xml
+Sitemap: https://www.makemelucky.com/sitemap.xml

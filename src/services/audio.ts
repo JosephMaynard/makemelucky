@@ -35,7 +35,11 @@ const SPRITE: Record<string, [number, number]> = {
 // created lazily the first time it's played.
 const TRACKS: Record<string, { src: string; volume: number }> = {
 	luckyNowDisco: { src: '/soundfx/lucky-now-disco.mp3', volume: 0.9 },
-	luckyFireworks: { src: '/soundfx/fireworks-luckyness.mp3', volume: 0.9 }
+	luckyFireworks: { src: '/soundfx/fireworks-luckyness.mp3', volume: 0.9 },
+	// Joseph's Suno sea shanty — drop the file in public/soundfx/ and it plays;
+	// until then jollyRoger runs on its procedural sfx alone (missing tracks
+	// fail silently in Howler)
+	pirateShanty: { src: '/soundfx/pirate-shanty.mp3', volume: 0.9 }
 };
 
 export class AudioService {

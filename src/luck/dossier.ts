@@ -191,7 +191,7 @@ const OMENS: readonly string[] = [
 	'Venus has entered your billing cycle.',
 	'Three magpies were consulted; two agreed.',
 	'Your ruling planet filed its paperwork on time today, which is rare.',
-	'The stars have aligned — not for you specifically, but you may stand near them.',
+	'The stars have aligned. Not for you specifically, but you may stand near them.',
 	'Saturn is doing that thing again.',
 	'A comet you will never see is nonetheless rooting for you.',
 	'Jupiter looms auspiciously, as is its habit.',
@@ -204,7 +204,7 @@ const HEDGES: readonly string[] = [
 	'Expect the unexpected, within reason.',
 	'A surprise is possible, though not guaranteed, weather permitting.',
 	'Something will happen today. This much is certain.',
-	'Change is coming — possibly loose.',
+	'Change is coming. Possibly loose.',
 	'An opportunity will knock, or at the very least text.',
 	'You will meet someone today. Statistically, several someones.',
 	'A door will close; a window will require maintenance.',
@@ -361,7 +361,7 @@ export function initDossier(opts: { onFirstDossier?: () => void } = {}): void {
 
 		const h = document.createElement('h3');
 		h.className = 'dossier-title';
-		h.textContent = `OFFICIAL LUCK DOSSIER — ${name ? name.toUpperCase() : 'THE BEARER'}`;
+		h.textContent = `OFFICIAL LUCK DOSSIER: ${name ? name.toUpperCase() : 'THE BEARER'}`;
 		card.appendChild(h);
 
 		const list = document.createElement('ul');
@@ -378,7 +378,7 @@ export function initDossier(opts: { onFirstDossier?: () => void } = {}): void {
 
 		const scopeEl = document.createElement('p');
 		scopeEl.className = 'dossier-scope';
-		scopeEl.textContent = `TODAY’S FORECAST — ${scope.omen} ${scope.hedge} ${scope.advice}`;
+		scopeEl.textContent = `TODAY’S FORECAST: ${scope.omen} ${scope.hedge} ${scope.advice}`;
 		card.appendChild(scopeEl);
 
 		const lucky = document.createElement('p');
@@ -393,7 +393,7 @@ export function initDossier(opts: { onFirstDossier?: () => void } = {}): void {
 
 		const tomorrow = document.createElement('p');
 		tomorrow.className = 'dossier-small';
-		tomorrow.textContent = 'A fresh forecast is issued at midnight, local time. Check back tomorrow — the cosmos keeps office hours.';
+		tomorrow.textContent = 'A fresh forecast is issued at midnight, local time. Check back tomorrow. The cosmos keeps office hours.';
 		card.appendChild(tomorrow);
 
 		out!.appendChild(card);

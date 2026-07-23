@@ -22,6 +22,7 @@ import * as pinball from './pinball';
 import * as cardCyclone from './cardCyclone';
 import * as horseshoeToss from './horseshoeToss';
 import * as makeItRain from './makeItRain';
+import * as jollyRoger from './jollyRoger';
 import * as slotArm from './slotArm';
 import * as solarEclipse from './solarEclipse';
 import * as genieOfTheMachine from './genieOfTheMachine';
@@ -51,6 +52,7 @@ const EFFECTS: Record<string, EffectModule> = {
 	cardCyclone,
 	horseshoeToss,
 	makeItRain,
+	jollyRoger,
 	slotArm,
 	solarEclipse,
 	genieOfTheMachine,

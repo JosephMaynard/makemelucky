@@ -229,7 +229,7 @@ async function boot(): Promise<void> {
 	// party trick: run any effect from the console without waiting for the
 	// shuffle bag. Curiosity is its own kind of luck — it earns a charm.
 	window.showEffect = async (name: string): Promise<string> => {
-		if (director.running) return 'An effect is already running — patience is lucky too.';
+		if (director.running) return 'An effect is already running. Patience is lucky too.';
 		if (!name || !director.names.includes(name)) {
 			return `Unknown effect. Try one of: ${director.names.join(', ')}`;
 		}
@@ -306,7 +306,7 @@ async function boot(): Promise<void> {
 		const shareData = {
 			title: 'Make Me Lucky',
 			text: 'Feeling unlucky? Press the button. It genuinely might help.',
-			url: 'https://makemelucky.com/'
+			url: 'https://www.makemelucky.com/'
 		};
 		let shared = false;
 		try {

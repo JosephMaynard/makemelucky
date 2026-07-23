@@ -618,7 +618,7 @@ export function initLottoPicker(): void {
 		if (!lastDraw) return;
 		const { game, main, bonus, resonance } = lastDraw;
 		const bonusPart = bonus.length ? ` + bonus ${bonus.join(', ')}` : '';
-		const text = `My lucky numbers: ${main.join(', ')}${bonusPart} — ${game}, resonance ${resonance}%. Conjured at makemelucky.com 🍀`;
+		const text = `My lucky numbers: ${main.join(', ')}${bonusPart} (${game}, resonance ${resonance}%). Conjured at makemelucky.com 🍀`;
 		let shared = false;
 		try {
 			if (navigator.share) {
@@ -875,9 +875,9 @@ export function initLottoPicker(): void {
 			track('luck_numbers_spun', { game: currentGameKey, count: cfg.count });
 
 			await wait(main.length * 70 + 400);
-			statusEl!.textContent = `Luck-field resonance ${avg}% — ${fieldQuip(avg)}. 🍀`;
+			statusEl!.textContent = `Luck-field resonance ${avg}%. ${fieldQuip(avg)}. 🍀`;
 		} catch {
-			statusEl!.textContent = 'The cosmos misfired — try another spin. 🍀';
+			statusEl!.textContent = 'The cosmos misfired. Try another spin. 🍀';
 		} finally {
 			spinBtn!.disabled = false;
 			spinning = false;

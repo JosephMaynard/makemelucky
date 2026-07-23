@@ -162,9 +162,9 @@ describe('share button', () => {
 		await vi.waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
 
 		const text = writeText.mock.calls[0][0] as string;
-		// EuroMillions: 5 main + bonus 2, e.g. "My lucky numbers: 7, 19, 23, 31, 48 + bonus 3, 9 — EuroMillions, resonance 87%. Conjured at makemelucky.com 🍀"
+		// EuroMillions: 5 main + bonus 2, e.g. "My lucky numbers: 7, 19, 23, 31, 48 + bonus 3, 9 (EuroMillions, resonance 87%). Conjured at makemelucky.com 🍀"
 		expect(text).toMatch(
-			/^My lucky numbers: \d+(, \d+){4} \+ bonus \d+, \d+ — EuroMillions, resonance \d+%\. Conjured at makemelucky\.com 🍀$/
+			/^My lucky numbers: \d+(, \d+){4} \+ bonus \d+, \d+ \(EuroMillions, resonance \d+%\)\. Conjured at makemelucky\.com 🍀$/
 		);
 		expect(track).toHaveBeenCalledWith('numbers_shared', { game: 'euromillions' });
 
