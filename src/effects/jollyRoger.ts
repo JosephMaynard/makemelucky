@@ -349,6 +349,24 @@ const LYRIC: readonly (readonly [number, number])[] = [
 export async function play(ctx: EffectContext): Promise<void> {
 	const { scene, machine, particles, lightning, sprites, audio, haptics } = ctx;
 
+	// visible half-width of the frame at a given depth. Wide screens hit the
+	// camera's FOV clamp and see MUCH more world than the design constants
+	// assumed, so every off-screen position must be computed, never hardcoded.
+	const frameHalfW = (z: number) =>
+		Math.tan(THREE.MathUtils.degToRad(scene.camera.fov / 2)) * scene.camera.aspect * (5.35 - z);
+
+	// the ocean vertex shader's wave, replicated exactly, so the ship can ride
+	// the real crest line instead of bobbing on an unrelated sine
+	const waveTop = (x: number, t: number, phase: number) => {
+		const tt = t + phase;
+		return (
+			Math.sin(x * 1.6 + tt * 1.0) * 0.075 +
+			Math.sin(x * 3.1 - tt * 1.6) * 0.05 +
+			Math.sin(x * 5.9 + tt * 2.2) * 0.024 +
+			Math.sin(x * 11.0 - tt * 2.9) * 0.011
+		);
+	};
+
 	// ---- Act 1: the storm slams in (the song is already at full sail)
 	const restore = dimLights(scene, 0.3, 600);
 	scene.crossfadeEnvironment('nightSky', 600);
@@ -393,8 +411,10 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	const flagTex = jollyRogerTexture();
 	const { ship, flag } = buildShip(flagTex, sprites.softDot);
-	ship.position.set(-3.4, -0.42, -0.5);
+	ship.position.set(-(frameHalfW(-0.5) + 1.2), -0.42, -0.5);
 	ship.scale.setScalar(0.62);
+	// which band she rides: the sim seats her on that band's live crest line
+	ship.userData.ride = { band: oceanBack, phase: 0, halfH: 0.75, draft: 0.1 };
 	scene.scene.add(ship);
 
 	const { skull, head, jaw, eyes } = buildSkull(sprites.softDot);
@@ -431,7 +451,6 @@ export async function play(ctx: EffectContext): Promise<void> {
 	let rollAmp = 0;
 	let rollBoost = 1; // the close pass rocks the machine in its wash
 	let leanBias = 0;
-	let shipBob = 1;
 	let singT = -1; // ≥0 once the skull starts the outro
 	let laughing = false;
 	let jawOpen = 0;
@@ -440,8 +459,14 @@ export async function play(ctx: EffectContext): Promise<void> {
 		for (const band of [oceanBack, oceanMid, oceanNear]) {
 			(band.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
 		}
-		ship.position.y += (Math.sin(t * 0.8 + 0.7) * 0.045 * shipBob - (ship.position.y - ship.userData.waterline)) * Math.min(1, dt * 6);
-		ship.rotation.z = Math.sin(t * 0.7) * 0.05;
+		// seat her on the live crest of whichever band she's riding, and pitch
+		// her with the wave slope — close enough to read as riding the sea
+		const ride = ship.userData.ride;
+		const crest = ride.band.position.y + ride.halfH + waveTop(ship.position.x, t, ride.phase);
+		ship.position.y += (crest - ride.draft - ship.position.y) * Math.min(1, dt * 8);
+		const slope =
+			(waveTop(ship.position.x + 0.3, t, ride.phase) - waveTop(ship.position.x - 0.3, t, ride.phase)) / 0.6;
+		ship.rotation.z = slope * 0.45 + Math.sin(t * 0.7) * 0.02;
 		flag.rotation.z = Math.sin(t * 7.3) * 0.14;
 		flag.scale.x = 0.92 + Math.sin(t * 9.1) * 0.1;
 		const roll = Math.sin(t * 0.85) * rollAmp * rollBoost;
@@ -472,13 +497,6 @@ export async function play(ctx: EffectContext): Promise<void> {
 		jaw.rotation.x = jawOpen;
 		for (const eye of eyes) eye.scale.setScalar(0.07 + jawOpen * 0.05);
 	});
-	ship.userData.waterline = -0.42;
-
-	// visible half-width of the frame at a given depth — phones are much
-	// narrower than desktop, so every pass spans the REAL frame edges instead
-	// of desktop-tuned constants that leave mobile watching empty water
-	const frameHalfW = (z: number) =>
-		Math.tan(THREE.MathUtils.degToRad(scene.camera.fov / 2)) * scene.camera.aspect * (5.35 - z);
 
 	const skyBolt = (x: number) => {
 		lightning.strike(
@@ -630,7 +648,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 	ship.scale.x = 1.18; // bow toward -x: sailing right → left
 	const nearEdge = frameHalfW(0.75) + 1.0;
 	ship.position.set(nearEdge, -0.72, 0.75);
-	ship.userData.waterline = -0.72; // hull-down in the near swell
+	// hull-down in the near swell: deeper draft, riding the near band's crest
+	ship.userData.ride = { band: oceanNear, phase: 4.4, halfH: 0.85, draft: 0.2 };
 	const wake = particles.emitter({
 		texture: sprites.softDot,
 		count: 80,
@@ -765,9 +784,9 @@ export async function play(ctx: EffectContext): Promise<void> {
 	});
 	// she sails steadily across the horizon while he sings — one clean
 	// crossing, gone off the right-hand side before the tide turns
-	ship.userData.waterline = -0.44;
 	ship.scale.setScalar(0.62);
 	ship.scale.x = -0.62;
+	ship.userData.ride = { band: oceanBack, phase: 0, halfH: 0.75, draft: 0.12 };
 	const songEdge = frameHalfW(-0.5) + 0.7;
 	ship.position.set(-songEdge, -0.44, -0.5);
 	tween(5000, 'linear', (v) => {
