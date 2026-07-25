@@ -24,6 +24,7 @@ import * as horseshoeToss from './horseshoeToss';
 import * as makeItRain from './makeItRain';
 import * as jollyRoger from './jollyRoger';
 import * as kpopLuck from './kpopLuck';
+import * as luckDragon from './luckDragon';
 import * as slotArm from './slotArm';
 import * as solarEclipse from './solarEclipse';
 import * as genieOfTheMachine from './genieOfTheMachine';
@@ -55,6 +56,7 @@ const EFFECTS: Record<string, EffectModule> = {
 	makeItRain,
 	jollyRoger,
 	kpopLuck,
+	luckDragon,
 	slotArm,
 	solarEclipse,
 	genieOfTheMachine,
