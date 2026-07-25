@@ -24,6 +24,7 @@ export const QUIPS: Record<string, readonly [string, string]> = {
   horseshoeToss: ["RINGER!", ""],
   makeItRain: ["FORECAST:", "MONEY"],
   jollyRoger: ["SHIVER ME", "FORTUNES!"],
+  kpopLuck: ["LUCK IS ON", "YOUR SIDE"],
   slotArm: ["777.", "HOUSE PAYS."],
   solarEclipse: ["TOTALITY", "ACHIEVED"],
   genieOfTheMachine: ["TWO WISHES", "LEFT"],

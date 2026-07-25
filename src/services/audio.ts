@@ -39,7 +39,8 @@ const TRACKS: Record<string, { src: string; volume: number }> = {
 	// Joseph's Suno sea shanty — drop the file in public/soundfx/ and it plays;
 	// until then jollyRoger runs on its procedural sfx alone (missing tracks
 	// fail silently in Howler)
-	pirateShanty: { src: '/soundfx/pirate-shanty.mp3', volume: 0.9 }
+	pirateShanty: { src: '/soundfx/pirate-shanty.mp3', volume: 0.9 },
+	kpopLuck: { src: '/soundfx/kpop-luck.mp3', volume: 0.9 }
 };
 
 export class AudioService {
