@@ -31,68 +31,84 @@ const SONG = 21.888; // the mp3, to the millisecond
 // into aurora. The ripple grows in from the mouth so the near end stays anchored
 // to the hole it is pouring out of.
 // STREAMERS, not flags. The first version fired flat bands radially out of the
-// centre and the result read as a Pride starburst rather than a party popper —
-// six equal horizontal stripes repeated in a symmetric sunburst will do that.
-// The fix is threefold: each ribbon TWISTS about its own axis so you see it
-// edge-on as often as face-on, its path starts deep inside the bore and curls
-// as it flies, and they are fired as a loose asymmetric spray with cream
-// selvedge down both edges — which is what a party streamer actually looks like.
+// centre and read as a Pride starburst rather than a party popper — six equal
+// horizontal stripes repeated in a symmetric sunburst will do that. The second
+// fixed the look but the ribbons were still infinite banners anchored to the
+// machine. These are finite sections of ribbon that start deep inside the bore,
+// are FIRED out along a heading, arc over under gravity and leave the screen.
+// Thin, twisting, sprayed asymmetrically, cream selvedge down both edges.
 const RIBBON_VERT = /* glsl */ `
 	uniform float uTime;
 	uniform float uPhase;
 	uniform float uLen;
 	uniform float uWidth;
 	uniform float uTwist;
+	uniform float uGrav;
+	uniform float uHead;
+	uniform float uRibbon;
+	uniform vec2 uDir;
 	varying vec2 vUv;
+	varying float vWin;
 	void main() {
 		vUv = uv;
-		float s = position.x; // 0..1 along the streamer
-		float w = position.y; // -0.5..0.5 across it
+		float s = position.x; // 0..1 along the FLIGHT PATH, not the ribbon
+		float w = position.y;
 		float t = uTime * 1.5 + uPhase;
-		// the path: out of the deep dark of the bore, forward, then waving
+		// The heading is a uniform rather than a mesh rotation on purpose: the
+		// gravity term has to pull towards world -Y, and a rotated mesh would
+		// drag "down" round with it.
+		// NB: this vector is deliberately not called "flat" — that is an
+		// interpolation qualifier in GLSL ES 3.0 and using it as an identifier
+		// fails the compile silently, which just makes the mesh vanish.
+		vec2 reach = uDir * (s * uLen);
 		vec3 path;
-		path.x = s * uLen;
-		path.y = sin(s * 5.0 + t) * 0.4 * s + sin(s * 11.0 - t * 1.4) * 0.11 * s;
-		path.z = mix(-2.1, 0.0, smoothstep(0.0, 0.2, s)) + sin(s * 3.6 + t * 0.8) * 0.55 * s;
-		// the twist. Without it this is a flag; with it, it is a ribbon.
-		float tw = s * uTwist + t * 1.15 + uPhase;
-		vec3 across = vec3(0.0, cos(tw), sin(tw));
-		// pinched at the mouth so you never see where it comes from
-		vec3 p = path + across * w * uWidth * smoothstep(0.0, 0.13, s);
+		path.x = reach.x + sin(s * 6.0 + t) * 0.12 * s;
+		path.y = reach.y - uGrav * s * s + sin(s * 5.0 + t) * 0.14 * s;
+		path.z = mix(-2.3, 0.0, smoothstep(0.0, 0.1, s)) + sin(s * 3.4 + t * 0.7) * 0.3 * s;
+		// Only a finite SECTION of that path is ribbon. uHead is the leading
+		// tip; everything outside the window collapses to zero width, so the
+		// streamer flies out of the hole and off the screen instead of being a
+		// permanent banner stuck to the machine.
+		float tail = uHead - uRibbon;
+		// the taper zone scales WITH the ribbon, so it keeps its full width down
+		// the middle instead of collapsing into a leaf shape at both ends
+		float edge = uRibbon * 0.17;
+		vWin = smoothstep(tail, tail + edge, s) * (1.0 - smoothstep(uHead - edge, uHead, s));
+		// the cross-section rolls about the direction of travel
+		float tw = s * uTwist + t * 1.2 + uPhase;
+		vec3 across = vec3(-uDir.y, uDir.x, 0.0) * cos(tw) + vec3(0.0, 0.0, 1.0) * sin(tw);
+		vec3 p = path + across * w * uWidth * vWin;
 		gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 	}
 `;
 
 const RIBBON_FRAG = /* glsl */ `
 	uniform float uAlpha;
-	uniform float uReveal;
 	uniform float uShift;
 	varying vec2 vUv;
+	varying float vWin;
 	void main() {
 		float a = vUv.y;
 		vec3 c;
-		if (a < 0.1 || a > 0.9) {
+		if (a < 0.12 || a > 0.88) {
 			c = vec3(1.0, 0.97, 0.88); // cream selvedge, like crepe paper
 		} else {
 			// the palette is ROTATED per ribbon so a handful of them together
 			// never line up into the same repeated banner
-			float band = mod(floor((a - 0.1) / 0.8 * 6.0) + uShift, 6.0);
+			float band = mod(floor((a - 0.12) / 0.76 * 6.0) + uShift, 6.0);
 			c = band < 1.0 ? vec3(1.00, 0.20, 0.34)
 				: band < 2.0 ? vec3(1.00, 0.60, 0.14)
 				: band < 3.0 ? vec3(1.00, 0.90, 0.20)
 				: band < 4.0 ? vec3(0.28, 0.86, 0.42)
 				: band < 5.0 ? vec3(0.24, 0.60, 1.00)
 				: vec3(0.78, 0.36, 0.92);
-			float seam = smoothstep(0.05, 0.0, abs(fract((a - 0.1) / 0.8 * 6.0) - 0.5) - 0.45);
-			c *= 1.0 - seam * 0.4;
 		}
 		// the far side of a twist is in its own shadow — this is what gives the
 		// ribbon its form as it rolls over
 		if (!gl_FrontFacing) c *= 0.5;
-		float grow = smoothstep(uReveal, uReveal - 0.08, vUv.x);
 		// sRGB constants written into a linear buffer come back pastel; the
 		// output pass encodes afterwards, so linearise here
-		gl_FragColor = vec4(pow(c, vec3(2.2)), uAlpha * grow);
+		gl_FragColor = vec4(pow(c, vec3(2.2)), uAlpha * smoothstep(0.0, 0.3, vWin));
 	}
 `;
 
@@ -439,17 +455,20 @@ export async function play(ctx: EffectContext): Promise<void> {
 		free: boolean;
 	}
 	const trails: Streamer[] = [];
-	for (let i = 0; i < 9; i++) {
+	for (let i = 0; i < 12; i++) {
 		const mat = new THREE.ShaderMaterial({
 			uniforms: {
 				uTime: { value: 0 },
 				uPhase: { value: i * 1.7 },
 				uAlpha: { value: 0 },
-				uReveal: { value: 0 },
 				uShift: { value: 0 },
-				uLen: { value: 4 },
-				uWidth: { value: 0.4 },
-				uTwist: { value: 6 }
+				uLen: { value: 6 },
+				uWidth: { value: 0.2 },
+				uTwist: { value: 10 },
+				uGrav: { value: 1.4 },
+				uHead: { value: 0 },
+				uRibbon: { value: 0.18 },
+				uDir: { value: new THREE.Vector2(1, 0) }
 			},
 			vertexShader: RIBBON_VERT,
 			fragmentShader: RIBBON_FRAG,
@@ -464,28 +483,32 @@ export async function play(ctx: EffectContext): Promise<void> {
 		trails.push({ mesh, free: true });
 	}
 
-	/** Fire one streamer out of the bore. `angle` is only the general heading —
-	 *  the ribbon's own curl does most of the work, so volleys are sprayed
-	 *  rather than spaced evenly, which is what stopped them reading as a flag. */
-	const streamer = (angle: number, len = 4.2, hold = 1800) => {
+	/** Fire one streamer out of the bore along `angle`. It flies the whole path
+	 *  and leaves the frame — the slot frees itself when it's gone. */
+	const streamer = (angle: number, len = 4.4, flightMs = 2700) => {
 		const t = trails.find((x) => x.free);
 		if (!t) return null;
 		t.free = false;
 		const u = t.mesh.material.uniforms;
 		t.mesh.visible = true;
-		// deep behind the button: the vertex path starts at z -2.1 from here
+		// the vertex path starts at z -2.3 from here: deep behind the button
 		t.mesh.position.set(btn.x, btn.y, 0.35);
-		t.mesh.rotation.z = angle + rand(-0.12, 0.12);
+		const a = angle + rand(-0.12, 0.12);
+		(u.uDir.value as THREE.Vector2).set(Math.cos(a), Math.sin(a));
 		u.uAlpha.value = 1;
-		u.uReveal.value = 0;
+		u.uHead.value = 0;
 		u.uPhase.value = rand(0, 6.28);
 		u.uShift.value = Math.floor(rand(0, 6));
 		u.uLen.value = len * rand(0.85, 1.15);
-		u.uWidth.value = rand(0.3, 0.46);
-		u.uTwist.value = rand(7, 13);
-		tween(420, 'outQuad', (v) => (u.uReveal.value = v));
-		tween(hold + 700, 'linear', (v) => {
-			u.uAlpha.value = v < 0.72 ? 1 : 1 - (v - 0.72) / 0.28;
+		u.uWidth.value = rand(0.13, 0.23); // thin: these are ribbons, not banners
+		u.uTwist.value = rand(9, 16);
+		u.uGrav.value = rand(0.9, 2.3); // it arcs over and falls away
+		u.uRibbon.value = rand(0.46, 0.64); // a good length of ribbon, not a dart
+		// Linear, because that IS ballistic: constant speed along the heading
+		// with a quadratic droop. An eased head covered the on-screen part of
+		// the path in the first fifth of the flight and you never saw it.
+		tween(flightMs, 'linear', (v) => {
+			u.uHead.value = v * (1 + (u.uRibbon.value as number));
 		}).then(() => {
 			t.mesh.visible = false;
 			t.free = true;
@@ -494,9 +517,11 @@ export async function play(ctx: EffectContext): Promise<void> {
 	};
 
 	/** A loose spray of streamers around a heading — never a symmetric star. */
-	const volley = (count: number, centre: number, spread: number, hold = 2000) => {
+	const volley = (count: number, centre: number, spread: number, flightMs = 2700) => {
 		for (let i = 0; i < count; i++) {
-			streamer(centre + rand(-spread, spread), rand(3.4, 5), hold);
+			// the path only has to be a bit longer than the frame: overshoot it
+			// and the streamer spends its whole life off-screen
+			streamer(centre + rand(-spread, spread), rand(3.6, 5.2), flightMs);
 		}
 	};
 
