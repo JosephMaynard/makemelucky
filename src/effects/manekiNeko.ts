@@ -388,9 +388,9 @@ function kanjiFlashTexture(glyph: string): THREE.CanvasTexture {
 	c.font = "900 380px 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif";
 	c.lineJoin = 'round';
 	c.strokeStyle = '#c0202c';
-	c.lineWidth = 34;
+	c.lineWidth = 40;
 	c.strokeText(glyph, S / 2, S / 2 + 12);
-	c.fillStyle = '#fffaf0';
+	c.fillStyle = '#fff2d8';
 	c.fillText(glyph, S / 2, S / 2 + 12);
 	kanjiTex[glyph] = new THREE.CanvasTexture(cv);
 	kanjiTex[glyph]!.colorSpace = THREE.SRGBColorSpace;
@@ -548,16 +548,21 @@ export async function play(ctx: EffectContext): Promise<void> {
 		depthWrite: false
 	});
 	const kanji = new THREE.Sprite(kanjiMat);
-	kanji.position.set(btn.x, btn.y + 0.1, 2.2);
+	// z matters here: at 2.2 the sprite was closer to the camera than the frame
+	// is wide, so a glyph this size covered the whole viewport in white and read
+	// as the screen blanking. Back it off and it stays a glyph.
+	kanji.position.set(btn.x, btn.y + 0.1, 1.15);
 	kanji.renderOrder = 21;
 	scene.scene.add(kanji);
 	const kanjiFlash = (glyph: string, ms = 900) => {
 		kanjiMat.map = kanjiFlashTexture(glyph);
 		kanjiMat.needsUpdate = true;
 		tween(ms, 'outCubic', (v) => {
-			// slams in oversized, settles, then goes
-			kanji.scale.setScalar(3.6 - Math.pow(1 - v, 3) * 1.9);
-			kanjiMat.opacity = v < 0.18 ? v / 0.18 : Math.pow(1 - (v - 0.18) / 0.82, 1.7);
+			// slams in oversized and SETTLES — the old curve grew the other way,
+			// ending frame-filling, which is exactly the wrong shape for a flash
+			kanji.scale.setScalar(2.05 + Math.pow(1 - v, 2.6) * 0.85);
+			const a = v < 0.14 ? v / 0.14 : Math.pow(1 - (v - 0.14) / 0.86, 1.8);
+			kanjiMat.opacity = a * 0.88;
 		});
 	};
 

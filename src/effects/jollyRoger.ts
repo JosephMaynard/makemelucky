@@ -248,67 +248,161 @@ function buildSkull(glowTex: THREE.Texture) {
 	const skull = new THREE.Group(); // rises/scales
 	const head = new THREE.Group(); // sways/tilts
 	skull.add(head);
-	const boneMat = new THREE.MeshStandardMaterial({ color: 0xe6ddc8, roughness: 0.55, metalness: 0.02 });
-	const darkMat = new THREE.MeshBasicMaterial({ color: 0x080604 });
+	const boneMat = new THREE.MeshStandardMaterial({ color: 0xeae0c9, roughness: 0.62, metalness: 0.02 });
+	const darkMat = new THREE.MeshBasicMaterial({ color: 0x060504 });
 	const goldMat = new THREE.MeshStandardMaterial({ color: 0xd9a842, roughness: 0.3, metalness: 0.85 });
 
-	const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.27, 24, 18), boneMat);
-	cranium.scale.set(1, 1.12, 0.92);
-	cranium.position.y = 0.1;
+	// ---- cranium. A single sphere reads as a ball; what makes it a SKULL is
+	// the occipital bulge at the back, the brow ridge, the cheek arches and the
+	// orbital rims — the shadows those cast do more than any amount of detail.
+	const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.27, 30, 22), boneMat);
+	cranium.scale.set(1.0, 1.07, 0.94);
+	cranium.position.y = 0.095;
 	head.add(cranium);
-	const maxilla = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), boneMat);
-	maxilla.scale.set(1, 0.72, 0.75);
-	maxilla.position.set(0, -0.1, 0.13);
+	const occiput = new THREE.Mesh(new THREE.SphereGeometry(0.15, 18, 14), boneMat);
+	occiput.scale.set(1.1, 0.95, 0.85);
+	occiput.position.set(0, 0.05, -0.16);
+	head.add(occiput);
+	// the coronal suture, running over the crown
+	const suture = new THREE.Mesh(
+		new THREE.TorusGeometry(0.253, 0.0055, 6, 30, Math.PI * 0.85),
+		darkMat
+	);
+	suture.position.y = 0.095;
+	suture.rotation.set(0, Math.PI / 2, Math.PI * 0.075);
+	head.add(suture);
+	// brow ridge: one arch across both orbits, the single most skull-like line
+	const brow = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.028, 8, 22, Math.PI), boneMat);
+	brow.position.set(0, 0.055, 0.155);
+	brow.rotation.x = -0.42;
+	head.add(brow);
+
+	// ---- face
+	const maxilla = new THREE.Mesh(new THREE.SphereGeometry(0.155, 20, 14), boneMat);
+	maxilla.scale.set(1.02, 0.62, 0.72);
+	maxilla.position.set(0, -0.105, 0.11);
 	head.add(maxilla);
 	for (const side of [-1, 1]) {
-		const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10), boneMat);
-		cheek.position.set(side * 0.155, -0.05, 0.16);
-		head.add(cheek);
-		const socket = new THREE.Mesh(new THREE.SphereGeometry(0.075, 14, 12), darkMat);
-		socket.position.set(side * 0.105, 0.03, 0.185);
-		socket.scale.set(1, 1.15, 0.6);
+		// eye socket: a dark void with a raised bone rim around it, tilted in
+		const socket = new THREE.Mesh(new THREE.SphereGeometry(0.079, 18, 14), darkMat);
+		socket.scale.set(1, 1.06, 0.55);
+		socket.position.set(side * 0.108, 0.025, 0.175);
+		socket.rotation.z = side * 0.14;
 		head.add(socket);
+		const rim = new THREE.Mesh(new THREE.TorusGeometry(0.083, 0.017, 8, 20), boneMat);
+		rim.position.set(side * 0.108, 0.025, 0.198);
+		rim.rotation.set(-0.12, 0, side * 0.14);
+		head.add(rim);
+		// zygomatic arch, sweeping back towards the ear
+		const arch = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.032, 0.17), boneMat);
+		arch.position.set(side * 0.2, -0.035, 0.055);
+		arch.rotation.set(0.1, side * 0.42, side * 0.12);
+		head.add(arch);
+		// the hollow under it
+		const temple = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10), darkMat);
+		temple.scale.set(0.5, 1.1, 0.9);
+		temple.position.set(side * 0.215, -0.02, -0.02);
+		head.add(temple);
 	}
-	const nose = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), darkMat);
-	nose.scale.set(0.7, 1.25, 0.5);
-	nose.position.set(0, -0.08, 0.235);
+	// nasal aperture: an inverted triangle, not a smudge
+	const nose = new THREE.Mesh(new THREE.ConeGeometry(0.048, 0.088, 3), darkMat);
+	nose.scale.set(1, 1, 0.45);
+	nose.rotation.y = Math.PI;
+	nose.position.set(0, -0.055, 0.222);
 	head.add(nose);
-	// teeth — one gold, obviously
-	for (let i = 0; i < 5; i++) {
-		const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.05, 0.028), i === 1 ? goldMat : boneMat);
-		const a = (i - 2) * 0.19;
-		tooth.position.set(Math.sin(a) * 0.13, -0.185, 0.13 + Math.cos(a) * 0.075);
+
+	// the maw. Teeth only read as teeth against a dark interior — without this
+	// both rows merge into a single white brick.
+	const maw = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 12), darkMat);
+	maw.scale.set(1.08, 0.6, 0.66);
+	maw.position.set(0, -0.2, 0.085);
+	head.add(maw);
+
+	// ---- upper teeth: seven, uneven, one of them gold, obviously
+	for (let i = 0; i < 7; i++) {
+		const a = (i / 6 - 0.5) * 1.55;
+		const w = i === 3 ? 0.04 : 0.033 - Math.abs(i - 3) * 0.002;
+		const tooth = new THREE.Mesh(new THREE.BoxGeometry(w, 0.052, 0.026), i === 2 ? goldMat : boneMat);
+		tooth.position.set(Math.sin(a) * 0.132, -0.183, 0.055 + Math.cos(a) * 0.115);
 		tooth.rotation.y = a;
 		head.add(tooth);
 	}
-	// jaw, pivoted at the back so rotation.x drops the chin
+
+	// ---- jaw. Pivoted at the back so a POSITIVE rotation.x drops the chin —
+	// the lyric animation drives this and must not change.
 	const jaw = new THREE.Group();
 	jaw.position.set(0, -0.19, 0.0);
-	const mandible = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.06, 0.12), boneMat);
-	mandible.position.set(0, -0.05, 0.12);
-	jaw.add(mandible);
+	// the mandible is a horseshoe of bone, not a block
+	for (let i = 0; i < 7; i++) {
+		const a = (i / 6 - 0.5) * 2.0;
+		const seg = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.048, 0.045), boneMat);
+		seg.position.set(Math.sin(a) * 0.134, -0.062, 0.05 + Math.cos(a) * 0.112);
+		seg.rotation.y = a;
+		jaw.add(seg);
+	}
+	const chin = new THREE.Mesh(new THREE.BoxGeometry(0.105, 0.075, 0.055), boneMat);
+	chin.position.set(0, -0.072, 0.158);
+	jaw.add(chin);
 	for (const side of [-1, 1]) {
-		const ramus = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.1, 0.045), boneMat);
-		ramus.position.set(side * 0.115, 0.0, 0.03);
-		ramus.rotation.x = -0.5;
+		const ramus = new THREE.Mesh(new THREE.BoxGeometry(0.046, 0.125, 0.05), boneMat);
+		ramus.position.set(side * 0.128, 0.028, -0.008);
+		ramus.rotation.x = -0.44;
 		jaw.add(ramus);
 	}
-	for (let i = 0; i < 4; i++) {
-		const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.024), boneMat);
-		tooth.position.set((i - 1.5) * 0.042, -0.008, 0.175);
+	for (let i = 0; i < 5; i++) {
+		const a = (i / 4 - 0.5) * 1.25;
+		const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.027, 0.038, 0.023), boneMat);
+		tooth.position.set(Math.sin(a) * 0.122, -0.022, 0.062 + Math.cos(a) * 0.11);
+		tooth.rotation.y = a;
 		jaw.add(tooth);
 	}
 	head.add(jaw);
-	// crimson bandana + knot, gold earring
+
+	// ---- crimson bandana + knot, gold earring
+	// The moon key here is BLUE (0xa8c8e8) and a plain red under blue light goes
+	// muddy brown — the bandana was reading as a leather helmet. Saturate it and
+	// give it its own faint emissive so it holds crimson in the storm.
+	const clothMat = new THREE.MeshStandardMaterial({
+		color: 0xc42a2c,
+		emissive: 0x4a0a0c,
+		emissiveIntensity: 0.75,
+		roughness: 0.92,
+		metalness: 0
+	});
+	const clothDark = new THREE.MeshStandardMaterial({
+		color: 0x8e1c20,
+		emissive: 0x300608,
+		emissiveIntensity: 0.6,
+		roughness: 0.95,
+		metalness: 0
+	});
 	const bandana = new THREE.Mesh(
-		new THREE.SphereGeometry(0.285, 24, 12, 0, Math.PI * 2, 0, 1.2),
-		new THREE.MeshStandardMaterial({ color: 0xa8322e, roughness: 0.85, metalness: 0 })
+		new THREE.SphereGeometry(0.288, 26, 14, 0, Math.PI * 2, 0, 1.45),
+		clothMat
 	);
-	bandana.scale.set(1.02, 1.05, 0.95);
-	bandana.position.y = 0.1;
+	bandana.scale.set(1.02, 1.04, 0.96);
+	bandana.position.y = 0.095;
 	head.add(bandana);
+	// the rolled hem, so the cloth has an edge instead of just stopping
+	const hem = new THREE.Mesh(new THREE.TorusGeometry(0.284, 0.024, 8, 28), clothDark);
+	hem.position.set(0, 0.128, 0);
+	hem.rotation.x = Math.PI / 2;
+	head.add(hem);
+	// cloth gathers towards the knot: four folds over the crown, which is the
+	// difference between a tied rag and a moulded helmet
+	for (let i = 0; i < 4; i++) {
+		const fold = new THREE.Mesh(new THREE.TorusGeometry(0.283, 0.011, 6, 22, 1.15), clothDark);
+		fold.position.y = 0.095;
+		fold.rotation.set(Math.PI / 2, 0, 0);
+		fold.rotation.y = -0.5 - i * 0.42;
+		head.add(fold);
+	}
+	const knot = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 10), clothMat);
+	knot.scale.set(1, 0.85, 0.9);
+	knot.position.set(-0.258, 0.105, -0.062);
+	head.add(knot);
 	for (const [dx, rz] of [[0, 0.5], [0.05, 1.1]] as const) {
-		const tail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.16, 0.02), bandana.material);
+		const tail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.16, 0.02), clothMat);
 		tail.position.set(-0.25 - dx, 0.06, -0.12);
 		tail.rotation.z = rz;
 		head.add(tail);
@@ -317,7 +411,9 @@ function buildSkull(glowTex: THREE.Texture) {
 	earring.position.set(-0.27, -0.08, 0.05);
 	earring.rotation.y = Math.PI / 2;
 	head.add(earring);
-	// glowing amber eyes
+
+	// ---- glowing amber eyes. These MUST sit in front of the socket geometry
+	// (socket front face is z 0.20) or they are invisible.
 	const eyeMat = new THREE.SpriteMaterial({
 		map: glowTex,
 		color: 0xffb84e,
@@ -330,7 +426,7 @@ function buildSkull(glowTex: THREE.Texture) {
 	for (const side of [-1, 1]) {
 		const eye = new THREE.Sprite(eyeMat);
 		eye.scale.setScalar(0.07);
-		eye.position.set(side * 0.105, 0.03, 0.28);
+		eye.position.set(side * 0.108, 0.025, 0.29);
 		head.add(eye);
 		eyes.push(eye);
 	}
