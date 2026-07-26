@@ -288,7 +288,7 @@ function buildSkull(glowTex: THREE.Texture) {
 		boneMat
 	);
 	upperGum.position.set(0, -0.168, 0.055);
-	upperGum.rotation.set(Math.PI / 2, 0, Math.PI * 0.475);
+	upperGum.rotation.set(Math.PI / 2, 0, Math.PI * (0.5 - 1.05 / 2));
 	head.add(upperGum);
 	for (let i = 0; i < 7; i++) {
 		const a = (i / 6 - 0.5) * 1.5;
@@ -310,7 +310,7 @@ function buildSkull(glowTex: THREE.Texture) {
 		boneMat
 	);
 	mandible.position.set(0, -0.055, 0.055);
-	mandible.rotation.set(Math.PI / 2, 0, Math.PI * 0.46);
+	mandible.rotation.set(Math.PI / 2, 0, Math.PI * (0.5 - 1.08 / 2));
 	jaw.add(mandible);
 	const chin = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.07, 0.055), boneMat);
 	chin.position.set(0, -0.062, 0.158);
