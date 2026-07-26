@@ -7,6 +7,12 @@
 // their hinges, lying flat inside the paper square until the fold tween sweeps
 // them into the pose. Building the crane facing +Z means Object3D.lookAt() can
 // fly it — the one orientation convention that never fights three.js.
+//
+// Two things the fold needs to be WATCHABLE, both learned the hard way: the
+// flock has to hold station while it happens (nobody can follow a fold on an
+// object that is already flying past), and the paper has to face the viewer —
+// a square lying flat is edge-on to the camera and effectively invisible, so
+// the cranes turn side-on and their sheets counter-rotate to face front.
 
 import * as THREE from 'three';
 import { tween, delay, rand, pick } from '../core/anim';
@@ -42,7 +48,7 @@ function buildCrane(mat: THREE.Material, sheetMat: THREE.Material): Crane {
 
 	// the unfolded square, visible only until the fold takes
 	const sheet = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.3), sheetMat);
-	sheet.rotation.x = -Math.PI / 2; // lying flat, as paper does
+	// squared up to the viewer; the caller counter-rotates it against the pose
 	group.add(sheet);
 
 	// body: a four-sided keel pointing the way it flies
@@ -116,15 +122,21 @@ export async function play(ctx: EffectContext): Promise<void> {
 		cranes.push(crane);
 	}
 
-	// the ribbon every crane rides, offset by its phase
-	const ribbon = (a: number, out = new THREE.Vector3()) =>
-		out.set(
-			Math.cos(a) * 2.15,
-			0.2 + Math.sin(a * 0.85) * 0.88,
-			0.6 + Math.sin(a * 1.35) * 0.78
-		);
+	// The orbit: an ellipse concentric with the machine, big enough that the
+	// flock never crosses its silhouette — cranes used to fly straight through
+	// the button, which read as a clipping bug rather than a flypast. Anything
+	// that does stray inside the machine's radius is pushed towards the viewer
+	// so it passes cleanly IN FRONT instead.
+	const MACHINE_Y = -0.32;
+	const ribbon = (a: number, out = new THREE.Vector3()) => {
+		const x = Math.cos(a) * 1.78;
+		const y = MACHINE_Y + Math.sin(a) * 1.18;
+		const clear = Math.max(0, Math.min(1, (1.62 - Math.hypot(x, y - MACHINE_Y)) / 0.6));
+		return out.set(x, y, 0.5 + Math.sin(a * 1.35) * 0.45 + clear * 1.15);
+	};
 
 	let pace = 0;
+	let flying = false;
 	const ahead = new THREE.Vector3();
 	const stopFlight = scene.addUpdatable((dt, t) => {
 		for (const c of cranes) {
@@ -132,9 +144,16 @@ export async function play(ctx: EffectContext): Promise<void> {
 			const beat = Math.sin(c.flap);
 			// wings ride their fold pose plus the beat
 			const fold = (c.group.userData.fold as number) ?? 0;
-			c.wings[0].rotation.z = fold * (0.5 + beat * 0.42);
-			c.wings[1].rotation.z = -fold * (0.5 + beat * 0.42);
+			const flutter = flying ? 0.42 : 0.16; // barely stirring while folding
+			c.wings[0].rotation.z = fold * (0.5 + beat * flutter);
+			c.wings[1].rotation.z = -fold * (0.5 + beat * flutter);
 			if (c.landing) continue;
+			if (!flying) {
+				// holding station in the ring, side-on, breathing
+				c.group.position.y = (c.group.userData.homeY as number) + Math.sin(t * 1.5 + c.phase) * 0.045;
+				c.group.rotation.z = Math.sin(t * 1.1 + c.phase) * 0.07;
+				continue;
+			}
 			c.phase += dt * pace;
 			ribbon(c.phase, c.group.position);
 			// point where it's going, one small step ahead
@@ -145,32 +164,45 @@ export async function play(ctx: EffectContext): Promise<void> {
 		}
 	});
 
-	// ---- squares drift in flat
+	// ---- the squares arrive and take their places in the ring, turned side-on
+	// so their profile will read once they are cranes
 	haptics.vibrate(18);
 	audio.sfx('swoosh', { pitch: 1.4, gain: 0.35 });
 	for (let i = 0; i < N; i++) {
 		const c = cranes[i];
 		ribbon(c.phase, c.group.position);
-		tween(620, 'outCubic', (v) => c.group.scale.setScalar(Math.max(0.001, v)));
+		c.group.userData.homeY = c.group.position.y;
+		const side = Math.cos(c.phase) >= 0 ? 1 : -1; // face into the ring
+		c.group.rotation.set(0, side * 1.25, 0);
+		c.sheet.rotation.set(0, -side * 1.25, 0); // …but the paper faces front
+		c.sheet.scale.setScalar(1.25); // a sheet you can actually see
+		tween(620, 'outCubic', (v) => c.group.scale.setScalar(Math.max(0.001, v * 1.15)));
 		await delay(46);
 	}
-	tween(1400, 'outCubic', (v) => (pace = v * 1.05));
 
-	// ---- and fold, one after another, with a paper rustle each
-	await delay(340);
+	// ---- and now the fold, slow enough to follow, one bird at a time
+	await delay(420);
 	for (let i = 0; i < N; i++) {
 		const c = cranes[i];
 		const sheetMat = c.sheet.material as THREE.MeshStandardMaterial;
-		tween(520, 'outBack', (v) => {
+		audio.sfx('tick', { pitch: 1.7 + rand(-0.2, 0.2), gain: 0.18 });
+		tween(700, 'outBack', (v) => {
 			c.group.userData.fold = v;
 			c.body.scale.set(1, 0.02 + v * 0.98, 1);
-			sheetMat.opacity = Math.max(0, 1 - v * 1.8);
-			c.sheet.scale.setScalar(Math.max(0.001, 1 - v));
+			// the sheet folds itself away: it narrows and lifts, it doesn't
+			// simply dissolve
+			sheetMat.opacity = Math.max(0, 1 - v * 1.35);
+			c.sheet.scale.set(1.25 * (1 - v * 0.75), 1.25 * (1 - v), 1);
 		});
-		audio.sfx('tick', { pitch: 1.7 + rand(-0.2, 0.2), gain: 0.16 });
-		await delay(72);
+		await delay(105);
 	}
 	for (const c of cranes) c.sheet.visible = false;
+
+	// ---- and they're off
+	await delay(260);
+	audio.sfx('swoosh', { pitch: 1.15, gain: 0.4 });
+	flying = true;
+	tween(1500, 'outCubic', (v) => (pace = v * 1.05));
 
 	// a scatter of paper motes in their wake
 	const dust = particles.emitter({
@@ -188,7 +220,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	});
 
 	// ---- let the ribbon fly
-	await delay(1900);
+	await delay(1500);
 	audio.sfx('swoosh', { pitch: 0.9, gain: 0.35 });
 	tween(1500, 'inOutQuad', (v) => (pace = 1.05 + v * 0.55));
 	await delay(1400);
