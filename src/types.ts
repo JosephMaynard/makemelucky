@@ -44,8 +44,8 @@ export interface EffectModule {
 
 declare global {
 	interface Window {
-		/** Console party trick — run any effect by name, earns a charm. */
-		showEffect?: (name: string) => Promise<string | undefined>;
+		/** Console party trick — run any effect by name (no name lists them). */
+		showEffect?: (name?: string) => Promise<string | undefined>;
 		/** Debug handle used by tools/snap.mjs probes. */
 		__mml?: Record<string, unknown>;
 	}

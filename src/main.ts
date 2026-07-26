@@ -17,6 +17,7 @@ import { Director } from './effects/director';
 import { ScreenPanel } from './ui/screenPanel';
 import { CharmsUI } from './ui/charmsUI';
 import { QUIPS } from './ui/quips';
+import { printConsoleBanner, printEffectList } from './ui/console';
 import { LuckStore } from './luck/store';
 import type { Charm } from './luck/charmsData';
 import { initLottoPicker } from './luck/lottoPicker';
@@ -228,10 +229,22 @@ async function boot(): Promise<void> {
 
 	// party trick: run any effect from the console without waiting for the
 	// shuffle bag. Curiosity is its own kind of luck — it earns a charm.
-	window.showEffect = async (name: string): Promise<string> => {
+	window.showEffect = async (name?: string): Promise<string> => {
 		if (director.running) return 'An effect is already running. Patience is lucky too.';
-		if (!name || !director.names.includes(name)) {
-			return `Unknown effect. Try one of: ${director.names.join(', ')}`;
+		if (!name) {
+			printEffectList(director.names);
+			return "Pick one: showEffect('rainbow') 🍀";
+		}
+		if (!director.names.includes(name)) {
+			printEffectList(director.names);
+			return `No effect called "${name}". The full cast is listed above.`;
+		}
+		// Browsers keep the AudioContext suspended until a real user gesture, so
+		// an effect summoned from the console before the first press runs silent
+		// — and half of these are choreographed to a soundtrack. Muted visitors
+		// aren't missing anything, so they get to skip the ceremony.
+		if (!audio.muted && !audio.unlocked) {
+			return 'Press the big red button once first — the browser keeps the sound locked until you do, and these effects are scored. Then call showEffect() again. 🔇';
 		}
 		const charm = store.awardSpecial(
 			'consoleWizard',
@@ -241,13 +254,17 @@ async function boot(): Promise<void> {
 		);
 		if (charm) celebrateCharms([charm]);
 		screen.blank();
+		// remember any ?fx= override rather than clobbering it
+		const wasForced = director.forced;
 		director.forced = name;
 		const fx = await director.play();
-		director.forced = null;
+		director.forced = wasForced;
 		track('effect_played', { effect: fx, via: 'console' });
 		screen.youAreNowLucky(store.data.luckyness, false, fx ? QUIPS[fx] : undefined);
-		return `Played ${fx} 🍀`;
+		// prefers-reduced-motion overrides every request with the gentle version
+		return fx === name ? `Played ${fx} 🍀` : `Played ${fx} instead — you've asked for reduced motion. 🍀`;
 	};
+	printConsoleBanner(director.names);
 
 	pressTarget.addEventListener('pointerdown', (e) => {
 		if (director.running) return;

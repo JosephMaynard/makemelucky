@@ -69,6 +69,14 @@ export class AudioService {
 		this._dongDecoding = false;
 	}
 
+	/** Has a real user gesture woken Web Audio yet? Browsers park the context in
+	 *  'suspended' until someone touches the page, and anything played before
+	 *  then is silent. Howler binds its own unlock handlers to the document, so
+	 *  in practice this flips on the first press (or any click). */
+	get unlocked(): boolean {
+		return Howler.ctx?.state === 'running';
+	}
+
 	/** Start fetching the sprite + the church bell in the background (idempotent). */
 	warm(): void {
 		if (this.howl.state() === 'unloaded') this.howl.load();

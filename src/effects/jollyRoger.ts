@@ -648,8 +648,15 @@ export async function play(ctx: EffectContext): Promise<void> {
 	ship.scale.x = 1.18; // bow toward -x: sailing right → left
 	const nearEdge = frameHalfW(0.75) + 1.0;
 	ship.position.set(nearEdge, -0.72, 0.75);
-	// hull-down in the near swell: deeper draft, riding the near band's crest
-	ship.userData.ride = { band: oceanNear, phase: 4.4, halfH: 0.85, draft: 0.2 };
+	// The near band is the ONE band that draws in front of her, so on this pass
+	// its top edge is the real, visible waterline. The distant passes get away
+	// with a positive draft only because the band they ride sits behind them and
+	// something lower does the occluding — here it bites, and a positive draft
+	// buries the deck outright ("she looks like she's sinking"). Measured on the
+	// hull she has to float PROUD of the crest: waterline at local y ≈ -0.11,
+	// under the cannon ports (-0.05) and well above the keel (-0.24), which at
+	// scale 1.18 is 0.13 world units of lift.
+	ship.userData.ride = { band: oceanNear, phase: 4.4, halfH: 0.85, draft: -0.13 };
 	const wake = particles.emitter({
 		texture: sprites.softDot,
 		count: 80,
