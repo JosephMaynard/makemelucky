@@ -1,0 +1,343 @@
+// Effect — BAD LUCK GAUNTLET: every superstition in the book takes a swing at
+// the machine and every one of them misses. A ladder drops over it, a black cat
+// crosses its path, an umbrella opens indoors. Nothing sticks. The joke is that
+// the machine never reacts — it just sits there being lucky at things.
+//
+// Comedy timing beats fidelity here, so the props are deliberately simple
+// silhouettes: the beat lands before anyone inspects the geometry.
+
+import * as THREE from 'three';
+import { tween, delay } from '../core/anim';
+import { dimLights, flashPulse } from './helpers';
+import { luckyWord } from './luckyWord';
+import type { EffectContext } from '../types';
+
+export const sound = 'spinningRim';
+export const duration = 10800;
+
+/** A hanging ladder: two stiles and six rungs of dark wood. */
+function buildLadder(): THREE.Group {
+	const g = new THREE.Group();
+	const wood = new THREE.MeshStandardMaterial({ color: 0x4a3520, roughness: 0.85, metalness: 0.02 });
+	const stileGeo = new THREE.BoxGeometry(0.09, 3.4, 0.09);
+	for (const x of [-0.42, 0.42]) {
+		const s = new THREE.Mesh(stileGeo, wood);
+		s.position.set(x, 0, 0);
+		g.add(s);
+	}
+	const rungGeo = new THREE.BoxGeometry(0.84, 0.06, 0.06);
+	for (let i = 0; i < 6; i++) {
+		const r = new THREE.Mesh(rungGeo, wood);
+		r.position.set(0, 1.42 - i * 0.56, 0);
+		g.add(r);
+	}
+	g.userData.dispose = () => {
+		stileGeo.dispose();
+		rungGeo.dispose();
+		wood.dispose();
+	};
+	return g;
+}
+
+/** A black cat in profile, walking. Silhouette only — it lives in shadow. */
+function buildCat(glow: THREE.Texture): { cat: THREE.Group; legs: THREE.Mesh[]; tail: THREE.Group } {
+	const cat = new THREE.Group();
+	const fur = new THREE.MeshStandardMaterial({ color: 0x1c1c28, roughness: 0.62, metalness: 0.18 });
+	const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.42, 6, 12), fur);
+	body.rotation.z = Math.PI / 2;
+	body.position.y = 0.3;
+	cat.add(body);
+	const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 12), fur);
+	head.position.set(-0.34, 0.42, 0);
+	cat.add(head);
+	for (const s of [-1, 1]) {
+		const ear = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.12, 4), fur);
+		ear.position.set(-0.35, 0.53, s * 0.06);
+		cat.add(ear);
+	}
+	// eyes: the only part of a black cat you ever actually see
+	const eyeMat = new THREE.SpriteMaterial({
+		map: glow,
+		color: 0xd8f048,
+		transparent: true,
+		opacity: 0.95,
+		blending: THREE.AdditiveBlending,
+		depthWrite: false
+	});
+	for (const s of [-1, 1]) {
+		const eye = new THREE.Sprite(eyeMat);
+		eye.scale.setScalar(0.075);
+		eye.position.set(-0.44, 0.45, s * 0.05 + 0.06);
+		cat.add(eye);
+	}
+	const legs: THREE.Mesh[] = [];
+	const legGeo = new THREE.CapsuleGeometry(0.035, 0.2, 4, 8);
+	for (let i = 0; i < 4; i++) {
+		const leg = new THREE.Mesh(legGeo, fur);
+		leg.position.set(-0.2 + (i % 2) * 0.42, 0.13, (i < 2 ? 0.07 : -0.07));
+		cat.add(leg);
+		legs.push(leg);
+	}
+	const tail = new THREE.Group();
+	const tailMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.03, 0.42, 4, 8), fur);
+	tailMesh.position.y = 0.21;
+	tail.add(tailMesh);
+	tail.position.set(0.3, 0.34, 0);
+	tail.rotation.z = -0.5;
+	cat.add(tail);
+	cat.userData.dispose = () => {
+		fur.dispose();
+		eyeMat.dispose();
+		legGeo.dispose();
+	};
+	return { cat, legs, tail };
+}
+
+/** An umbrella, opened indoors, which is the whole problem. */
+function buildUmbrella(): { umbrella: THREE.Group } {
+	const umbrella = new THREE.Group();
+	const cloth = new THREE.MeshStandardMaterial({
+		color: 0x1f2a3a,
+		roughness: 0.8,
+		metalness: 0.02,
+		side: THREE.DoubleSide
+	});
+	// an eight-gore canopy: a low cone reads as one the moment it has ribs
+	const canopy = new THREE.Mesh(new THREE.ConeGeometry(1.05, 0.52, 8, 1, true), cloth);
+	canopy.position.y = 0.26;
+	umbrella.add(canopy);
+	const ribMat = new THREE.MeshStandardMaterial({ color: 0x64707e, roughness: 0.4, metalness: 0.8 });
+	const ribGeo = new THREE.CylinderGeometry(0.012, 0.012, 1.06, 5);
+	for (let i = 0; i < 8; i++) {
+		const a = (i / 8) * Math.PI * 2;
+		const rib = new THREE.Mesh(ribGeo, ribMat);
+		rib.position.set(Math.cos(a) * 0.5, 0.13, Math.sin(a) * 0.5);
+		rib.rotation.z = Math.PI / 2 - 0.46;
+		rib.rotation.y = -a;
+		umbrella.add(rib);
+	}
+	const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 1.5, 8), ribMat);
+	shaft.position.y = -0.4;
+	umbrella.add(shaft);
+	const hook = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.026, 8, 16, Math.PI * 1.2), ribMat);
+	hook.position.set(-0.11, -1.13, 0);
+	hook.rotation.z = -0.4;
+	umbrella.add(hook);
+	umbrella.userData.dispose = () => {
+		canopy.geometry.dispose();
+		ribGeo.dispose();
+		shaft.geometry.dispose();
+		hook.geometry.dispose();
+		cloth.dispose();
+		ribMat.dispose();
+	};
+	return { umbrella };
+}
+
+const COLD = new THREE.Color(0x9fb8d8);
+const WARM = new THREE.Color(0xffc478);
+
+export async function play(ctx: EffectContext): Promise<void> {
+	const { scene, machine, particles, lightning, sprites, audio, haptics } = ctx;
+	const btn = machine.buttonWorldPosition();
+
+	const restore = dimLights(scene, 0.42, 700);
+	scene.crossfadeEnvironment('nightSky', 800);
+	scene.fxLight.color.set(0x9fb8d8);
+	scene.fxLight.position.set(-1.5, 1.6, 1.8);
+	tween(700, 'inOutQuad', (v) => (scene.fxLight.intensity = v * 1.4));
+	machine.setInnerGlow(0.2, 0xbfe8ff);
+
+	/** Bad luck bounces off: gold sparks and a shrugged little glow pulse. */
+	const deflect = (at: THREE.Vector3, gain = 1) => {
+		audio.sfx('ding', { pitch: 1.5, gain: 0.4 * gain });
+		audio.sfx('pop', { pitch: 1.8, gain: 0.3 * gain });
+		haptics.vibrate(16);
+		particles.burst({
+			texture: sprites.star4,
+			count: Math.round(34 * gain),
+			origin: at.clone(),
+			originSpread: 0.14,
+			speed: [1, 3],
+			gravity: new THREE.Vector3(0, -2.2, 0),
+			life: [0.5, 1.1],
+			size: [0.03, 0.09],
+			colors: [0xffd27a, 0xfff3cf, 0xffe0a0]
+		});
+		flashPulse(machine, 0.3 * gain, 90, 420, 0xffd27a);
+	};
+
+	// ================= BEAT 1: the ladder =================
+	const ladder = buildLadder();
+	ladder.position.set(btn.x - 0.1, 3.6, 0.85);
+	ladder.rotation.z = 0.5;
+	scene.scene.add(ladder);
+	audio.sfx('swoosh', { pitch: 0.7, gain: 0.5 });
+	await tween(900, 'outCubic', (v) => {
+		ladder.position.y = 3.6 - v * 3.0;
+		ladder.rotation.z = 0.5 - v * 0.42;
+	});
+	audio.sfx('clack', { pitch: 0.55, gain: 0.5 });
+	scene.shake(0.14);
+	// it hangs there, ominously, right over the machine. Nothing happens.
+	await delay(420);
+	// a bolt of ill fortune slides down it and pings off the gold
+	lightning.strike(
+		new THREE.Vector3(btn.x - 0.1, 1.7, 0.85),
+		new THREE.Vector3(btn.x, btn.y + 0.2, 0.6),
+		{ width: 0.03, life: 0.3, jitter: 0.22, generations: 5 }
+	);
+	await delay(180);
+	deflect(new THREE.Vector3(btn.x, btn.y + 0.2, 0.6));
+	await delay(340);
+	// and up it goes again, embarrassed
+	audio.sfx('swoosh', { pitch: 1.1, gain: 0.35 });
+	tween(800, 'inCubic', (v) => {
+		ladder.position.y = 0.6 + v * 3.4;
+		ladder.rotation.z = 0.08 + v * 0.5;
+	}).then(() => {
+		scene.scene.remove(ladder);
+		(ladder.userData.dispose as () => void)();
+	});
+
+	// ================= BEAT 2: the black cat =================
+	await delay(500);
+	const { cat, legs, tail } = buildCat(sprites.softDot);
+	const startX = 3.4;
+	cat.position.set(startX, -1.02, 1.05);
+	cat.scale.setScalar(1.05);
+	scene.scene.add(cat);
+	let walk = 0;
+	let walking = true;
+	const stopCat = scene.addUpdatable((dt, t) => {
+		if (walking) walk += dt * 9;
+		for (let i = 0; i < legs.length; i++) {
+			legs[i].rotation.z = Math.sin(walk + i * 1.6) * (walking ? 0.5 : 0.04);
+		}
+		tail.rotation.z = -0.5 + Math.sin(t * 3.4) * 0.35;
+		cat.position.y = -1.02 + Math.abs(Math.sin(walk)) * 0.02;
+	});
+	// crosses your path, right to left
+	await tween(1500, 'linear', (v) => {
+		cat.position.x = startX - v * 3.1;
+	});
+	// ...and stops dead in front of the button, because of course it does
+	walking = false;
+	audio.sfx('chime', { pitch: 0.75, gain: 0.3 });
+	await tween(700, 'outCubic', (v) => {
+		cat.position.y = -1.02 + v * 0.14; // stretches up at the button
+		cat.rotation.z = v * 0.16;
+	});
+	// it head-butts the machine. Affection, not malice.
+	audio.sfx('pop', { pitch: 0.9, gain: 0.3 });
+	haptics.vibrate(20);
+	deflect(new THREE.Vector3(btn.x - 0.35, btn.y - 0.7, 0.9), 0.7);
+	particles.burst({
+		texture: sprites.clover,
+		count: 14,
+		origin: new THREE.Vector3(cat.position.x - 0.3, -0.85, 1.1),
+		originSpread: 0.16,
+		direction: new THREE.Vector3(0, 1, 0),
+		cone: 0.5,
+		speed: [0.6, 1.6],
+		gravity: new THREE.Vector3(0, -1.4, 0),
+		life: [0.8, 1.6],
+		size: [0.05, 0.1],
+		colors: [0x6fd48a, 0xa8f0bf],
+		spin: [-4, 4]
+	});
+	await delay(420);
+	walking = true;
+	await tween(1000, 'inQuad', (v) => {
+		cat.position.x = startX - 3.1 - v * 2.2;
+		cat.rotation.z = 0.16 * (1 - v);
+	});
+	stopCat();
+	scene.scene.remove(cat);
+	(cat.userData.dispose as () => void)();
+
+	// ================= BEAT 3: the umbrella, indoors =================
+	const { umbrella } = buildUmbrella();
+	umbrella.position.set(btn.x, btn.y + 2.9, 1.15);
+	umbrella.scale.set(0.06, 0.06, 0.06);
+	scene.scene.add(umbrella);
+	audio.sfx('swoosh', { pitch: 1.2, gain: 0.4 });
+	await tween(520, 'outQuad', (v) => {
+		umbrella.position.y = btn.y + 2.9 - v * 1.95;
+		umbrella.scale.set(0.06, 0.06 + v * 0.2, 0.06); // still furled
+	});
+	// FWUMP
+	audio.sfx('boom', { pitch: 1.15, gain: 0.5 });
+	audio.sfx('swoosh', { pitch: 0.75, gain: 0.5 });
+	haptics.vibrate([25, 20, 45]);
+	scene.shake(0.2);
+	await tween(420, 'outBack', (v) => {
+		umbrella.scale.set(0.06 + v * 0.94, 0.26 + v * 0.74, 0.06 + v * 0.94);
+	});
+	await delay(260);
+
+	// it rains, but only money, and only under the umbrella
+	audio.sfx('ding', { pitch: 1.1, gain: 0.5 });
+	const rain = particles.emitter({
+		texture: sprites.coin,
+		count: 260,
+		emitRate: 150,
+		origin: new THREE.Vector3(btn.x, btn.y + 1.05, 1.1),
+		originSpread: 0.95,
+		direction: new THREE.Vector3(0, -1, 0),
+		cone: 0.14,
+		speed: [1.6, 3],
+		gravity: new THREE.Vector3(0, -3.4, 0),
+		life: [1, 1.9],
+		size: [0.05, 0.12],
+		colors: [0xf7ce6b, 0xffe9ad, 0xd9a842],
+		spin: [-6, 6]
+	});
+	tween(1400, 'outCubic', (v) => {
+		machine.setInnerGlow(0.2 + v * 0.4, 0xffd27a);
+		scene.fxLight.color.copy(COLD).lerp(WARM, v);
+		scene.fxLight.intensity = 1.4 + v * 2.6;
+	});
+	await delay(1500);
+	rain.stop();
+	audio.sfx('swoosh', { pitch: 1.4, gain: 0.35 });
+	tween(700, 'inCubic', (v) => {
+		umbrella.position.y = btn.y + 0.95 + v * 3.1;
+		umbrella.scale.set(1 - v * 0.9, 1 - v * 0.7, 1 - v * 0.9);
+	}).then(() => {
+		scene.scene.remove(umbrella);
+		(umbrella.userData.dispose as () => void)();
+	});
+	// ================= the verdict =================
+	audio.sfx('gong', { pitch: 0.85, gain: 0.7 });
+	haptics.vibrate([30, 40, 90]);
+	scene.shake(0.28);
+	flashPulse(machine, 0.6, 110, 700, 0xffd27a);
+	particles.burst({
+		texture: sprites.star4,
+		count: 90,
+		origin: new THREE.Vector3(btn.x, btn.y, 0.6),
+		originSpread: 0.2,
+		speed: [1.4, 4],
+		gravity: new THREE.Vector3(0, -2, 0),
+		life: [0.7, 1.6],
+		size: [0.03, 0.1],
+		colors: [0xffd27a, 0xfff3cf, 0xffe0a0]
+	});
+	await luckyWord(ctx, {
+		text: 'STILL LUCKY',
+		color: 0xffd27a,
+		colorB: 0xfff3cf,
+		gather: 850,
+		hold: 1000,
+		scatter: 560
+	});
+
+	// ---- teardown
+	scene.crossfadeEnvironment('lounge');
+	tween(900, 'outQuad', (v) => {
+		machine.setInnerGlow(0.6 * (1 - v));
+		scene.fxLight.intensity = 4 * (1 - v);
+	});
+	await restore(900);
+}

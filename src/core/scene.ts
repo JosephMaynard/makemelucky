@@ -86,7 +86,14 @@ export class LuckyScene {
 
 	constructor(canvas: HTMLCanvasElement) {
 		this.canvas = canvas;
-		this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		// live, not a one-off read: switching the OS setting used to need a
+		// reload before the machine took any notice of it
+		const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+		this.reducedMotion = motionQuery.matches;
+		motionQuery.addEventListener('change', (e) => {
+			this.reducedMotion = e.matches;
+			if (e.matches) this.trauma = 0; // drop any shake already in flight
+		});
 
 		this.renderer = new THREE.WebGLRenderer({
 			canvas,

@@ -1,14 +1,17 @@
 // Effect 10 — AURORA: the lights fall and ethereal ribbons of green-violet
 // light wave over the machine like the northern lights paying a visit.
+//
+// Deliberately SHORT. The curtains and the one big surge are the whole idea;
+// it used to hold that idea for eight and a half seconds and outstay it. There
+// is no word set-piece here on purpose — the swell is the payoff.
 
 import * as THREE from 'three';
 import { tween, delay } from '../core/anim';
 import { dimLights, flashPulse } from './helpers';
-import { luckyWord } from './luckyWord';
 import type { EffectContext } from '../types';
 
 export const sound = 'rimLight';
-export const duration = 8400;
+export const duration = 4400;
 
 const VERT = /* glsl */ `
 	uniform float uTime;
@@ -42,10 +45,10 @@ const FRAG = /* glsl */ `
 export async function play(ctx: EffectContext): Promise<void> {
 	const { scene, machine, particles, sprites, haptics } = ctx;
 
-	const restore = dimLights(scene, 0.3, 1100);
+	const restore = dimLights(scene, 0.3, 650);
 	scene.fxLight.color.set(0x46f0b4);
 	scene.fxLight.position.set(0, 1, 1.2);
-	tween(1100, 'inOutQuad', (v) => (scene.fxLight.intensity = v * 4));
+	tween(650, 'inOutQuad', (v) => (scene.fxLight.intensity = v * 4));
 
 	const ribbons: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>[] = [];
 	const defs: { y: number; z: number; colA: number; colB: number; phase: number; flip?: boolean }[] = [
@@ -102,19 +105,19 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	haptics.vibrate(25);
 	machine.setInnerGlow(0, 0x46f0b4);
-	tween(1700, 'inOutQuad', (v) => machine.setInnerGlow(v * 0.5, 0x46f0b4));
+	tween(1000, 'inOutQuad', (v) => machine.setInnerGlow(v * 0.5, 0x46f0b4));
 
 	// fade the curtains in, let them dance
 	await Promise.all(
-		ribbons.map((r, i) => tween(1000 + i * 210, 'inOutQuad', (v) => (r.material.uniforms.uAlpha.value = v * 0.75)))
+		ribbons.map((r, i) => tween(560 + i * 105, 'inOutQuad', (v) => (r.material.uniforms.uAlpha.value = v * 0.75)))
 	);
-	await delay(2100);
+	await delay(560);
 
 	// the crescendo: the whole sky surges once — bright, then breathless
 	ctx.audio.sfx('gong', { pitch: 0.8, gain: 0.55 }); // deep, distant, serene
 	scene.shake(0.18); // barely a tremor; this one stays serene
 	haptics.vibrate(20);
-	tween(900, 'inOutQuad', (v) => {
+	tween(760, 'inOutQuad', (v) => {
 		const surge = 0.75 + Math.sin(v * Math.PI) * 0.25;
 		for (const r of ribbons) r.material.uniforms.uAlpha.value = surge;
 		machine.setInnerGlow(0.5 + Math.sin(v * Math.PI) * 0.4, 0x46f0b4);
@@ -131,20 +134,12 @@ export async function play(ctx: EffectContext): Promise<void> {
 		colors: [0x8ff0ff, 0x46f0b4, 0xbf9aff],
 		fadeIn: 0.35
 	});
-	flashPulse(machine, 0.45, 260, 900, 0x46f0b4); // a glow swell, not a bang
-	await luckyWord(ctx, {
-		text: 'SERENELY LUCKY',
-		color: 0x46f0b4,
-		colorB: 0xbf9aff,
-		y: -1.1,
-		gather: 900,
-		hold: 1400,
-		scatter: 600
-	});
+	flashPulse(machine, 0.45, 240, 760, 0x46f0b4); // a glow swell, not a bang
+	await delay(880);
 
 	motes.stop();
 	await Promise.all(
-		ribbons.map((r, i) => tween(850 + i * 140, 'inOutQuad', (v) => (r.material.uniforms.uAlpha.value = 0.75 * (1 - v))))
+		ribbons.map((r, i) => tween(520 + i * 70, 'inOutQuad', (v) => (r.material.uniforms.uAlpha.value = 0.75 * (1 - v))))
 	);
 	stopWave();
 	for (const r of ribbons) {
@@ -152,9 +147,9 @@ export async function play(ctx: EffectContext): Promise<void> {
 		r.geometry.dispose();
 		r.material.dispose();
 	}
-	tween(900, 'outQuad', (v) => {
+	tween(650, 'outQuad', (v) => {
 		scene.fxLight.intensity = 4 * (1 - v);
 		machine.setInnerGlow(0.5 * (1 - v), 0x46f0b4);
 	});
-	await restore(1100);
+	await restore(700);
 }

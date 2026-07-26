@@ -231,12 +231,15 @@ async function boot(): Promise<void> {
 	// shuffle bag. Curiosity is its own kind of luck — it earns a charm.
 	window.showEffect = async (name?: string): Promise<string> => {
 		if (director.running) return 'An effect is already running. Patience is lucky too.';
+		// gentleGlow isn't in the bag (it's the reduced-motion stand-in) but it is
+		// a real effect, so the console is allowed to ask for it by name
+		const summonable = [...director.names, 'gentleGlow'];
 		if (!name) {
-			printEffectList(director.names);
+			printEffectList(summonable);
 			return "Pick one: showEffect('rainbow') 🍀";
 		}
-		if (!director.names.includes(name)) {
-			printEffectList(director.names);
+		if (!summonable.includes(name)) {
+			printEffectList(summonable);
 			return `No effect called "${name}". The full cast is listed above.`;
 		}
 		// Browsers keep the AudioContext suspended until a real user gesture, so
@@ -261,10 +264,10 @@ async function boot(): Promise<void> {
 		director.forced = wasForced;
 		track('effect_played', { effect: fx, via: 'console' });
 		screen.youAreNowLucky(store.data.luckyness, false, fx ? QUIPS[fx] : undefined);
-		// prefers-reduced-motion overrides every request with the gentle version
+		// reduced motion substitutes something from the calm shortlist
 		return fx === name ? `Played ${fx} 🍀` : `Played ${fx} instead — you've asked for reduced motion. 🍀`;
 	};
-	printConsoleBanner(director.names);
+	printConsoleBanner([...director.names, 'gentleGlow']);
 
 	pressTarget.addEventListener('pointerdown', (e) => {
 		if (director.running) return;
@@ -290,17 +293,33 @@ async function boot(): Promise<void> {
 		pointerHeld = false;
 		machine.pressUp();
 	});
-	// keyboard activation — mirrors the pointer path (toast clear + haptic)
+	// keyboard activation — mirrors the pointer path, hold included. The press
+	// ends when the key comes up, so the eight-second Steady Hand charm is
+	// reachable without a mouse; it used to be pinned at 0.1s and unwinnable.
+	let keyHeld = false;
 	pressTarget.addEventListener('keydown', async (e) => {
-		if ((e.key === 'Enter' || e.key === ' ') && !director.running && !e.repeat) {
+		if ((e.key === 'Enter' || e.key === ' ') && !director.running && !e.repeat && !keyHeld) {
 			e.preventDefault();
 			charmsUI.hideToast();
+			keyHeld = true;
+			holdStart = performance.now();
 			await machine.pressDown();
 			audio.play('button');
 			haptics.vibrate(25);
-			machine.pressUp();
-			completePress(0.1);
 		}
+	});
+	pressTarget.addEventListener('keyup', (e) => {
+		if (!keyHeld || (e.key !== 'Enter' && e.key !== ' ')) return;
+		e.preventDefault();
+		keyHeld = false;
+		machine.pressUp();
+		completePress((performance.now() - holdStart) / 1000);
+	});
+	// focus lost mid-hold: let the button back up without crediting a press
+	pressTarget.addEventListener('blur', () => {
+		if (!keyHeld) return;
+		keyHeld = false;
+		machine.pressUp();
 	});
 
 	// ---- mute

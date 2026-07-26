@@ -303,4 +303,12 @@ export class Particles {
 	setScale(pixelHeight: number) {
 		for (const b of this.bursts) b.material.uniforms.uScale.value = pixelHeight * 0.8;
 	}
+
+	/** Kill every live burst and emitter immediately. For the director's crash
+	 *  recovery only — an effect that dies mid-flight leaves its emitters
+	 *  running forever, and they are the one thing that never expires on its own. */
+	clear(): void {
+		for (const b of this.bursts) b.dispose();
+		this.bursts.clear();
+	}
 }

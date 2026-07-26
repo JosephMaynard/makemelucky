@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Mock } from 'vitest';
-import { Director } from '../src/effects/director';
+import { Director, CALM_EFFECTS } from '../src/effects/director';
 import { QUIPS } from '../src/ui/quips';
 import type { EffectContext } from '../src/types';
 
@@ -62,19 +62,50 @@ describe('QUIPS', () => {
 	});
 });
 
-describe('Director.play()', () => {
-	// stub EffectContext: only the fields play() actually touches
-	const ctx = {
-		scene: { reducedMotion: false },
-		machine: { mechSpeed: 1, resetToIdle: vi.fn() },
-		audio: { play: vi.fn(), stopAllLoops: vi.fn() },
+// A stand-in for the bits of the scene/machine that play() and the crash
+// recovery reach for. Fresh per test so the recovery assertions can't leak.
+function stubCtx(): EffectContext {
+	const vec = () => ({
+		x: 0,
+		y: 0,
+		z: 0,
+		clone() { return { ...this, clone: this.clone, copy: this.copy }; },
+		copy(v: unknown) { Object.assign(this, v); return this; }
+	});
+	return {
+		scene: {
+			reducedMotion: false,
+			updatables: new Set<() => void>(),
+			keyLight: { intensity: 2 },
+			fillLight: { intensity: 0.55 },
+			rimLight: { intensity: 0 },
+			fxLight: { intensity: 0 },
+			scene: { environmentIntensity: 1.35, background: null, environment: null, fog: null },
+			environmentName: 'lounge',
+			cameraRoll: 0,
+			parallaxStrength: 1,
+			setVignetteBoost: vi.fn(),
+			envTexture: vi.fn(() => null)
+		},
+		machine: {
+			mechSpeed: 1,
+			resetToIdle: vi.fn(),
+			group: { position: vec(), rotation: vec() },
+			buttonGroup: { position: vec(), rotation: vec(), scale: vec(), parent: null },
+			backdrop: { visible: true, material: { userData: {} } }
+		},
+		particles: { clear: vi.fn() },
+		audio: { play: vi.fn(), stopAllLoops: vi.fn(), stopAllTracks: vi.fn() },
 		lightning: { clear: vi.fn() }
 	} as unknown as EffectContext;
+}
+
+describe('Director.play()', () => {
+	let ctx = stubCtx();
 
 	beforeEach(async () => {
 		vi.clearAllMocks();
-		ctx.scene.reducedMotion = false;
-		ctx.machine.mechSpeed = 1;
+		ctx = stubCtx();
 		const powerSurge = await import('../src/effects/powerSurge');
 		const gentleGlow = await import('../src/effects/gentleGlow');
 		(powerSurge.play as Mock).mockReset();
@@ -119,17 +150,82 @@ describe('Director.play()', () => {
 		const first = director.play();
 		const second = await director.play();
 		expect(second).toBeNull();
+		// play() now awaits the effect's dynamic import before it calls play(),
+		// so the mock's resolver doesn't exist until that chunk lands
+		await vi.waitFor(() => expect(resolveFirst).toBeTypeOf('function'));
 		resolveFirst();
 		await first;
 	});
 
-	it('reducedMotion forces gentleGlow, overriding the bag/forced choice', async () => {
+	it('reducedMotion draws from the calm shortlist, overriding the forced choice', async () => {
 		const gentleGlow = await import('../src/effects/gentleGlow');
 		(gentleGlow.play as Mock).mockResolvedValue(undefined);
 		ctx.scene.reducedMotion = true;
 		const director = new Director(ctx);
-		director.forced = 'powerSurge'; // reducedMotion should win over this
+		director.forced = 'jollyRoger'; // a pirate ship is not a calm effect
 		const name = await director.play();
-		expect(name).toBe('gentleGlow');
+		expect(CALM_EFFECTS).toContain(name);
+		expect(name).not.toBe('jollyRoger');
+	});
+
+	it('reducedMotion honours a forced choice that IS calm', async () => {
+		ctx.scene.reducedMotion = true;
+		const director = new Director(ctx);
+		director.forced = 'gentleGlow';
+		expect(await director.play()).toBe('gentleGlow');
+	});
+});
+
+describe('Director crash recovery', () => {
+	let ctx = stubCtx();
+	beforeEach(async () => {
+		vi.clearAllMocks();
+		ctx = stubCtx();
+		const powerSurge = await import('../src/effects/powerSurge');
+		(powerSurge.play as Mock).mockReset();
+	});
+
+	it('unhooks sims the dead effect registered, and clears its particles', async () => {
+		const powerSurge = await import('../src/effects/powerSurge');
+		const leaked = () => {};
+		(powerSurge.play as Mock).mockImplementation(async () => {
+			ctx.scene.updatables.add(leaked); // an effect's own sim loop
+			throw new Error('effect boom');
+		});
+		const preexisting = () => {};
+		ctx.scene.updatables.add(preexisting); // main.ts's machine/particles tick
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		const director = new Director(ctx);
+		director.forced = 'powerSurge';
+		await director.play();
+
+		expect(ctx.scene.updatables.has(leaked)).toBe(false);
+		expect(ctx.scene.updatables.has(preexisting)).toBe(true); // not ours to kill
+		expect(ctx.particles.clear).toHaveBeenCalledTimes(1);
+		expect(ctx.audio.stopAllTracks).toHaveBeenCalledTimes(1);
+		consoleError.mockRestore();
+	});
+
+	it('restores the lights, vignette and camera roll it found', async () => {
+		const powerSurge = await import('../src/effects/powerSurge');
+		(powerSurge.play as Mock).mockImplementation(async () => {
+			ctx.scene.keyLight.intensity = 0.1; // dimLights, mid-effect
+			ctx.scene.cameraRoll = 0.4;
+			ctx.machine.backdrop.visible = false;
+			throw new Error('effect boom');
+		});
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		const director = new Director(ctx);
+		director.forced = 'powerSurge';
+		await director.play();
+
+		expect(ctx.scene.keyLight.intensity).toBe(2);
+		expect(ctx.scene.cameraRoll).toBe(0);
+		expect(ctx.machine.backdrop.visible).toBe(true);
+		expect(ctx.scene.setVignetteBoost).toHaveBeenCalledWith(0);
+		expect(ctx.scene.environmentName).toBe('lounge');
+		consoleError.mockRestore();
 	});
 });

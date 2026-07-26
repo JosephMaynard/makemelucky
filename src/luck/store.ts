@@ -133,21 +133,26 @@ export class LuckStore {
 	_trackVisit(): void {
 		const now = new Date();
 		const last = new Date(this.data.lastVisit || this.data.firstUse);
+		const dayNow = now.toDateString();
+		const dayLast = last.toDateString();
 		if (+now - +last > HOUR) {
 			this.data.visits += 1;
 			for (const def of VISIT_CHARMS) {
 				if (def.amount === this.data.visits) this._award(def);
 			}
-			// daily streak
-			const dayNow = now.toDateString();
-			const dayLast = last.toDateString();
+		}
+		// The streak is counted in DAYS, so it must be judged on the calendar and
+		// not on the one-hour visit gate: someone who closes the tab at 23:50 and
+		// opens it again at 00:20 has started a new day, and used to lose the
+		// streak for it because the whole block was skipped.
+		if (dayLast !== dayNow) {
 			const yesterday = new Date(+now - 86400000).toDateString();
 			if (dayLast === yesterday) {
 				this.data.streak = (this.data.streak || 1) + 1;
 				for (const def of STREAK_CHARMS) {
 					if (def.amount === this.data.streak) this._award(def);
 				}
-			} else if (dayLast !== dayNow) {
+			} else {
 				this.data.streak = 1;
 			}
 		}

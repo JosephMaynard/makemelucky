@@ -9,7 +9,7 @@ import { createClockRingTexture } from '../gfx/textures';
 import type { EffectContext } from '../types';
 
 export const sound = 'spinningRim';
-export const duration = 10600;
+export const duration = 8200;
 
 let clockTex: THREE.CanvasTexture | null = null;
 
@@ -80,13 +80,13 @@ export async function play(ctx: EffectContext): Promise<void> {
 		}
 	});
 	machine.setInnerGlow(0, 0xffd27a);
-	await tween(4200, 'inCubic', (v) => {
+	await tween(2900, 'inCubic', (v) => {
 		handSpeed = 0.6 + v * 34;
 		machine.mechSpeed = 2 + v * 13;
 		machine.setInnerGlow(v * 0.55, 0xffd27a);
 	});
 	shockwave(scene.scene, new THREE.Vector3(0, -0.32, 0.4), { color: 0xffd27a, maxScale: 4 });
-	await delay(600);
+	await delay(380);
 
 	// THE LUCKY HOUR — hands snap to midnight, everything strikes at once
 	stopTime();
@@ -124,7 +124,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 			minuteHand.rotation.z = kick;
 			hourHand.rotation.z = kick * 0.5;
 		});
-		await delay(strike < 2 ? 800 : 550);
+		await delay(strike < 2 ? 620 : 420);
 	}
 
 	// time settles back down

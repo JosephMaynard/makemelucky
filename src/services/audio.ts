@@ -470,4 +470,10 @@ export class AudioService {
 		for (const stop of [...this._loopStops]) stop(fadeMs);
 		this._loopStops.clear();
 	}
+
+	/** Cut every music bed. An effect that crashes halfway leaves its soundtrack
+	 *  playing over the silence of the next one — the director calls this. */
+	stopAllTracks(fadeMs = 250): void {
+		for (const name of Object.keys(this.tracks)) this.stopTrack(name, fadeMs);
+	}
 }

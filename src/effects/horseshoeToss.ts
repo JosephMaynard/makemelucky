@@ -7,7 +7,7 @@ import { dimLights, flashPulse, shockwave, disposeObject } from './helpers';
 import type { EffectContext } from '../types';
 
 export const sound = 'luckySymbol';
-export const duration = 9000;
+export const duration = 6800;
 
 function buildHorseshoe() {
 	const g = new THREE.Group();
@@ -71,7 +71,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	haptics.vibrate(30);
 	audio.sfx('swoosh', { gain: 0.6, pitch: 0.9 });
 	const target = new THREE.Vector3(0, -0.32, 0.78);
-	await tween(1500, 'inOutQuad', (v) => {
+	await tween(1150, 'inOutQuad', (v) => {
 		shoe.position.x = -3.1 + v * 3.1;
 		shoe.position.y = 1.3 + Math.sin(v * Math.PI) * 0.7 - v * 1.62;
 		shoe.position.z = 0.62 + v * 0.16;
@@ -98,7 +98,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 		colors: [0xffffff, 0xffe9ad, 0xffd27a]
 	});
 	// settle wobble, like a tossed ring finding its rest
-	await tween(900, 'outQuad', (v) => {
+	await tween(700, 'outQuad', (v) => {
 		shoe.rotation.z = Math.sin(v * Math.PI * 4) * 0.16 * (1 - v);
 		shoe.position.z = 0.78 - Math.sin(v * Math.PI) * 0.05;
 	});
@@ -121,12 +121,12 @@ export async function play(ctx: EffectContext): Promise<void> {
 		spin: [-5, 5]
 	});
 	await flashPulse(machine, 0.85, 90, 750, 0xffe9ad);
-	await delay(1400);
+	await delay(760);
 	shoeFountain.stop();
 
 	// it lifts off, spins triumphantly and sails away over the camera
 	haptics.vibrate([25, 30, 60]);
-	await tween(900, 'inQuad', (v) => {
+	await tween(700, 'inQuad', (v) => {
 		shoe.position.y = -0.32 + v * 1.1;
 		shoe.position.z = 0.78 + v * 3.3;
 		shoe.rotation.z = v * Math.PI * 2;

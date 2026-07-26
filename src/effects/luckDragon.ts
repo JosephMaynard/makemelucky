@@ -7,74 +7,12 @@
 import * as THREE from 'three';
 import { tween, delay, rand } from '../core/anim';
 import { dimLights, flashPulse, shockwave } from './helpers';
+import { backdropWipe } from '../gfx/quiltWipe';
 import { luckyWord } from './luckyWord';
 import type { EffectContext } from '../types';
 
 export const sound = 'lucky';
 export const duration = 11500;
-
-// ---- the dragon scorches the lounge: the green quilted leather turns ember
-// red behind it. The red albedo is derived from the green one by remapping
-// channels (the green channel encodes the pillow shading), so seams, grain
-// and stitching survive the re-dye untouched. Cached across runs.
-let emberQuilt: THREE.CanvasTexture | null = null;
-function emberQuiltTexture(src: THREE.Texture): THREE.CanvasTexture {
-	if (emberQuilt) return emberQuilt;
-	const img = src.image as HTMLCanvasElement;
-	const cv = document.createElement('canvas');
-	cv.width = img.width;
-	cv.height = img.height;
-	const c = cv.getContext('2d')!;
-	c.drawImage(img, 0, 0);
-	const px = c.getImageData(0, 0, cv.width, cv.height);
-	for (let i = 0; i < px.data.length; i += 4) {
-		const st = (px.data[i + 1] - 6) / 92; // recover shade*tint from green
-		px.data[i] = 118 * st + 6;
-		px.data[i + 1] = 26 * st + 4;
-		px.data[i + 2] = 20 * st + 4;
-	}
-	c.putImageData(px, 0, 0);
-	const tex = new THREE.CanvasTexture(cv);
-	tex.colorSpace = THREE.SRGBColorSpace;
-	tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-	tex.repeat.copy(src.repeat);
-	emberQuilt = tex;
-	return tex;
-}
-
-/** Patch the backdrop's material once: a radial wipe (in view space, so the
- *  quilt's 22x UV repeat doesn't matter) blends green->red leather with a
- *  glowing burn-front. Rest state uWipe = -1 shows pure green. */
-function patchQuiltWipe(mat: THREE.MeshStandardMaterial, ember: THREE.Texture): { value: number } {
-	if (mat.userData.wipeUniform) return mat.userData.wipeUniform;
-	const uWipe = { value: -1 };
-	mat.onBeforeCompile = (shader) => {
-		shader.uniforms.uWipe = uWipe;
-		shader.uniforms.uMap2 = { value: ember };
-		shader.fragmentShader = shader.fragmentShader
-			.replace(
-				'#include <common>',
-				'#include <common>\nuniform float uWipe;\nuniform sampler2D uMap2;'
-			)
-			.replace(
-				'#include <map_fragment>',
-				/* glsl */ `
-				vec4 sampledDiffuseColor = texture2D( map, vMapUv );
-				vec4 emberDiffuse = texture2D( uMap2, vMapUv );
-				float dWipe = length( vViewPosition.xy );
-				float redA = 1.0 - smoothstep( uWipe, uWipe + 0.4, dWipe );
-				sampledDiffuseColor = mix( sampledDiffuseColor, emberDiffuse, redA );
-				float rim = smoothstep( uWipe - 0.12, uWipe + 0.2, dWipe )
-					* ( 1.0 - smoothstep( uWipe + 0.2, uWipe + 0.55, dWipe ) );
-				sampledDiffuseColor.rgb += vec3( 1.0, 0.45, 0.12 ) * rim * 0.55 * step( -0.4, uWipe );
-				diffuseColor *= sampledDiffuseColor;`
-			);
-	};
-	mat.customProgramCacheKey = () => 'quilt-ember-wipe';
-	mat.needsUpdate = true;
-	mat.userData.wipeUniform = uWipe;
-	return uWipe;
-}
 
 export async function play(ctx: EffectContext): Promise<void> {
 	const { scene, machine, particles, sprites, audio, haptics } = ctx;
@@ -84,11 +22,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 	scene.fxLight.color.set(0xffb45e);
 
 	// the leather smoulders red from the centre out as the dragon arrives
-	const wipe = patchQuiltWipe(
-		machine.backdrop.material as THREE.MeshStandardMaterial,
-		emberQuiltTexture(ctx.textures.quilt.map)
-	);
-	tween(2600, 'inOutQuad', (v) => (wipe.value = -0.5 + v * 8.5));
+	const wipe = backdropWipe(machine.backdrop, ctx.textures.quilt.map, 'ember');
+	wipe.in(2600);
 
 	// the dragon's head: a hot core with a soft halo
 	const head = new THREE.Group();
@@ -283,10 +218,9 @@ export async function play(ctx: EffectContext): Promise<void> {
 	haloMat.dispose();
 	scene.crossfadeEnvironment('lounge');
 	// the fire retreats: the wipe runs in reverse and the green comes back
-	tween(1100, 'inQuad', (v) => (wipe.value = 8 - v * 9));
+	wipe.out(1100);
 	await delay(500);
 	machine.setInnerGlow(0);
 	scene.fxLight.intensity = 0;
 	await restore(900);
-	wipe.value = -1; // rest state, exactly green
 }
