@@ -44,7 +44,7 @@ import { luckyWord } from './luckyWord';
 import type { EffectContext } from '../types';
 
 export const sound = 'cloudsTunnel';
-export const duration = 29000;
+export const duration = 31500;
 
 // ---------------------------------------------------------------- palette
 const C = {
@@ -946,12 +946,17 @@ export async function play(ctx: EffectContext): Promise<void> {
 	}
 	// (Deliberately none around the king — he is far too regal for that.)
 
-	// The path starts where the REAL camera is relative to the wall (6.1 units
-	// in front of the backdrop plane), so kingdom z = 0 lands exactly on the
-	// leather and the hole in it is a genuine window. Everything after that is
-	// one long unbroken sweep with landmarks strung along it.
-	const arrive = kingPos.clone().add(new THREE.Vector3(0.5, 1.95, 5.4));
-	const PATH = new THREE.CatmullRomCurve3(
+	// The path starts where the REAL camera is relative to the wall (6.1 units in
+	// front of the backdrop plane), so kingdom z = 0 lands exactly on the leather
+	// and the hole in it is a genuine window.
+	//
+	// It is in two pieces. The JOURNEY runs the length of the kingdom past the
+	// landmarks; the SWOOSH is a long banking orbit right around the castle that
+	// climbs to the turret and comes back round to the king's face. They are
+	// sampled as one continuous parameter, so the return leg retraces both.
+	const arrive = kingPos.clone().add(new THREE.Vector3(0.4, 2.1, 6.9));
+	const runIn = new THREE.Vector3(2.0, 11.6, -176);
+	const JOURNEY = new THREE.CatmullRomCurve3(
 		[
 			new THREE.Vector3(0, 0, 6.1),
 			new THREE.Vector3(0, 0.1, 1.5),
@@ -960,19 +965,42 @@ export async function play(ctx: EffectContext): Promise<void> {
 			new THREE.Vector3(1.8, 4.6, -84),
 			new THREE.Vector3(5.4, 6.2, -118),
 			new THREE.Vector3(-3.2, 8.4, -152),
-			new THREE.Vector3(2.0, 11.6, -180),
-			arrive.clone().add(new THREE.Vector3(-1.6, 1.4, 12)),
-			arrive
+			runIn
 		],
 		false,
 		'catmullrom',
 		0.25
 	);
+	const SWOOSH = new THREE.CatmullRomCurve3(
+		[
+			runIn,
+			new THREE.Vector3(-34, 13.5, -180),
+			new THREE.Vector3(-56, 16.5, -206),
+			new THREE.Vector3(-46, 19.5, -246),
+			new THREE.Vector3(-4, 21.2, -264),
+			new THREE.Vector3(38, 21.6, -250),
+			new THREE.Vector3(57, 21.4, -212),
+			new THREE.Vector3(34, 21.4, -186),
+			arrive
+		],
+		false,
+		'catmullrom',
+		0.3
+	);
+	const jLen = JOURNEY.getLength();
+	const SPLIT = jLen / (jLen + SWOOSH.getLength());
+	/** One continuous 0..1 across both curves. */
+	const sample = (t: number, out: THREE.Vector3) =>
+		t <= SPLIT
+			? JOURNEY.getPointAt(THREE.MathUtils.clamp(t / SPLIT, 0, 1), out)
+			: SWOOSH.getPointAt(THREE.MathUtils.clamp((t - SPLIT) / (1 - SPLIT), 0, 1), out);
+
 	// where along the path the entry plane is behind us
+	const probe = new THREE.Vector3();
 	let ENTRY_T = 0.05;
-	for (let i = 0; i <= 200; i++) {
-		if (PATH.getPointAt(i / 200).z < -1.5) {
-			ENTRY_T = i / 200;
+	for (let i = 0; i <= 400; i++) {
+		if (sample(i / 400, probe).z < -1.5) {
+			ENTRY_T = i / 400;
 			break;
 		}
 	}
@@ -980,6 +1008,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	const vcam = new THREE.PerspectiveCamera(); // never renders; we only want its matrix
 	const eye = new THREE.Vector3();
 	const look = new THREE.Vector3();
+	const subject = new THREE.Vector3();
 	const eyeSmooth = new THREE.Vector3();
 	const lookSmooth = new THREE.Vector3();
 	const ahead = new THREE.Vector3();
@@ -992,7 +1021,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	let shakeAmt = 0;
 	let primed = false;
 
-	const kingLook = kingPos.clone().add(new THREE.Vector3(0, 1.15, 0));
+	const kingLook = kingPos.clone().add(new THREE.Vector3(0, 1.4, 0));
 
 	const inOutSine = (t: number) => -(Math.cos(Math.PI * t) - 1) / 2;
 
@@ -1003,9 +1032,20 @@ export async function play(ctx: EffectContext): Promise<void> {
 		// a twitch — "a camera taped to a house fly". Smoothing the eye and the
 		// look point on the same slow spring gives a cinematic sweep, and the
 		// sway now moves BOTH so it reads as drift rather than as rotation.
-		PATH.getPointAt(THREE.MathUtils.clamp(travel, 0, 1), eye);
-		PATH.getPointAt(THREE.MathUtils.clamp(travel + 0.055, 0, 1), look);
+		sample(THREE.MathUtils.clamp(travel, 0, 1), eye);
+		sample(THREE.MathUtils.clamp(travel + 0.045, 0, 1), look);
+		// Through the orbit the camera holds on the castle rather than on the
+		// path ahead — that is what makes it a sweep rather than a ride — and it
+		// holds it at its OWN height, which keeps the horizon level.
+		if (travel > SPLIT) {
+			const hold = THREE.MathUtils.clamp(((travel - SPLIT) / (1 - SPLIT)) * 2.2, 0, 1);
+			subject.set(0, eye.y, CASTLE_Z);
+			look.lerp(subject, hold);
+		}
 		if (gaze > 0) look.lerp(kingLook, gaze);
+		// Never look UP. Pitching up at the turret filled the frame with empty
+		// sky; the camera arrives level with the king's head instead.
+		look.y = Math.min(look.y, eye.y + 0.2);
 		const drift = new THREE.Vector3(
 			Math.sin(time * 0.31) * 0.5 * sway,
 			Math.sin(time * 0.24 + 1.1) * 0.34 * sway,
@@ -1023,9 +1063,13 @@ export async function play(ctx: EffectContext): Promise<void> {
 		lookSmooth.lerp(look, k);
 
 		// bank into the turn, itself heavily smoothed
-		PATH.getPointAt(THREE.MathUtils.clamp(travel + 0.02, 0, 1), ahead);
-		PATH.getPointAt(THREE.MathUtils.clamp(travel - 0.02, 0, 1), behind);
-		bank += ((behind.x - ahead.x) * 0.055 - bank) * Math.min(1, dt * 1.6);
+		// Roll is for the cruise, not for the orbit: circling the castle swings x
+		// hard and would put the horizon over at thirty degrees. Level all the
+		// way round.
+		sample(THREE.MathUtils.clamp(travel + 0.02, 0, 1), ahead);
+		sample(THREE.MathUtils.clamp(travel - 0.02, 0, 1), behind);
+		const bankTo = travel > SPLIT ? 0 : (behind.x - ahead.x) * 0.045;
+		bank += (bankTo - bank) * Math.min(1, dt * 1.6);
 
 		vcam.position.copy(eyeSmooth);
 		if (shakeAmt > 0) {
@@ -1182,7 +1226,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	// the whole run of the journey, one long unbroken sweep
 	const journey = tween(9600, inOutSine, (v) => {
-		travel = ENTRY_T * 1.6 + v * (0.9 - ENTRY_T * 1.6);
+		travel = ENTRY_T * 1.6 + v * (SPLIT - ENTRY_T * 1.6);
 	});
 	await delay(1400);
 	audio.sfx('chime', { pitch: 0.9, gain: 0.35 });
@@ -1194,9 +1238,10 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	// ---- the last of it: rise to the turret and turn to the king
 	audio.sfx('swoosh', { pitch: 1.1, gain: 0.4 });
-	await tween(2600, inOutSine, (v) => {
-		travel = 0.9 + v * 0.1;
-		gaze = Math.max(0, (v - 0.35) / 0.65);
+	// the swoosh: right around the castle, climbing, ending on the king
+	await tween(5200, inOutSine, (v) => {
+		travel = SPLIT + v * (1 - SPLIT);
+		gaze = Math.max(0, (v - 0.72) / 0.28);
 		sway = 1 - v * 0.85;
 	});
 
