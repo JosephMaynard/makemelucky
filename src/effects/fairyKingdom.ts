@@ -1,9 +1,17 @@
-// Effect — THE FAIRY KINGDOM: the rim opens, the button lifts away, and you go
-// THROUGH the hole. Out the other side is a little low-poly kingdom — rolling
-// hills, toadstools, fairies trailing dust — and you fly over it to a storybook
-// castle, up to a turret, where an old king is waiting with your luck in a cup.
-// Then the whole journey runs backwards at four times the speed and the hole
-// shuts behind you.
+// Effect — THE FAIRY KINGDOM: the rim opens and there is a WINDOW THROUGH THE
+// QUILTED LEATHER. Out the other side is a little low-poly kingdom — hills,
+// toadstools, fairies trailing dust, a lake and a bridge, a windmill, a village
+// under a rainbow — and you fly the length of it to a storybook castle, up to a
+// turret, where an old king is waiting with your luck in a cup. Then the whole
+// journey runs backwards at four times the speed and the hole shuts behind you.
+//
+// ── The window ───────────────────────────────────────────────────────────────
+// There is no portal effect and no cut. The machine's 26x26 backdrop is swapped
+// for an identical one — SAME material instance, so the leather is lit exactly
+// the same — with a circular hole cut in it over the bore. The kingdom is simply
+// behind it, so the iris opening reveals real distance. Flying "through" is then
+// literal: the kingdom advances until its entry plane passes the wall, and the
+// wall is dropped once we are the other side of it.
 //
 // ── How the camera actually flies ────────────────────────────────────────────
 // It doesn't. LuckyScene.tick() re-aims the real camera at the world origin on
@@ -36,7 +44,7 @@ import { luckyWord } from './luckyWord';
 import type { EffectContext } from '../types';
 
 export const sound = 'cloudsTunnel';
-export const duration = 26000;
+export const duration = 29000;
 
 // ---------------------------------------------------------------- palette
 const C = {
@@ -100,14 +108,21 @@ function toon(color: THREE.ColorRepresentation, extra: THREE.MeshStandardMateria
 
 /** Rolling hills, as a height function shared by the ground and everything
  *  standing on it — trees have to know where the ground is. */
+const CASTLE_Z = -212; // a long way off: the journey is the point
+const LAKE = { x: -10, z: -92, r: 30 };
+const BASE_Y = -7.5; // the flight starts at kingdom y 0, so the ground lives below it
+
 function groundHeight(x: number, z: number): number {
-	const plateau = Math.max(0, 1 - Math.hypot(x, z + 84) / 26); // the castle sits up high
+	const plateau = Math.max(0, 1 - Math.hypot(x, z - CASTLE_Z) / 34); // the castle sits up high
+	const basin = Math.max(0, 1 - Math.hypot(x - LAKE.x, z - LAKE.z) / LAKE.r);
 	return (
-		Math.sin(x * 0.075) * 2.1 +
-		Math.cos(z * 0.062) * 2.4 +
-		Math.sin((x + z) * 0.045) * 1.7 +
-		Math.sin(x * 0.21 + 1.3) * 0.5 +
-		plateau * plateau * 7.5
+		BASE_Y +
+		Math.sin(x * 0.055) * 2.3 +
+		Math.cos(z * 0.031) * 2.6 +
+		Math.sin((x + z * 0.6) * 0.028) * 2.1 +
+		Math.sin(x * 0.17 + 1.3) * 0.5 +
+		plateau * plateau * 11 -
+		basin * basin * 9.5
 	);
 }
 
@@ -115,7 +130,8 @@ function groundHeight(x: number, z: number): number {
  *  each facet takes a single colour. That faceting IS the low-poly look — a
  *  smooth-shaded hill just reads as a beanbag. */
 function buildGround(): THREE.Mesh {
-	const geo = new THREE.PlaneGeometry(520, 520, 64, 64).toNonIndexed();
+	const geo = new THREE.PlaneGeometry(680, 680, 72, 72).toNonIndexed();
+	geo.translate(0, 0, -110); // the kingdom runs a long way back
 	geo.rotateX(-Math.PI / 2);
 	const pos = geo.attributes.position;
 	for (let i = 0; i < pos.count; i++) {
@@ -128,7 +144,7 @@ function buildGround(): THREE.Mesh {
 	const c = new THREE.Color();
 	for (let f = 0; f < pos.count; f += 3) {
 		const h = (pos.getY(f) + pos.getY(f + 1) + pos.getY(f + 2)) / 3;
-		const k = THREE.MathUtils.clamp((h + 4) / 12, 0, 1);
+		const k = THREE.MathUtils.clamp((h - BASE_Y + 5) / 14, 0, 1);
 		c.copy(lo).lerp(mid, Math.min(1, k * 2)).lerp(hi, Math.max(0, k * 2 - 1));
 		// a little per-facet variation so the hills don't band
 		c.offsetHSL(0, 0, (((f * 37) % 13) - 6) * 0.004);
@@ -196,6 +212,123 @@ function buildCloud(): THREE.Group {
 		lump.rotation.set(rand(0, 3), rand(0, 3), rand(0, 3));
 		g.add(lump);
 	}
+	return g;
+}
+
+/** The wall the kingdom is behind: the machine's own backdrop, with a hole cut
+ *  in it over the bore. Built from the SAME material instance as the real one,
+ *  so the leather is lit identically and the swap is invisible; only the UVs
+ *  need remapping, since ShapeGeometry lays them out in raw world units while
+ *  the backdrop's plane maps 26 units across 0..1. */
+function buildPortalWall(mat: THREE.Material, holeRadius: number, holeY: number): THREE.Mesh {
+	const S = 64;
+	const shape = new THREE.Shape();
+	shape.moveTo(-S / 2, -S / 2);
+	shape.lineTo(S / 2, -S / 2);
+	shape.lineTo(S / 2, S / 2);
+	shape.lineTo(-S / 2, S / 2);
+	shape.closePath();
+	const hole = new THREE.Path();
+	hole.absarc(0, holeY, holeRadius, 0, Math.PI * 2, true);
+	shape.holes.push(hole);
+	const geo = new THREE.ShapeGeometry(shape, 72);
+	const uv = geo.attributes.uv;
+	const pos = geo.attributes.position;
+	for (let i = 0; i < uv.count; i++) {
+		uv.setXY(i, (pos.getX(i) + 13) / 26, (pos.getY(i) + 13) / 26);
+	}
+	return new THREE.Mesh(geo, mat);
+}
+
+/** A windmill on a rise, sails turning. */
+function buildWindmill(): { mill: THREE.Group; sails: THREE.Group } {
+	const mill = new THREE.Group();
+	const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 2.4, 7, 9), toon(0xf0e6d2));
+	tower.position.y = 3.5;
+	mill.add(tower);
+	const cap = new THREE.Mesh(new THREE.ConeGeometry(1.9, 2.2, 9), toon(0x8a4a52));
+	cap.position.y = 8;
+	mill.add(cap);
+	const door = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.6, 0.3), toon(0x7a4a2c));
+	door.position.set(0, 0.8, 2.1);
+	mill.add(door);
+	const sails = new THREE.Group();
+	sails.position.set(0, 7.4, 1.9);
+	const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.5, 8), toon(0x7a4a2c));
+	hub.rotation.x = Math.PI / 2;
+	sails.add(hub);
+	for (let i = 0; i < 4; i++) {
+		const arm = new THREE.Group();
+		arm.rotation.z = (i / 4) * Math.PI * 2;
+		const spar = new THREE.Mesh(new THREE.BoxGeometry(0.22, 4.4, 0.14), toon(0x7a4a2c));
+		spar.position.y = 2.2;
+		arm.add(spar);
+		const cloth = new THREE.Mesh(new THREE.BoxGeometry(0.95, 3.2, 0.08), toon(0xfdf6e4));
+		cloth.position.set(0.62, 2.3, 0.1);
+		arm.add(cloth);
+		sails.add(arm);
+	}
+	mill.add(sails);
+	return { mill, sails };
+}
+
+/** A thatched cottage. Villages are made of these and nothing else. */
+function buildCottage(): THREE.Group {
+	const g = new THREE.Group();
+	const walls = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2, 2.2), toon(0xfaf0dc));
+	walls.position.y = 1;
+	g.add(walls);
+	const roof = new THREE.Mesh(new THREE.ConeGeometry(2.3, 1.8, 4), toon(pick([0xc98a4b, 0xb5714a, 0xd8a45e])));
+	roof.position.y = 2.85;
+	roof.rotation.y = Math.PI / 4;
+	g.add(roof);
+	const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.42, 1.3, 0.42), toon(0xb0483f));
+	chimney.position.set(0.8, 3.2, 0.4);
+	g.add(chimney);
+	const door = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.1, 0.12), toon(0x7a4a2c));
+	door.position.set(0, 0.55, 1.14);
+	g.add(door);
+	for (const dx of [-0.8, 0.8]) {
+		const win = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.1), toon(0xffd98a));
+		win.position.set(dx, 1.3, 1.13);
+		g.add(win);
+	}
+	return g;
+}
+
+/** A humpbacked stone bridge over the lake. */
+function buildBridge(): THREE.Group {
+	const g = new THREE.Group();
+	const stone = toon(0xd8cdb8);
+	for (let i = 0; i <= 12; i++) {
+		const t = i / 12;
+		const seg = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.7, 5.4), stone);
+		seg.position.set(0, Math.sin(t * Math.PI) * 2.6, (t - 0.5) * 78);
+		seg.rotation.x = Math.cos(t * Math.PI) * 0.14;
+		g.add(seg);
+	}
+	for (const side of [-1, 1]) {
+		for (let i = 0; i <= 12; i++) {
+			const t = i / 12;
+			const post = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.1, 0.5), stone);
+			post.position.set(side * 2.4, Math.sin(t * Math.PI) * 2.6 + 0.8, (t - 0.5) * 78);
+			g.add(post);
+		}
+	}
+	return g;
+}
+
+/** A rainbow standing over the valley. Seven arcs, no shader needed. */
+function buildRainbow(): THREE.Group {
+	const g = new THREE.Group();
+	const bands = [0xff5f5f, 0xff9f43, 0xffd93d, 0x5fd97a, 0x4fb3ff, 0x6f6fe0, 0xb06fe0];
+	bands.forEach((hex, i) => {
+		const arc = new THREE.Mesh(
+			new THREE.TorusGeometry(44 - i * 1.7, 0.85, 6, 40, Math.PI),
+			new THREE.MeshBasicMaterial({ color: hex, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+		);
+		g.add(arc);
+	});
 	return g;
 }
 
@@ -345,7 +478,7 @@ function buildCastle(): { castle: THREE.Group; balcony: THREE.Vector3; pennants:
 /** A fairy: a bell of a dress, a round head, and four wings that beat. */
 function buildFairy(tint: number): { group: THREE.Group; wings: THREE.Mesh[] } {
 	const g = new THREE.Group();
-	const dress = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.42, 7), toon(tint));
+	const dress = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.42, 7), toon(tint, { emissive: tint, emissiveIntensity: 0.18 }));
 	dress.position.y = 0.2;
 	g.add(dress);
 	const head = new THREE.Mesh(new THREE.SphereGeometry(0.135, 10, 8), toon(C.skin));
@@ -361,9 +494,9 @@ function buildFairy(tint: number): { group: THREE.Group; wings: THREE.Mesh[] } {
 	}
 	const wings: THREE.Mesh[] = [];
 	const wingMat = new THREE.MeshBasicMaterial({
-		color: 0xbfe4ff,
+		color: 0xa8d8ff,
 		transparent: true,
-		opacity: 0.62,
+		opacity: 0.4,
 		side: THREE.DoubleSide,
 		depthWrite: false,
 		blending: THREE.AdditiveBlending
@@ -606,12 +739,23 @@ export async function play(ctx: EffectContext): Promise<void> {
 	machine.portal.visible = false;
 	machine.setInnerGlow(0.15, 0x8fffb8);
 	tween(1100, 'inOutQuad', (v) => {
-		machine.setInnerGlow(0.15 + v * 0.5, 0x8fffb8);
+		// eases OFF: an additive glow in the bore would fog the view through it
+		machine.setInnerGlow(0.15 * (1 - v), 0x8fffb8);
 		scene.fxLight.intensity = v * 3;
 	});
 
-	// something green and alive on the other side of it
-	const portalMat = new THREE.SpriteMaterial({
+	// THE WINDOW. Swap the backdrop for one with a hole in it, built from the
+	// very same material, and hide the backplate — which fades to nothing but
+	// still writes depth, so it would block the view through the hole.
+	const wall = buildPortalWall(machine.backdrop.material as THREE.Material, 1.02, -0.32);
+	wall.position.copy(machine.backdrop.position);
+	machine.group.add(wall);
+	machine.backdrop.visible = false;
+	const backplateFace = machine.backplate.children[0] as THREE.Mesh;
+	backplateFace.visible = false;
+
+	// a rim of light where the two worlds meet
+	const rimMat = new THREE.SpriteMaterial({
 		map: sprites.softDot,
 		color: 0xa8ffcf,
 		transparent: true,
@@ -619,15 +763,12 @@ export async function play(ctx: EffectContext): Promise<void> {
 		blending: THREE.AdditiveBlending,
 		depthWrite: false
 	});
-	const portal = new THREE.Sprite(portalMat);
-	portal.position.set(btn.x, btn.y, -0.05);
-	portal.scale.setScalar(0.2);
-	portal.renderOrder = 4;
-	scene.scene.add(portal);
-	tween(900, 'outCubic', (v) => {
-		portalMat.opacity = v * 0.9;
-		portal.scale.setScalar(0.2 + v * 1.5);
-	});
+	const rimGlow = new THREE.Sprite(rimMat);
+	rimGlow.position.set(btn.x, btn.y, 0.1);
+	rimGlow.scale.setScalar(2.6);
+	scene.scene.add(rimGlow);
+	// barely there: a soft additive disc over the hole washes the whole view
+	tween(1100, 'outCubic', (v) => (rimMat.opacity = v * 0.1));
 	const escaping = particles.emitter({
 		texture: sprites.star4,
 		count: 200,
@@ -649,7 +790,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// ================================================================ THE KINGDOM
 	const world = new THREE.Group();
 	world.matrixAutoUpdate = false; // we drive its matrix directly, every frame
-	world.visible = false;
+	// visible from the outset: it is what you SEE through the hole, so there is
+	// nothing to reveal later
 	scene.scene.add(world);
 
 	const sky = new THREE.Mesh(
@@ -702,20 +844,21 @@ export async function play(ctx: EffectContext): Promise<void> {
 		});
 	};
 
-	for (let i = 0; i < 130; i++) {
-		const x = rand(-95, 95);
-		const z = rand(30, -140);
-		const nearPath = Math.abs(x) < 9 && z > -70;
+	for (let i = 0; i < 320; i++) {
+		const x = rand(-120, 120);
+		const z = rand(24, -300);
+		const nearPath = Math.abs(x) < 10;
 		if (nearPath && Math.random() < 0.8) continue;
-		if (Math.hypot(x, z + 84) < 15) continue; // keep the castle plateau clear
+		if (Math.hypot(x, z - CASTLE_Z) < 22) continue; // keep the castle plateau clear
+		if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r * 0.95) continue; // and the lake wet
 		const thing = Math.random() < 0.76 ? buildTree(rand(0.85, 1.9)) : buildToadstool(rand(0.9, 1.9));
 		thing.position.set(x, groundHeight(x, z) - 0.1, z);
 		thing.rotation.y = rand(0, 6.28);
 		bake(thing);
 	}
-	for (let i = 0; i < 16; i++) {
+	for (let i = 0; i < 26; i++) {
 		const cloud = buildCloud();
-		cloud.position.set(rand(-90, 90), rand(31, 48), rand(20, -150));
+		cloud.position.set(rand(-110, 110), rand(26, 44), rand(20, -300));
 		cloud.rotation.y = rand(0, 6.28);
 		bake(cloud);
 	}
@@ -727,8 +870,38 @@ export async function play(ctx: EffectContext): Promise<void> {
 		world.add(new THREE.Mesh(merged, toon(hex, isCloud ? { emissive: 0x30343c, emissiveIntensity: 0.3 } : {})));
 	}
 
+	// ---- landmarks, so the journey has things to pass rather than just hills
+	const lakeMat = toon(0x4aa8d8, { roughness: 0.25, metalness: 0.15, flatShading: false });
+	const lake = new THREE.Mesh(new THREE.CircleGeometry(LAKE.r * 0.92, 40), lakeMat);
+	lake.rotation.x = -Math.PI / 2;
+	lake.position.set(LAKE.x, BASE_Y - 4.6, LAKE.z);
+	world.add(lake);
+	const bridge = buildBridge();
+	bridge.position.set(LAKE.x + 6, BASE_Y - 3.4, LAKE.z);
+	world.add(bridge);
+
+	const { mill, sails } = buildWindmill();
+	mill.position.set(30, groundHeight(30, -120) - 0.4, -120);
+	mill.rotation.y = -0.5;
+	world.add(mill);
+
+	for (let i = 0; i < 7; i++) {
+		const a = (i / 7) * Math.PI * 2;
+		const cx = -30 + Math.cos(a) * 9;
+		const cz = -152 + Math.sin(a) * 9;
+		const cottage = buildCottage();
+		cottage.position.set(cx, groundHeight(cx, cz) - 0.2, cz);
+		cottage.rotation.y = -a + Math.PI / 2;
+		world.add(cottage);
+	}
+
+	const rainbow = buildRainbow();
+	rainbow.position.set(-6, groundHeight(-6, -158) - 2, -158);
+	rainbow.rotation.y = 0.22;
+	world.add(rainbow);
+
 	const { castle, balcony, pennants } = buildCastle();
-	castle.position.set(0, groundHeight(0, -84) - 1.5, -84);
+	castle.position.set(0, groundHeight(0, CASTLE_Z) - 1.5, CASTLE_Z);
 	world.add(castle);
 
 	// ---- the king, on his balcony, facing the way we come in
@@ -772,18 +945,19 @@ export async function play(ctx: EffectContext): Promise<void> {
 		colour: THREE.Color;
 		emit: number;
 	}[] = [];
-	for (let i = 0; i < 9; i++) {
+	for (let i = 0; i < 12; i++) {
 		const tint = fairyTints[i % fairyTints.length];
 		const { group, wings } = buildFairy(tint);
-		const t = i / 9;
+		const t = i / 12;
+		// clustered around the way in — they are a welcome party, not an escort
 		const home = new THREE.Vector3(
-			rand(-9, 9),
+			rand(-11, 11),
 			0,
-			THREE.MathUtils.lerp(4, -70, t) + rand(-6, 6)
+			THREE.MathUtils.lerp(0, -52, t) + rand(-5, 5)
 		);
 		home.y = groundHeight(home.x, home.z) + rand(2.5, 6.5);
 		group.position.copy(home);
-		group.scale.setScalar(rand(1.5, 2.4));
+		group.scale.setScalar(rand(0.95, 1.6));
 		world.add(group);
 		fairies.push({
 			group,
@@ -796,84 +970,96 @@ export async function play(ctx: EffectContext): Promise<void> {
 			emit: 0
 		});
 	}
-	// three more circling the king, as an honour guard
-	for (let i = 0; i < 3; i++) {
-		const tint = fairyTints[(i + 2) % fairyTints.length];
-		const { group, wings } = buildFairy(tint);
-		const home = kingPos.clone().add(new THREE.Vector3((i - 1) * 2.35 + rand(-0.3, 0.3), rand(1.5, 2.7), rand(-0.9, 0.6)));
-		group.position.copy(home);
-		group.scale.setScalar(rand(0.9, 1.25));
-		world.add(group);
-		fairies.push({
-			group,
-			wings,
-			home,
-			phase: rand(0, 6.28),
-			radius: rand(0.45, 0.85),
-			speed: rand(1.1, 1.7),
-			colour: new THREE.Color(tint),
-			emit: 0
-		});
-	}
+	// (Deliberately none around the king — he is far too regal for that.)
 
-	// ================================================================ THE FLIGHT
-	// Built from the king's ACTUAL position, not from guessed numbers: the castle
-	// sits on a plateau whose height comes out of groundHeight(), so hard-coding
-	// the arrival left the camera eight units under the balcony staring up at
-	// the masonry.
+	// The path starts where the REAL camera is relative to the wall (6.1 units
+	// in front of the backdrop plane), so kingdom z = 0 lands exactly on the
+	// leather and the hole in it is a genuine window. Everything after that is
+	// one long unbroken sweep with landmarks strung along it.
 	const arrive = kingPos.clone().add(new THREE.Vector3(0.5, 1.95, 5.4));
 	const PATH = new THREE.CatmullRomCurve3(
 		[
-			new THREE.Vector3(0, 4.2, 16),
-			new THREE.Vector3(2.2, 5.4, 2),
-			new THREE.Vector3(-3.6, 7.0, -16),
-			new THREE.Vector3(2.8, 9.0, -34),
-			new THREE.Vector3(-2.2, 13.0, -48),
-			new THREE.Vector3(2.0, arrive.y * 0.82, -58),
-			arrive.clone().add(new THREE.Vector3(-0.4, 0.6, 5.5)),
+			new THREE.Vector3(0, 0, 6.1),
+			new THREE.Vector3(0, 0.1, 1.5),
+			new THREE.Vector3(0.4, 1.0, -16),
+			new THREE.Vector3(-2.6, 2.6, -46),
+			new THREE.Vector3(1.8, 4.6, -84),
+			new THREE.Vector3(5.4, 6.2, -118),
+			new THREE.Vector3(-3.2, 8.4, -152),
+			new THREE.Vector3(2.0, 11.6, -180),
+			arrive.clone().add(new THREE.Vector3(-1.6, 1.4, 12)),
 			arrive
 		],
 		false,
 		'catmullrom',
-		0.3
+		0.25
 	);
+	// where along the path the entry plane is behind us
+	let ENTRY_T = 0.05;
+	for (let i = 0; i <= 200; i++) {
+		if (PATH.getPointAt(i / 200).z < -1.5) {
+			ENTRY_T = i / 200;
+			break;
+		}
+	}
 
 	const vcam = new THREE.PerspectiveCamera(); // never renders; we only want its matrix
 	const eye = new THREE.Vector3();
 	const look = new THREE.Vector3();
+	const eyeSmooth = new THREE.Vector3();
+	const lookSmooth = new THREE.Vector3();
+	const ahead = new THREE.Vector3();
+	const behind = new THREE.Vector3();
 	const inv = new THREE.Matrix4();
 	let travel = 0; // 0..1 along the path
 	let gaze = 0; // 0 = look along the path, 1 = look at the king
 	let bank = 0;
-	let sway = 1; // handheld sway, killed during the presentation
+	let sway = 1;
 	let shakeAmt = 0;
+	let primed = false;
 
 	const kingLook = kingPos.clone().add(new THREE.Vector3(0, 1.15, 0));
 
-	const flyCamera = (t: number) => {
-		PATH.getPointAt(THREE.MathUtils.clamp(t, 0, 1), eye);
-		PATH.getPointAt(THREE.MathUtils.clamp(t + 0.035, 0, 1), look);
-		if (gaze > 0) look.lerp(kingLook, gaze);
-		// a gentle bank into whichever way the path is turning
-		const ahead = PATH.getPointAt(THREE.MathUtils.clamp(t + 0.02, 0, 1));
-		const behind = PATH.getPointAt(THREE.MathUtils.clamp(t - 0.02, 0, 1));
-		bank += ((behind.x - ahead.x) * 0.12 - bank) * 0.06;
-	};
+	const inOutSine = (t: number) => -(Math.cos(Math.PI * t) - 1) / 2;
 
 	const stopSim = scene.addUpdatable((dt, time) => {
-		// ---- flight
-		flyCamera(travel);
-		vcam.position.copy(eye);
-		if (sway > 0) {
-			vcam.position.x += Math.sin(time * 0.7) * 0.22 * sway;
-			vcam.position.y += Math.sin(time * 0.53 + 1.1) * 0.16 * sway;
+		// ---- flight. Every value the camera uses is SMOOTHED towards its target
+		// rather than snapped to it: sampling the spline directly, with a short
+		// look-ahead and a wobble applied only to the eye, turned every bend into
+		// a twitch — "a camera taped to a house fly". Smoothing the eye and the
+		// look point on the same slow spring gives a cinematic sweep, and the
+		// sway now moves BOTH so it reads as drift rather than as rotation.
+		PATH.getPointAt(THREE.MathUtils.clamp(travel, 0, 1), eye);
+		PATH.getPointAt(THREE.MathUtils.clamp(travel + 0.055, 0, 1), look);
+		if (gaze > 0) look.lerp(kingLook, gaze);
+		const drift = new THREE.Vector3(
+			Math.sin(time * 0.31) * 0.5 * sway,
+			Math.sin(time * 0.24 + 1.1) * 0.34 * sway,
+			0
+		);
+		eye.add(drift);
+		look.add(drift);
+		if (!primed) {
+			eyeSmooth.copy(eye);
+			lookSmooth.copy(look);
+			primed = true;
 		}
+		const k = 1 - Math.pow(0.0009, dt); // ~0.15s spring, kills all the jitter
+		eyeSmooth.lerp(eye, k);
+		lookSmooth.lerp(look, k);
+
+		// bank into the turn, itself heavily smoothed
+		PATH.getPointAt(THREE.MathUtils.clamp(travel + 0.02, 0, 1), ahead);
+		PATH.getPointAt(THREE.MathUtils.clamp(travel - 0.02, 0, 1), behind);
+		bank += ((behind.x - ahead.x) * 0.055 - bank) * Math.min(1, dt * 1.6);
+
+		vcam.position.copy(eyeSmooth);
 		if (shakeAmt > 0) {
 			vcam.position.x += (Math.random() - 0.5) * shakeAmt;
 			vcam.position.y += (Math.random() - 0.5) * shakeAmt;
 		}
 		vcam.up.set(0, 1, 0);
-		vcam.lookAt(look);
+		vcam.lookAt(lookSmooth);
 		vcam.rotateZ(bank);
 		vcam.updateMatrixWorld(true);
 
@@ -882,6 +1068,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 		inv.copy(vcam.matrixWorld).invert();
 		world.matrix.multiplyMatrices(scene.camera.matrixWorld, inv);
 		world.matrixWorldNeedsUpdate = true;
+
+		if (sails) sails.rotation.z += dt * 0.55;
 
 		// ---- fairies
 		for (const f of fairies) {
@@ -914,73 +1102,51 @@ export async function play(ctx: EffectContext): Promise<void> {
 		cupGlow.scale.setScalar(0.62 + Math.sin(time * 3.4) * 0.09);
 	});
 
-	// ---- the dive: the portal swells until it owns the screen, and we cut
-	await delay(280);
-	audio.sfx('swoosh', { pitch: 0.6, gain: 0.7 });
+	// ---- through the window. No cut and no whiteout: the kingdom is genuinely
+	// behind the wall, so we simply advance until the entry plane is past us.
+	await delay(420);
+	audio.sfx('swoosh', { pitch: 0.6, gain: 0.6 });
 	haptics.vibrate([25, 30, 90]);
-	const rigZ0 = scene.rig.position.z;
-	const fov0 = scene.camera.fov;
-	// The scene runs a 200-unit far plane, which is fine for a machine 5 units
-	// away and useless for a kingdom: it was clipping the sky dome entirely
-	// (hence a black sky) and slicing the horizon off the hills.
 	const far0 = scene.camera.far;
-	scene.camera.far = 1400;
+	scene.camera.far = 2000; // a 200-unit far plane clips a kingdom's sky away
 	scene.camera.updateProjectionMatrix();
-	// AWAIT the dive rather than racing it: cutting away 60ms early left this
-	// tween running past the restore below, which re-applied the push-in and
-	// left the machine framed at double size for the rest of the effect.
-	await tween(760, 'inQuad', (v) => {
-		scene.rig.position.z = rigZ0 - v * 3.4;
-		scene.camera.fov = fov0 + v * 20;
-		scene.camera.updateProjectionMatrix();
-		portalMat.opacity = 0.9 + v * 0.1;
-		portal.scale.setScalar(1.7 + v * v * 22);
-	});
-
-	// the cut, hidden inside the whiteout
-	escaping.stop();
-	machine.group.visible = false;
-	world.visible = true;
-	scene.scene.fog = new THREE.Fog(0xe8dcc0, 110, 330);
 	const envIntensity0 = scene.scene.environmentIntensity;
-	scene.scene.environmentIntensity = 0; // world-space reflections would swim
 	const keep0 = scene.keyLight.intensity;
 	const fill0 = scene.fillLight.intensity;
 	const rim0 = scene.rimLight.intensity;
-	scene.keyLight.intensity = 0;
-	scene.fillLight.intensity = 0;
-	scene.rimLight.intensity = 0;
-	scene.rig.position.z = rigZ0;
-	scene.camera.fov = fov0;
-	scene.camera.updateProjectionMatrix();
-	audio.stopAllLoops(200);
-	audio.sfx('chime', { pitch: 1.3, gain: 0.6 });
 
-	await tween(700, 'outCubic', (v) => {
-		portalMat.opacity = 1 - v;
-		portal.scale.setScalar(23 * (1 - v * 0.35));
+	// the whole run of the journey, one long unbroken sweep
+	const journey = tween(11200, inOutSine, (v) => {
+		travel = v * 0.9;
+		// once the entry plane is behind us the machine has no more to give
+		if (travel > ENTRY_T && machine.group.visible) {
+			machine.group.visible = false;
+			scene.scene.remove(rimGlow);
+			escaping.stop();
+			scene.scene.environmentIntensity = 0; // world-space reflections would swim
+			scene.keyLight.intensity = 0;
+			scene.fillLight.intensity = 0;
+			scene.rimLight.intensity = 0;
+			scene.scene.fog = new THREE.Fog(0xe8dcc0, 150, 520);
+			audio.stopAllLoops(200);
+			audio.sfx('chime', { pitch: 1.3, gain: 0.6 });
+		}
 	});
-	portal.visible = false;
-
-	// ---- over the hills
+	await delay(1500);
 	audio.sfx('chime', { pitch: 0.9, gain: 0.35 });
-	tween(5200, 'inOutQuad', (v) => (travel = v * 0.42));
-	await delay(1700);
+	await delay(3200);
 	audio.sfx('ding', { pitch: 1.8, gain: 0.22 });
-	await delay(1900);
+	await delay(3400);
 	audio.sfx('ding', { pitch: 2.1, gain: 0.2 });
-	await delay(1600);
+	await journey;
 
-	// ---- the castle, and up to the turret
+	// ---- the last of it: rise to the turret and turn to the king
 	audio.sfx('swoosh', { pitch: 1.1, gain: 0.4 });
-	tween(4600, 'inOutCubic', (v) => {
-		travel = 0.42 + v * 0.58;
-		gaze = Math.max(0, (v - 0.55) / 0.45); // start turning to the king near the end
-		sway = 1 - v * 0.75;
+	await tween(2600, inOutSine, (v) => {
+		travel = 0.9 + v * 0.1;
+		gaze = Math.max(0, (v - 0.35) / 0.65);
+		sway = 1 - v * 0.85;
 	});
-	await delay(3000);
-	audio.sfx('chime', { pitch: 0.75, gain: 0.5 });
-	await delay(1700);
 
 	// ================================================================ THE KING
 	sway = 0.12;
@@ -1008,7 +1174,6 @@ export async function play(ctx: EffectContext): Promise<void> {
 		cupGlowMat.opacity = 0.85 + v * 0.15;
 		cupGlow.scale.setScalar(0.62 + v * 1.5);
 	});
-	for (const f of fairies.slice(-3)) f.speed *= 2.1;
 	await delay(700);
 
 	// ---- the luck comes out of the cup and straight at you
@@ -1070,15 +1235,13 @@ export async function play(ctx: EffectContext): Promise<void> {
 	});
 	await tween(2500, 'inOutCubic', (v) => (travel = 1 - v));
 
-	// ---- back through the hole
+	// ---- back through the hole, the same way we came
 	audio.sfx('boom', { pitch: 0.9, gain: 0.5 });
-	portal.visible = true;
-	portalMat.opacity = 0;
-	portal.scale.setScalar(24);
-	await tween(420, 'inQuad', (v) => (portalMat.opacity = v));
-
-	world.visible = false;
 	machine.group.visible = true;
+	scene.scene.add(rimGlow);
+	rimMat.opacity = 0.1;
+	await tween(520, 'linear', (v) => (travel = 0.06 * (1 - v)));
+	world.visible = false;
 	scene.scene.fog = null;
 	scene.camera.far = far0;
 	scene.camera.updateProjectionMatrix();
@@ -1091,10 +1254,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	scene.shake(0.35);
 	haptics.vibrate([30, 40, 90]);
 
-	await tween(650, 'outCubic', (v) => {
-		portalMat.opacity = 1 - v;
-		portal.scale.setScalar(24 - v * 22.2);
-	});
+	await tween(650, 'outCubic', (v) => (rimMat.opacity = 0.1 * (1 - v)));
 	particles.burst({
 		texture: sprites.star4,
 		count: 90,
@@ -1140,8 +1300,12 @@ export async function play(ctx: EffectContext): Promise<void> {
 		scatter: 520
 	});
 
-	scene.scene.remove(portal);
-	portalMat.dispose();
+	scene.scene.remove(rimGlow);
+	rimMat.dispose();
+	machine.group.remove(wall);
+	wall.geometry.dispose();
+	machine.backdrop.visible = true;
+	backplateFace.visible = true;
 	machine.setInnerGlow(0);
 	scene.fxLight.intensity = 0;
 	await restoreLights(800);
