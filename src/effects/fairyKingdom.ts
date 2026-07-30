@@ -44,7 +44,7 @@ import { luckyWord } from './luckyWord';
 import type { EffectContext } from '../types';
 
 export const sound = 'cloudsTunnel';
-export const duration = 31500;
+export const duration = 27500;
 
 // ---------------------------------------------------------------- palette
 const C = {
@@ -728,24 +728,31 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// THE WINDOW goes in FIRST. It is built from the very same material as the
 	// backdrop it replaces, so swapping it changes nothing on screen — and it
 	// means the hole is already there, waiting, behind a closed iris.
-	const wall = buildPortalWall(machine.backdrop.material as THREE.Material, 1.02, -0.32);
+	const wall = buildPortalWall(machine.backdrop.material as THREE.Material, 1.45, -0.32);
 	wall.position.copy(machine.backdrop.position);
 	machine.group.add(wall);
 	machine.backdrop.visible = false;
 	const backplateFace = machine.backplate.children[0] as THREE.Mesh;
 
 	audio.sfx('clang', { pitch: 1.15, gain: 0.45 });
-	await machine.openClamps(560);
+	await machine.openClamps(420);
 	haptics.vibrate(30);
 	await tween(220, 'outQuad', (v) => {
 		machine.buttonGroup.position.z = btnHome.z + v * 0.24;
 	});
 	audio.sfx('swoosh', { pitch: 0.85, gain: 0.5 });
-	tween(900, 'outCubic', (v) => {
+	tween(680, 'outCubic', (v) => {
 		machine.buttonGroup.position.y = btnHome.y + v * 1.15;
 	});
 
 	// ================================================================ THE KINGDOM
+	// The scene runs a 200-unit far plane, which is fine for a machine five units
+	// away and useless for a kingdom: at 200 the sky dome is clipped clean off
+	// and the hole opens onto a black sky. It has to go up BEFORE the iris does.
+	const far0 = scene.camera.far;
+	scene.camera.far = 2000;
+	scene.camera.updateProjectionMatrix();
+
 	const world = new THREE.Group();
 	world.matrixAutoUpdate = false; // we drive its matrix directly, every frame
 	// visible from the outset: it is what you SEE through the hole, so there is
@@ -975,15 +982,11 @@ export async function play(ctx: EffectContext): Promise<void> {
 		[
 			new THREE.Vector3(0, 0, 6.1), // fixed: this is the hole in the leather
 			new THREE.Vector3(0, 0.1, 1.5),
-			wp(1.2, -18, 5.5),
-			wp(3.4, -34, 3.6), // down onto the deck over the meadow
-			wp(-3.0, -54, 4.0),
-			wp(-7.0, -70, 7.5), // up over the ridge…
-			wp(1.5, -90, 4.0), // …and straight back down to skim the lake
-			wp(9.0, -110, 6.0),
-			wp(23.0, -126, 8.0), // banking round the windmill
-			wp(0.0, -146, 10.0), // over the rooftops
-			wp(-8.0, -160, 14.0), // under the rainbow
+			wp(-2.0, -26, 5.2),
+			wp(-7.0, -58, 3.6), // down onto the deck, drifting left over the meadow
+			wp(-6.0, -92, 3.8), // skimming the lake, right past the bridge
+			wp(4.0, -126, 7.5), // rising away right, the windmill off the wing
+			wp(4.0, -156, 11.5), // under the rainbow, village off to port
 			runIn
 		],
 		false,
@@ -1156,10 +1159,10 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// The backplate has to go at the same moment: it fades to nothing but still
 	// writes depth, so it would block the view through its own hole.
 	backplateFace.visible = false;
-	const opening = machine.openIris(0.78, 1100);
+	const opening = machine.openIris(0.78, 820);
 	machine.portal.visible = false;
 	machine.setInnerGlow(0.15, 0x8fffb8);
-	tween(1100, 'inOutQuad', (v) => {
+	tween(820, 'inOutQuad', (v) => {
 		// eases OFF: an additive glow in the bore would fog the view through it
 		machine.setInnerGlow(0.15 * (1 - v), 0x8fffb8);
 		scene.fxLight.intensity = v * 3;
@@ -1179,7 +1182,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	rimGlow.scale.setScalar(2.6);
 	scene.scene.add(rimGlow);
 	// barely there: a soft additive disc over the hole washes the whole view
-	tween(1100, 'outCubic', (v) => (rimMat.opacity = v * 0.1));
+	tween(820, 'outCubic', (v) => (rimMat.opacity = v * 0.1));
 	const escaping = particles.emitter({
 		texture: sprites.star4,
 		count: 200,
@@ -1208,29 +1211,27 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// runs all the way in to z 0.85 and only then is there nothing left to see
 	// of the machine. The kingdom's own view is set by the virtual camera, so
 	// the dolly does not disturb it one bit.
-	await delay(420);
+	await delay(180);
 	audio.sfx('swoosh', { pitch: 0.6, gain: 0.6 });
 	haptics.vibrate([25, 30, 90]);
-	const far0 = scene.camera.far;
-	scene.camera.far = 2000; // a 200-unit far plane clips a kingdom's sky away
-	scene.camera.updateProjectionMatrix();
 	const envIntensity0 = scene.scene.environmentIntensity;
 	const keep0 = scene.keyLight.intensity;
 	const fill0 = scene.fillLight.intensity;
 	const rim0 = scene.rimLight.intensity;
 	const rigZ0 = scene.rig.position.z;
-	// 0.68, not 0.85: the hole has to clear the frame's CORNERS, not its edges.
-	// At a 1.02 radius that needs the camera within ~1.5 units of the wall —
-	// stop at 0.85 and there is still leather in the corners when it is dropped.
-	const RIG_IN = 0.68;
+	// The hole has to clear the frame's CORNERS, not its edges: the corner
+	// half-angle is atan(hypot(tan(hFov/2), tan(vFov/2))) ≈ 32°, so a 1.45
+	// radius needs the camera within ~2.3 units of the leather. 1.15 leaves
+	// room to spare and still flies you right into it.
+	const RIG_IN = 1.15;
 
 	await Promise.all([
-		tween(2100, 'inQuad', (v) => {
+		tween(1400, 'inQuad', (v) => {
 			scene.rig.position.z = rigZ0 - v * (rigZ0 - RIG_IN);
 			rimMat.opacity = 0.1 * (1 - v);
 		}),
 		// the kingdom comes to meet us as we go in
-		tween(2100, 'inQuad', (v) => (travel = v * ENTRY_T * 1.6))
+		tween(1400, 'inQuad', (v) => (travel = v * ENTRY_T * 1.6))
 	]);
 
 	// nothing of the machine is on screen any more — the hole is wider than the
@@ -1249,21 +1250,21 @@ export async function play(ctx: EffectContext): Promise<void> {
 	audio.sfx('chime', { pitch: 1.3, gain: 0.6 });
 
 	// the whole run of the journey, one long unbroken sweep
-	const journey = tween(9600, inOutSine, (v) => {
+	const journey = tween(6000, inOutSine, (v) => {
 		travel = ENTRY_T * 1.6 + v * (SPLIT - ENTRY_T * 1.6);
 	});
-	await delay(1400);
+	await delay(1100);
 	audio.sfx('chime', { pitch: 0.9, gain: 0.35 });
-	await delay(3000);
+	await delay(2000);
 	audio.sfx('ding', { pitch: 1.8, gain: 0.22 });
-	await delay(3000);
+	await delay(1900);
 	audio.sfx('ding', { pitch: 2.1, gain: 0.2 });
 	await journey;
 
 	// ---- the last of it: rise to the turret and turn to the king
 	audio.sfx('swoosh', { pitch: 1.1, gain: 0.4 });
 	// the swoosh: right around the castle, climbing, ending on the king
-	await tween(5200, inOutSine, (v) => {
+	await tween(4400, inOutSine, (v) => {
 		travel = SPLIT + v * (1 - SPLIT);
 		gaze = Math.max(0, (v - 0.72) / 0.28);
 		sway = 1 - v * 0.85;
