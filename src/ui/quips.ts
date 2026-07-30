@@ -36,5 +36,6 @@ export const QUIPS: Record<string, readonly [string, string]> = {
 	wishingWell: ['THE WELL', 'SAYS YES'],
 	senbazuru: ['986 CRANES', 'TO GO'],
 	badLuckGauntlet: ['NICE TRY,', 'SUPERSTITION'],
-	manekiNeko: ['RAINBOWS:', 'DEPLOYED']
+	manekiNeko: ['RAINBOWS:', 'DEPLOYED'],
+	fairyKingdom: ['BY ROYAL', 'DECREE']
 };
