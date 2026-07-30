@@ -984,7 +984,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 			new THREE.Vector3(0, 0.1, 1.5),
 			wp(-2.0, -26, 5.2),
 			wp(-7.0, -58, 3.6), // down onto the deck, drifting left over the meadow
-			wp(-6.0, -92, 3.8), // skimming the lake, right past the bridge
+			wp(-13.0, -92, 5.2), // skimming the lake — clear of the bridge, which
+			// arches to water+2.6 with posts to +3.95 and spans x -6.6..-1.4
 			wp(4.0, -126, 7.5), // rising away right, the windmill off the wing
 			wp(4.0, -156, 11.5), // under the rainbow, village off to port
 			runIn
@@ -1379,6 +1380,11 @@ export async function play(ctx: EffectContext): Promise<void> {
 		tween(900, 'outQuad', (v) => (travel = ENTRY_T * 1.6 * (1 - v)))
 	]);
 	world.visible = false;
+	// and put the leather back at the same moment: leaving the holed wall in
+	// place meant the iris closed over an empty socket
+	machine.group.remove(wall);
+	machine.backdrop.visible = true;
+	backplateFace.visible = true;
 	scene.camera.far = far0;
 	scene.camera.updateProjectionMatrix();
 	scene.scene.environmentIntensity = envIntensity0;
@@ -1392,16 +1398,20 @@ export async function play(ctx: EffectContext): Promise<void> {
 	scene.camera.updateProjectionMatrix();
 	haptics.vibrate([30, 40, 90]);
 
-	await tween(650, 'outCubic', (v) => (rimMat.opacity = 0.1 * (1 - v)));
+	// Shut it STRAIGHT AWAY. Waiting for the rim to fade and the sparks to fly
+	// before starting the iris left a second and a half of empty socket sitting
+	// there — the door closes under all of it instead.
+	const closing = machine.closeIris(820);
+	tween(650, 'outCubic', (v) => (rimMat.opacity = 0.1 * (1 - v)));
 	particles.burst({
 		texture: sprites.star4,
-		count: 90,
+		count: 130,
 		origin: new THREE.Vector3(btn.x, btn.y, 0.5),
-		originSpread: 0.2,
-		speed: [1.4, 4],
+		originSpread: 0.32,
+		speed: [1.4, 4.4],
 		gravity: new THREE.Vector3(0, -2, 0),
 		life: [0.7, 1.6],
-		size: [0.03, 0.1],
+		size: [0.04, 0.12],
 		colors: [0xbfffd8, 0xfff3cf, 0xffd6f0]
 	});
 	flashPulse(machine, 0.6, 110, 700, 0xd8ffe8);
@@ -1418,7 +1428,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 		machine.setInnerGlow(0.65 * (1 - v));
 		scene.fxLight.intensity = 3 * (1 - v);
 	});
-	await machine.closeIris(950);
+	await closing;
 	await tween(620, 'outBack', (v) => {
 		machine.buttonGroup.position.y = btnHome.y + 1.15 * (1 - v);
 	});
@@ -1441,10 +1451,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	scene.scene.remove(rimGlow);
 	rimMat.dispose();
-	machine.group.remove(wall);
 	wall.geometry.dispose();
-	machine.backdrop.visible = true;
-	backplateFace.visible = true;
 	machine.setInnerGlow(0);
 	scene.fxLight.intensity = 0;
 	await restoreLights(800);
