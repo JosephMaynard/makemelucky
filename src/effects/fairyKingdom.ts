@@ -955,16 +955,35 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// climbs to the turret and comes back round to the king's face. They are
 	// sampled as one continuous parameter, so the return leg retraces both.
 	const arrive = kingPos.clone().add(new THREE.Vector3(0.4, 2.1, 6.9));
-	const runIn = new THREE.Vector3(2.0, 11.6, -176);
+
+	// The lead-in is flown as CLEARANCES above whatever is underneath rather
+	// than as absolute heights — the terrain swings by fifteen units across the
+	// kingdom, so fixed heights give you a flat cruise over some of it and a
+	// hillside in the lens over the rest. Written this way it can properly dive:
+	// skim the meadow, climb the ridge, drop to the water, pull up round the
+	// windmill and rise over the village.
+	const WATER_Y = BASE_Y - 4.6;
+	const surfaceAt = (x: number, z: number) =>
+		Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r * 0.92
+			? Math.max(groundHeight(x, z), WATER_Y)
+			: groundHeight(x, z);
+	const wp = (x: number, z: number, up: number) =>
+		new THREE.Vector3(x, surfaceAt(x, z) + up, z);
+
+	const runIn = wp(2, -172, 20);
 	const JOURNEY = new THREE.CatmullRomCurve3(
 		[
-			new THREE.Vector3(0, 0, 6.1),
+			new THREE.Vector3(0, 0, 6.1), // fixed: this is the hole in the leather
 			new THREE.Vector3(0, 0.1, 1.5),
-			new THREE.Vector3(0.4, 1.0, -16),
-			new THREE.Vector3(-2.6, 2.6, -46),
-			new THREE.Vector3(1.8, 4.6, -84),
-			new THREE.Vector3(5.4, 6.2, -118),
-			new THREE.Vector3(-3.2, 8.4, -152),
+			wp(1.2, -18, 5.5),
+			wp(3.4, -34, 3.6), // down onto the deck over the meadow
+			wp(-3.0, -54, 4.0),
+			wp(-7.0, -70, 7.5), // up over the ridge…
+			wp(1.5, -90, 4.0), // …and straight back down to skim the lake
+			wp(9.0, -110, 6.0),
+			wp(23.0, -126, 8.0), // banking round the windmill
+			wp(0.0, -146, 10.0), // over the rooftops
+			wp(-8.0, -160, 14.0), // under the rainbow
 			runIn
 		],
 		false,
@@ -974,12 +993,12 @@ export async function play(ctx: EffectContext): Promise<void> {
 	const SWOOSH = new THREE.CatmullRomCurve3(
 		[
 			runIn,
-			new THREE.Vector3(-34, 13.5, -180),
-			new THREE.Vector3(-56, 16.5, -206),
-			new THREE.Vector3(-46, 19.5, -246),
-			new THREE.Vector3(-4, 21.2, -264),
-			new THREE.Vector3(38, 21.6, -250),
-			new THREE.Vector3(57, 21.4, -212),
+			new THREE.Vector3(-40, 17.5, -186),
+			new THREE.Vector3(-60, 19.5, -212),
+			new THREE.Vector3(-48, 21.0, -248),
+			new THREE.Vector3(-4, 21.6, -268),
+			new THREE.Vector3(40, 21.6, -250),
+			new THREE.Vector3(58, 21.4, -212),
 			new THREE.Vector3(34, 21.4, -186),
 			arrive
 		],
@@ -1037,8 +1056,13 @@ export async function play(ctx: EffectContext): Promise<void> {
 		// Through the orbit the camera holds on the castle rather than on the
 		// path ahead — that is what makes it a sweep rather than a ride — and it
 		// holds it at its OWN height, which keeps the horizon level.
-		if (travel > SPLIT) {
-			const hold = THREE.MathUtils.clamp(((travel - SPLIT) / (1 - SPLIT)) * 2.2, 0, 1);
+		//
+		// It has to be LOCKED ON BEFORE the turn begins. Ramping the hold up
+		// after the orbit started meant the first part of the sweep was still
+		// aimed down the path, so the castle slid out of frame and the camera
+		// appeared to turn away from the very thing it was circling.
+		const hold = THREE.MathUtils.clamp((travel - (SPLIT - 0.05)) / 0.05, 0, 1);
+		if (hold > 0) {
 			subject.set(0, eye.y, CASTLE_Z);
 			look.lerp(subject, hold);
 		}
@@ -1068,7 +1092,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 		// way round.
 		sample(THREE.MathUtils.clamp(travel + 0.02, 0, 1), ahead);
 		sample(THREE.MathUtils.clamp(travel - 0.02, 0, 1), behind);
-		const bankTo = travel > SPLIT ? 0 : (behind.x - ahead.x) * 0.045;
+		const bankTo = travel > SPLIT ? 0 : THREE.MathUtils.clamp((behind.x - ahead.x) * 0.022, -0.13, 0.13);
 		bank += (bankTo - bank) * Math.min(1, dt * 1.6);
 
 		vcam.position.copy(eyeSmooth);
