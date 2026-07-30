@@ -725,6 +725,15 @@ export async function play(ctx: EffectContext): Promise<void> {
 	scene.fxLight.position.set(0, -0.1, 1.4);
 
 	// ================================================================ THE HOLE
+	// THE WINDOW goes in FIRST. It is built from the very same material as the
+	// backdrop it replaces, so swapping it changes nothing on screen — and it
+	// means the hole is already there, waiting, behind a closed iris.
+	const wall = buildPortalWall(machine.backdrop.material as THREE.Material, 1.02, -0.32);
+	wall.position.copy(machine.backdrop.position);
+	machine.group.add(wall);
+	machine.backdrop.visible = false;
+	const backplateFace = machine.backplate.children[0] as THREE.Mesh;
+
 	audio.sfx('clang', { pitch: 1.15, gain: 0.45 });
 	await machine.openClamps(560);
 	haptics.vibrate(30);
@@ -735,57 +744,6 @@ export async function play(ctx: EffectContext): Promise<void> {
 	tween(900, 'outCubic', (v) => {
 		machine.buttonGroup.position.y = btnHome.y + v * 1.15;
 	});
-	const opening = machine.openIris(0.78, 1100);
-	machine.portal.visible = false;
-	machine.setInnerGlow(0.15, 0x8fffb8);
-	tween(1100, 'inOutQuad', (v) => {
-		// eases OFF: an additive glow in the bore would fog the view through it
-		machine.setInnerGlow(0.15 * (1 - v), 0x8fffb8);
-		scene.fxLight.intensity = v * 3;
-	});
-
-	// THE WINDOW. Swap the backdrop for one with a hole in it, built from the
-	// very same material, and hide the backplate — which fades to nothing but
-	// still writes depth, so it would block the view through the hole.
-	const wall = buildPortalWall(machine.backdrop.material as THREE.Material, 1.02, -0.32);
-	wall.position.copy(machine.backdrop.position);
-	machine.group.add(wall);
-	machine.backdrop.visible = false;
-	const backplateFace = machine.backplate.children[0] as THREE.Mesh;
-	backplateFace.visible = false;
-
-	// a rim of light where the two worlds meet
-	const rimMat = new THREE.SpriteMaterial({
-		map: sprites.softDot,
-		color: 0xa8ffcf,
-		transparent: true,
-		opacity: 0,
-		blending: THREE.AdditiveBlending,
-		depthWrite: false
-	});
-	const rimGlow = new THREE.Sprite(rimMat);
-	rimGlow.position.set(btn.x, btn.y, 0.1);
-	rimGlow.scale.setScalar(2.6);
-	scene.scene.add(rimGlow);
-	// barely there: a soft additive disc over the hole washes the whole view
-	tween(1100, 'outCubic', (v) => (rimMat.opacity = v * 0.1));
-	const escaping = particles.emitter({
-		texture: sprites.star4,
-		count: 200,
-		emitRate: 55,
-		origin: new THREE.Vector3(btn.x, btn.y, 0.2),
-		originSpread: 0.35,
-		direction: new THREE.Vector3(0, 0.35, 1),
-		cone: 0.6,
-		speed: [0.5, 1.8],
-		gravity: new THREE.Vector3(0, 0.4, 0),
-		life: [0.9, 2],
-		size: [0.03, 0.1],
-		colors: [0xbfffd8, 0xfff3cf, 0xa8e0ff, 0xffd6f0],
-		fadeIn: 0.1
-	});
-	await opening;
-	audio.sfxLoop('wooWoo');
 
 	// ================================================================ THE KINGDOM
 	const world = new THREE.Group();
@@ -823,6 +781,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	const fill = new THREE.HemisphereLight(0xcfe8ff, 0x5a7a3a, 1.15);
 	world.add(fill);
 
+	await delay(0); // yield: the machine is mid-animation and must keep moving
 	world.add(buildGround());
 
 	// Trees, toadstools and clouds are static scenery, and built naively they
@@ -846,7 +805,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	for (let i = 0; i < 320; i++) {
 		const x = rand(-120, 120);
-		const z = rand(24, -300);
+		const z = rand(-10, -300);
 		const nearPath = Math.abs(x) < 10;
 		if (nearPath && Math.random() < 0.8) continue;
 		if (Math.hypot(x, z - CASTLE_Z) < 22) continue; // keep the castle plateau clear
@@ -858,7 +817,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	}
 	for (let i = 0; i < 26; i++) {
 		const cloud = buildCloud();
-		cloud.position.set(rand(-110, 110), rand(26, 44), rand(20, -300));
+		cloud.position.set(rand(-110, 110), rand(26, 44), rand(-12, -300));
 		cloud.rotation.y = rand(0, 6.28);
 		bake(cloud);
 	}
@@ -870,6 +829,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 		world.add(new THREE.Mesh(merged, toon(hex, isCloud ? { emissive: 0x30343c, emissiveIntensity: 0.3 } : {})));
 	}
 
+	await delay(0); // yield: the machine is mid-animation and must keep moving
 	// ---- landmarks, so the journey has things to pass rather than just hills
 	const lakeMat = toon(0x4aa8d8, { roughness: 0.25, metalness: 0.15, flatShading: false });
 	const lake = new THREE.Mesh(new THREE.CircleGeometry(LAKE.r * 0.92, 40), lakeMat);
@@ -900,10 +860,12 @@ export async function play(ctx: EffectContext): Promise<void> {
 	rainbow.rotation.y = 0.22;
 	world.add(rainbow);
 
+	await delay(0); // yield: the machine is mid-animation and must keep moving
 	const { castle, balcony, pennants } = buildCastle();
 	castle.position.set(0, groundHeight(0, CASTLE_Z) - 1.5, CASTLE_Z);
 	world.add(castle);
 
+	await delay(0); // yield: the machine is mid-animation and must keep moving
 	// ---- the king, on his balcony, facing the way we come in
 	const { king, armR, head, brows } = buildKing();
 	const kingPos = balcony.clone().add(castle.position);
@@ -931,6 +893,18 @@ export async function play(ctx: EffectContext): Promise<void> {
 	cupGlow.position.set(0, 0.62, 0);
 	trophy.add(cupGlow);
 
+	await delay(0); // yield: the machine is mid-animation and must keep moving
+	// Anything of the kingdom that lands in FRONT of the wall in world space —
+	// the near lip of the ground, a tree at the edge of the plane, a fairy that
+	// wandered close — renders in the machine room, floating in the lounge. A
+	// world-space clipping plane at the leather cuts all of it off, so the only
+	// way the kingdom can be seen is through the hole. Moving the plane out of
+	// the way later is just a constant change, which costs no recompile — where
+	// toggling localClippingEnabled would rebuild every shader mid-flight.
+	const clip = new THREE.Plane(new THREE.Vector3(0, 0, -1), -0.78);
+	const clipping0 = scene.renderer.localClippingEnabled;
+	scene.renderer.localClippingEnabled = true;
+
 	// ---- fairies
 	const dust = new Dust(sprites.softDot);
 	world.add(dust.points);
@@ -953,7 +927,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 		const home = new THREE.Vector3(
 			rand(-11, 11),
 			0,
-			THREE.MathUtils.lerp(0, -52, t) + rand(-5, 5)
+			THREE.MathUtils.lerp(-9, -58, t) + rand(-4, 4)
 		);
 		home.y = groundHeight(home.x, home.z) + rand(2.5, 6.5);
 		group.position.copy(home);
@@ -1102,8 +1076,70 @@ export async function play(ctx: EffectContext): Promise<void> {
 		cupGlow.scale.setScalar(0.62 + Math.sin(time * 3.4) * 0.09);
 	});
 
-	// ---- through the window. No cut and no whiteout: the kingdom is genuinely
-	// behind the wall, so we simply advance until the entry plane is past us.
+	world.traverse((o) => {
+		const mat = (o as THREE.Mesh).material;
+		if (!mat) return;
+		for (const m of Array.isArray(mat) ? mat : [mat]) m.clippingPlanes = [clip];
+	});
+
+	// ---- and NOW open it. The kingdom above is already standing behind the
+	// wall, so the iris uncovers a view rather than an empty socket — which is
+	// what it did while this was built afterwards.
+	// The backplate has to go at the same moment: it fades to nothing but still
+	// writes depth, so it would block the view through its own hole.
+	backplateFace.visible = false;
+	const opening = machine.openIris(0.78, 1100);
+	machine.portal.visible = false;
+	machine.setInnerGlow(0.15, 0x8fffb8);
+	tween(1100, 'inOutQuad', (v) => {
+		// eases OFF: an additive glow in the bore would fog the view through it
+		machine.setInnerGlow(0.15 * (1 - v), 0x8fffb8);
+		scene.fxLight.intensity = v * 3;
+	});
+
+	// a rim of light where the two worlds meet
+	const rimMat = new THREE.SpriteMaterial({
+		map: sprites.softDot,
+		color: 0xa8ffcf,
+		transparent: true,
+		opacity: 0,
+		blending: THREE.AdditiveBlending,
+		depthWrite: false
+	});
+	const rimGlow = new THREE.Sprite(rimMat);
+	rimGlow.position.set(btn.x, btn.y, 0.1);
+	rimGlow.scale.setScalar(2.6);
+	scene.scene.add(rimGlow);
+	// barely there: a soft additive disc over the hole washes the whole view
+	tween(1100, 'outCubic', (v) => (rimMat.opacity = v * 0.1));
+	const escaping = particles.emitter({
+		texture: sprites.star4,
+		count: 200,
+		emitRate: 55,
+		origin: new THREE.Vector3(btn.x, btn.y, 0.2),
+		originSpread: 0.35,
+		direction: new THREE.Vector3(0, 0.35, 1),
+		cone: 0.6,
+		speed: [0.5, 1.8],
+		gravity: new THREE.Vector3(0, 0.4, 0),
+		life: [0.9, 2],
+		size: [0.03, 0.1],
+		colors: [0xbfffd8, 0xfff3cf, 0xa8e0ff, 0xffd6f0],
+		fadeIn: 0.1
+	});
+	await opening;
+	audio.sfxLoop('wooWoo');
+
+	// ---- through the window.
+	//
+	// The wall is FIXED in world space, so the hole is a fixed size on screen no
+	// matter how far the kingdom advances behind it — which is why hiding the
+	// machine read as a jump cut. The camera has to physically dolly INTO the
+	// hole until it is wider than the frame. At a hole radius of 1.02 the frame
+	// is covered once the camera is within ~1.9 units of the wall, so the rig
+	// runs all the way in to z 0.85 and only then is there nothing left to see
+	// of the machine. The kingdom's own view is set by the virtual camera, so
+	// the dolly does not disturb it one bit.
 	await delay(420);
 	audio.sfx('swoosh', { pitch: 0.6, gain: 0.6 });
 	haptics.vibrate([25, 30, 90]);
@@ -1114,29 +1150,45 @@ export async function play(ctx: EffectContext): Promise<void> {
 	const keep0 = scene.keyLight.intensity;
 	const fill0 = scene.fillLight.intensity;
 	const rim0 = scene.rimLight.intensity;
+	const rigZ0 = scene.rig.position.z;
+	// 0.68, not 0.85: the hole has to clear the frame's CORNERS, not its edges.
+	// At a 1.02 radius that needs the camera within ~1.5 units of the wall —
+	// stop at 0.85 and there is still leather in the corners when it is dropped.
+	const RIG_IN = 0.68;
+
+	await Promise.all([
+		tween(2100, 'inQuad', (v) => {
+			scene.rig.position.z = rigZ0 - v * (rigZ0 - RIG_IN);
+			rimMat.opacity = 0.1 * (1 - v);
+		}),
+		// the kingdom comes to meet us as we go in
+		tween(2100, 'inQuad', (v) => (travel = v * ENTRY_T * 1.6))
+	]);
+
+	// nothing of the machine is on screen any more — the hole is wider than the
+	// frame — so it can go, and the rig can snap back with nobody the wiser
+	machine.group.visible = false;
+	scene.scene.remove(rimGlow);
+	escaping.stop();
+	clip.constant = 1e6; // nothing left to hide behind: stop clipping
+	scene.rig.position.z = rigZ0;
+	scene.scene.environmentIntensity = 0; // world-space reflections would swim
+	scene.keyLight.intensity = 0;
+	scene.fillLight.intensity = 0;
+	scene.rimLight.intensity = 0;
+	scene.scene.fog = new THREE.Fog(0xe8dcc0, 150, 520);
+	audio.stopAllLoops(200);
+	audio.sfx('chime', { pitch: 1.3, gain: 0.6 });
 
 	// the whole run of the journey, one long unbroken sweep
-	const journey = tween(11200, inOutSine, (v) => {
-		travel = v * 0.9;
-		// once the entry plane is behind us the machine has no more to give
-		if (travel > ENTRY_T && machine.group.visible) {
-			machine.group.visible = false;
-			scene.scene.remove(rimGlow);
-			escaping.stop();
-			scene.scene.environmentIntensity = 0; // world-space reflections would swim
-			scene.keyLight.intensity = 0;
-			scene.fillLight.intensity = 0;
-			scene.rimLight.intensity = 0;
-			scene.scene.fog = new THREE.Fog(0xe8dcc0, 150, 520);
-			audio.stopAllLoops(200);
-			audio.sfx('chime', { pitch: 1.3, gain: 0.6 });
-		}
+	const journey = tween(9600, inOutSine, (v) => {
+		travel = ENTRY_T * 1.6 + v * (0.9 - ENTRY_T * 1.6);
 	});
-	await delay(1500);
+	await delay(1400);
 	audio.sfx('chime', { pitch: 0.9, gain: 0.35 });
-	await delay(3200);
+	await delay(3000);
 	audio.sfx('ding', { pitch: 1.8, gain: 0.22 });
-	await delay(3400);
+	await delay(3000);
 	audio.sfx('ding', { pitch: 2.1, gain: 0.2 });
 	await journey;
 
@@ -1235,14 +1287,28 @@ export async function play(ctx: EffectContext): Promise<void> {
 	});
 	await tween(2500, 'inOutCubic', (v) => (travel = 1 - v));
 
-	// ---- back through the hole, the same way we came
+	// ---- back through the hole, the same way we came: the machine returns at
+	// the same distance we left it at, so it is still off-frame, and then the
+	// rig pulls back out until the window shrinks to a hole in the leather again
 	audio.sfx('boom', { pitch: 0.9, gain: 0.5 });
+	scene.rig.position.z = RIG_IN;
+	clip.constant = -0.78;
 	machine.group.visible = true;
 	scene.scene.add(rimGlow);
-	rimMat.opacity = 0.1;
-	await tween(520, 'linear', (v) => (travel = 0.06 * (1 - v)));
-	world.visible = false;
+	rimMat.opacity = 0;
 	scene.scene.fog = null;
+	scene.scene.environmentIntensity = envIntensity0;
+	scene.keyLight.intensity = keep0;
+	scene.fillLight.intensity = fill0;
+	scene.rimLight.intensity = rim0;
+	await Promise.all([
+		tween(900, 'outQuad', (v) => {
+			scene.rig.position.z = RIG_IN + v * (rigZ0 - RIG_IN);
+			rimMat.opacity = v * 0.1;
+		}),
+		tween(900, 'outQuad', (v) => (travel = ENTRY_T * 1.6 * (1 - v)))
+	]);
+	world.visible = false;
 	scene.camera.far = far0;
 	scene.camera.updateProjectionMatrix();
 	scene.scene.environmentIntensity = envIntensity0;
@@ -1252,6 +1318,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 	warp.stop();
 	audio.stopAllLoops(180);
 	scene.shake(0.35);
+	scene.camera.far = far0;
+	scene.camera.updateProjectionMatrix();
 	haptics.vibrate([30, 40, 90]);
 
 	await tween(650, 'outCubic', (v) => (rimMat.opacity = 0.1 * (1 - v)));
@@ -1270,6 +1338,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	// ---- shut the door
 	stopSim();
+	scene.renderer.localClippingEnabled = clipping0;
 	scene.scene.remove(world);
 	disposeObject(world);
 	dust.points.geometry.dispose();
