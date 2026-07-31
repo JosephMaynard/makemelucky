@@ -40,6 +40,91 @@
 		<meta name="apple-mobile-web-app-title" content="Make Me Lucky" />
 		<meta name="mobile-web-app-capable" content="yes" />
 
+		<!-- Critical CSS: the loading overlay must be styled before ANY
+		     stylesheet arrives (the bundle is injected by JS in dev), or the
+		     first paint is a flash of unstyled HTML. Everything the overlay
+		     needs lives here and nowhere else. -->
+		<style>
+			body {
+				margin: 0;
+				background: #071407;
+			}
+			#loading {
+				position: fixed;
+				inset: 0;
+				background: radial-gradient(ellipse at 50% 45%, #16301a 0%, #071407 85%);
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				gap: 24px;
+				z-index: 20;
+				transition: opacity 0.8s ease;
+			}
+			#loading.done {
+				opacity: 0;
+				pointer-events: none;
+			}
+			#loading p {
+				margin: 0;
+				color: #c9a959;
+				font-family: 'Roboto Slab', Georgia, serif;
+				letter-spacing: 0.12em;
+				font-size: 14px;
+				text-transform: uppercase;
+			}
+			/* The 2026 double ring, in the machine's own language: two gold
+			   arcs turning with a mechanical cadence, a pearl-dot ring
+			   counter-rotating inside them, and a lucky clover glowing at
+			   the heart of it. */
+			.loading-ring {
+				position: relative;
+				width: 92px;
+				height: 92px;
+				border-radius: 50%;
+				border: 3px solid rgba(201, 169, 89, 0.16);
+				border-top-color: #f0d488;
+				border-bottom-color: #f0d488;
+				box-shadow:
+					0 0 22px rgba(240, 212, 136, 0.14),
+					inset 0 0 14px rgba(240, 212, 136, 0.08);
+				animation: lucky-spin 1.4s cubic-bezier(0.55, 0.12, 0.45, 0.88) infinite;
+			}
+			.loading-ring::before {
+				content: '';
+				position: absolute;
+				inset: 9px;
+				border-radius: 50%;
+				border: 3px dotted rgba(222, 234, 240, 0.85);
+				animation: lucky-spin 2.6s linear infinite reverse;
+			}
+			.loading-ring::after {
+				content: '\2618';
+				position: absolute;
+				inset: 0;
+				display: grid;
+				place-items: center;
+				font-size: 32px;
+				color: #8fdc78;
+				text-shadow: 0 0 14px rgba(127, 220, 120, 0.85);
+				animation: lucky-pulse 1.6s ease-in-out infinite;
+			}
+			@keyframes lucky-spin {
+				to { transform: rotate(360deg); }
+			}
+			@keyframes lucky-pulse {
+				0%, 100% { transform: scale(0.9); opacity: 0.72; }
+				50% { transform: scale(1.1); opacity: 1; }
+			}
+			@media (prefers-reduced-motion: reduce) {
+				.loading-ring,
+				.loading-ring::before,
+				.loading-ring::after {
+					animation: none;
+				}
+			}
+		</style>
+
 		<link rel="preload" href="/fonts/RobotoSlab-Bold-webfont.woff2" as="font" type="font/woff2" crossorigin />
 		<link rel="preload" href="/fonts/RobotoSlab-Regular-webfont.woff2" as="font" type="font/woff2" crossorigin />
 		<link rel="preconnect" href="https://us.i.posthog.com" crossorigin />
@@ -57,8 +142,8 @@
 				"author": { "@type": "Person", "name": "Joseph Maynard" }
 			}
 		</script>
-		<script type="module" crossorigin src="/assets/index-B5ZTOgoh.js"></script>
-		<link rel="stylesheet" crossorigin href="/assets/index-DjPvnQ9T.css">
+		<script type="module" crossorigin src="/assets/index-BuTe6ZB_.js"></script>
+		<link rel="stylesheet" crossorigin href="/assets/index-BXE7Y9eW.css">
 	<link rel="manifest" href="/manifest.webmanifest"></head>
 	<body>
 		<!-- ============ HERO: the Luck Machine ============ -->
