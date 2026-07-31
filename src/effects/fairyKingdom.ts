@@ -1599,7 +1599,31 @@ export async function play(ctx: EffectContext): Promise<void> {
 		head.rotation.y = v * 0.62;
 		head.rotation.x = -v * 0.26;
 	});
-	await delay(2300);
+	// ---- and the gift CHARGES: the glow swells while a tightening spiral of
+	// golden motes is gathered into the cup, so the star's launch is a payoff
+	// rather than a surprise. Kingdom dust, not the shared particle system —
+	// world-space particles would swim under the virtual camera.
+	const chargePos = new THREE.Vector3();
+	cupGlow.getWorldPosition(chargePos);
+	world.worldToLocal(chargePos);
+	const chargeGold = new THREE.Color(0xffe9ad);
+	const chargeWhite = new THREE.Color(0xfff7e0);
+	await tween(2300, 'inQuad', (v) => {
+		cupBoost = 0.5 + v * 0.85;
+		cupGlowMat.opacity = Math.min(1, 0.92 + v * 0.08);
+		const n = 1 + Math.round(v * 3); // the inrush thickens as it builds
+		for (let i = 0; i < n; i++) {
+			const a = v * 26 + i * 2.4;
+			const r = 0.95 * (1 - v) + 0.16;
+			dust.spawn(
+				chargePos.x + Math.cos(a) * r,
+				chargePos.y + Math.sin(a * 0.7) * r * 0.45 + rand(0, 0.25),
+				chargePos.z + Math.sin(a) * r,
+				Math.random() < 0.6 ? chargeGold : chargeWhite,
+				rand(0.35, 0.7)
+			);
+		}
+	});
 
 	// ---- the luck comes out of the cup and straight at you
 	const starMat = new THREE.SpriteMaterial({
