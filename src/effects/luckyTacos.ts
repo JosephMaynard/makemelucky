@@ -193,8 +193,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 	const maracaL = buildMaraca(0xe23d3d);
 	const maracaR = buildMaraca(0x2fae5e);
 	const maracaHomeY = btnPos.y - 0.2;
-	maracaL.position.set(btnPos.x - 1.05, -3.2, 0.6);
-	maracaR.position.set(btnPos.x + 1.05, -3.2, 0.6);
+	maracaL.position.set(btnPos.x - 1.05, -3.2, 1.1);
+	maracaR.position.set(btnPos.x + 1.05, -3.2, 1.1);
 	scene.scene.add(maracaL, maracaR);
 
 	// the sunstone: 4 sauce bottles + 16 chips in two counter-rotating rings,
@@ -266,6 +266,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	let groove = 0; // 0 still, 1 full fiesta
 	let shakePunch = 0; // extra maraca throw for "shake, shake, shake"
 	let chipsFalling = false;
+	let chipsRespawn = true; // rain dries up by letting the last chips fall out
 	let tacoTime = false;
 	let pirouette = false; // the exit owns the button transform
 	let maracasHeld = true; // false once they dive down the hole
@@ -322,8 +323,12 @@ export async function play(ctx: EffectContext): Promise<void> {
 				chip.rotation.x += chip.userData.spinX * dt;
 				chip.rotation.z += chip.userData.spinZ * dt;
 				if (chip.position.y < -2.2) {
-					chip.position.set(rainX(), rand(2.2, 3.6), rand(0.5, 0.65));
-					chip.userData.fall = rand(1.1, 1.9);
+					if (chipsRespawn) {
+						chip.position.set(rainX(), rand(2.2, 3.6), rand(0.5, 0.65));
+						chip.userData.fall = rand(1.1, 1.9);
+					} else {
+						chip.visible = false; // fell out of shot, done — never freeze mid-air
+					}
 				}
 			}
 		}
@@ -502,6 +507,11 @@ export async function play(ctx: EffectContext): Promise<void> {
 	tween(1200, (v) => Math.sin(v * Math.PI), (v) => (ringRate = 0.45 + v * 1.1));
 	flashPulse(machine, 0.4, 90, 600, 0xffd27a);
 
+	// the rain dries up early: no more respawns, the last chips simply fall
+	// off the bottom of the frame. The rings carry the finale — they're better.
+	await at(17500);
+	chipsRespawn = false;
+
 	// ================================================================ THE EXIT (from ~20s)
 	// ONE continuous move: bounce dancing straight into a forward swoop, a
 	// double pirouette, then a backflip home — during which the hat and both
@@ -510,13 +520,6 @@ export async function play(ctx: EffectContext): Promise<void> {
 	await at(20200);
 	tacoTime = false;
 	for (const taco of tacos) taco.visible = false;
-	chipsFalling = false;
-	tween(600, 'inQuad', (v) => (ringOut = 1 - v)).then(() => {
-		for (const item of ringItems) item.obj.visible = false;
-	});
-	setTimeout(() => {
-		for (const chip of rainChips) chip.visible = false;
-	}, 900);
 	await at(20800);
 
 	// the swoop grows straight out of the bounce: no windup pause, the last
@@ -528,7 +531,10 @@ export async function play(ctx: EffectContext): Promise<void> {
 		const s = 1 + v * 0.12; // stretches into the swoop
 		machine.buttonGroup.scale.set(1 / Math.sqrt(s), s, 1 / Math.sqrt(s));
 	});
-	// double pirouette, still travelling
+	// double pirouette, still travelling — the sunstone folds home behind it
+	tween(700, 'inQuad', (v) => (ringOut = 1 - v)).then(() => {
+		for (const item of ringItems) item.obj.visible = false;
+	});
 	await tween(1150, 'inOutCubic', (v) => {
 		machine.buttonGroup.rotation.y = v * Math.PI * 4;
 		const s = 1.12 + Math.sin(v * Math.PI) * 0.08;
