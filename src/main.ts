@@ -206,6 +206,12 @@ async function boot(): Promise<void> {
 	];
 	const todaysFortune = () => FORTUNES[Math.floor(Date.now() / 86400000) % FORTUNES.length];
 
+	// effect_played carries seq + prev so exit analysis is free: the number of
+	// sessions whose LAST effect was E = plays(E) minus events where prev = E.
+	// PostHog bills per event, not per property, so this costs nothing extra.
+	let effectSeq = 0;
+	let prevEffect: string | null = null;
+
 	async function completePress(holdSeconds: number): Promise<void> {
 		if (director.running) return;
 		const isRitual = store.ritualAvailable();
@@ -221,7 +227,9 @@ async function boot(): Promise<void> {
 		}
 		screen.blank();
 		const fx = await director.play();
-		track('effect_played', { effect: fx, ritual: isRitual });
+		effectSeq += 1;
+		track('effect_played', { effect: fx, ritual: isRitual, seq: effectSeq, prev: prevEffect });
+		prevEffect = fx;
 		celebrateCharms(awarded);
 		const quip = isRitual ? todaysFortune() : fx ? QUIPS[fx] : undefined;
 		screen.youAreNowLucky(store.data.luckyness, awarded.length > 0, quip);
@@ -262,7 +270,9 @@ async function boot(): Promise<void> {
 		director.forced = name;
 		const fx = await director.play();
 		director.forced = wasForced;
-		track('effect_played', { effect: fx, via: 'console' });
+		effectSeq += 1;
+		track('effect_played', { effect: fx, via: 'console', seq: effectSeq, prev: prevEffect });
+		prevEffect = fx;
 		screen.youAreNowLucky(store.data.luckyness, false, fx ? QUIPS[fx] : undefined);
 		// reduced motion substitutes something from the calm shortlist
 		return fx === name ? `Played ${fx} 🍀` : `Played ${fx} instead — you've asked for reduced motion. 🍀`;

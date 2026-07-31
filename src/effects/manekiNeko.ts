@@ -244,13 +244,23 @@ function buildNeko(): Neko {
 	pawPivot.add(mitt);
 	cat.add(pawPivot);
 
-	// the other paw stays down, holding the koban
+	// the other paw rests on the koban. It needs an actual ARM — the bare
+	// coin floating against the tummy read as a detached pancake where a paw
+	// should be.
 	const koban = new THREE.Mesh(keep(new THREE.CylinderGeometry(0.15, 0.15, 0.045, 24)), bright);
 	koban.scale.set(1, 1, 0.62); // the oval of an Edo gold piece
 	koban.rotation.x = Math.PI / 2;
 	koban.position.set(-0.17, 0.27, 0.34);
 	koban.rotation.z = 0.42;
 	cat.add(koban);
+	const armL = new THREE.Mesh(keep(new THREE.CapsuleGeometry(0.062, 0.2, 6, 12)), gold);
+	armL.position.set(-0.24, 0.42, 0.22);
+	armL.rotation.z = 0.3;
+	armL.rotation.x = 0.55;
+	cat.add(armL);
+	const mittL = new THREE.Mesh(keep(new THREE.SphereGeometry(0.085, 16, 12)), bright);
+	mittL.position.set(-0.19, 0.36, 0.37);
+	cat.add(mittL);
 
 	// collar and bell
 	const collar = new THREE.Mesh(keep(new THREE.TorusGeometry(0.22, 0.028, 10, 24)), dark);
@@ -631,10 +641,12 @@ export async function play(ctx: EffectContext): Promise<void> {
 			const m = ofuda[i];
 			if (!m.visible) continue;
 			const a = wardT + (i / ofuda.length) * Math.PI * 2;
-			const r = 1.62 * wardOut;
+			// the ring rides higher and wider than the cat: at the old 1.62/0.82
+			// the top talisman sliced straight through the crown of its head
+			const r = 1.7 * wardOut;
 			m.position.set(
 				btn.x + Math.cos(a) * r,
-				btn.y + Math.sin(a) * r * 0.82,
+				btn.y + 0.25 + Math.sin(a) * r * 0.92,
 				0.95 + Math.sin(a * 2) * 0.3
 			);
 			m.rotation.z = Math.sin(t * 2.1 + i) * 0.16 - Math.cos(a) * 0.12;
