@@ -46,6 +46,7 @@ const EFFECTS: Record<string, () => Promise<EffectModule>> = {
 	senbazuru: () => import('./senbazuru'),
 	badLuckGauntlet: () => import('./badLuckGauntlet'),
 	manekiNeko: () => import('./manekiNeko'),
+	luckyTacos: () => import('./luckyTacos'),
 	fairyKingdom: () => import('./fairyKingdom')
 };
 

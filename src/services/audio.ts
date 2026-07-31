@@ -44,7 +44,9 @@ const TRACKS: Record<string, { src: string; volume: number }> = {
 	// 165bpm chiptune for manekiNeko — 21.888s, deliberately Nyan-Cat-adjacent
 	luckyCatWave: { src: '/soundfx/lucky-cat-wave.mp3', volume: 0.9 },
 	// 33s; the king speaks 13s-20s — fairyKingdom's choreography is timed to it
-	fairyKingdom: { src: '/soundfx/fairy-kingdom.mp3', volume: 0.9 }
+	fairyKingdom: { src: '/soundfx/fairy-kingdom.mp3', volume: 0.9 },
+	// 24s mariachi-reggaeton at 126bpm: sung intro 0-9, build 9-13, drop 13-24
+	luckyTacos: { src: '/soundfx/lucky-tacos.mp3', volume: 0.9 }
 };
 
 export class AudioService {
