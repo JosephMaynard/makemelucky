@@ -657,26 +657,44 @@ function buildFairy(tint: number): { group: THREE.Group; wings: THREE.Mesh[] } {
 		eye.position.set(s * 0.05, 0.51, 0.115);
 		g.add(eye);
 	}
+	// proper fairy wings: two teardrop lobes a side, anchored at the shoulder
+	// blades, not the old floating ovals
 	const wings: THREE.Mesh[] = [];
 	const wingMat = new THREE.MeshBasicMaterial({
-		color: 0xa8d8ff,
+		color: 0xcfe8ff,
 		transparent: true,
-		opacity: 0.4,
+		opacity: 0.55,
 		side: THREE.DoubleSide,
 		depthWrite: false,
 		blending: THREE.AdditiveBlending
 	});
+	const wg = fairyWingGeometry();
 	for (const s of [-1, 1]) {
-		for (const [ly, lz, sc] of [[0.46, 0.0, 1], [0.31, 0.0, 0.74]] as const) {
-			const w = new THREE.Mesh(new THREE.CircleGeometry(0.38 * sc, 9), wingMat);
-			w.position.set(s * 0.07, ly, lz - 0.08);
-			w.scale.set(0.6, 1.15, 1);
+		for (const [tilt, sc, ly] of [[0.5, 1, 0.45], [-0.4, 0.62, 0.35]] as const) {
+			const w = new THREE.Mesh(wg, wingMat);
+			w.position.set(s * 0.05, ly, -0.07);
+			w.scale.set(s * sc, sc, 1); // negative x mirrors the left side
+			w.rotation.z = tilt;
 			w.userData.side = s;
 			g.add(w);
 			wings.push(w);
 		}
 	}
 	return { group: g, wings };
+}
+
+/** One wing lobe: a teardrop petal rooted at the origin, sweeping out and up.
+ *  Shared by every wing on every fairy. */
+let fairyWingGeo: THREE.ShapeGeometry | null = null;
+function fairyWingGeometry(): THREE.ShapeGeometry {
+	if (fairyWingGeo) return fairyWingGeo;
+	const s = new THREE.Shape();
+	s.moveTo(0, 0);
+	s.bezierCurveTo(0.04, 0.16, 0.1, 0.38, 0.3, 0.48);
+	s.bezierCurveTo(0.5, 0.56, 0.6, 0.42, 0.5, 0.24);
+	s.bezierCurveTo(0.4, 0.08, 0.15, 0.01, 0, 0);
+	fairyWingGeo = new THREE.ShapeGeometry(s, 10);
+	return fairyWingGeo;
 }
 
 /** A golden cup with your luck in it. */
@@ -823,10 +841,12 @@ function buildKing(): {
 	armL.rotation.z = -0.22;
 	king.add(armL);
 
-	// state dress: ermine collar and a gold belt cinching the robe
-	const collar = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.1, 8, 14), toon(0xfaf6ef));
-	collar.position.set(0, 1.42, 0.02);
-	collar.rotation.x = Math.PI / 2 - 0.12;
+	// state dress: ermine collar and a gold belt cinching the robe. The collar
+	// sits low and flat around the shoulders — any higher and it clips his
+	// mouth mid-decree.
+	const collar = new THREE.Mesh(new THREE.TorusGeometry(0.37, 0.085, 8, 14), toon(0xfaf6ef));
+	collar.position.set(0, 1.3, 0.0);
+	collar.rotation.x = Math.PI / 2 - 0.04;
 	king.add(collar);
 	const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.4, 0.14, 10), goldMat);
 	belt.position.y = 0.6;
@@ -1352,6 +1372,14 @@ export async function play(ctx: EffectContext): Promise<void> {
 		// ---- fairies
 		for (const f of fairies) {
 			f.phase += dt * f.speed;
+			// never fly THROUGH a fairy: anyone close to the camera politely
+			// darts aside, orbit and all, leaving her dust to mark the spot
+			const away = f.group.position.clone().sub(eyeSmooth);
+			const dNear = away.length();
+			if (dNear < 5.5) {
+				away.y *= 0.3; // she darts sideways, not straight up
+				f.home.addScaledVector(away.normalize(), (5.5 - dNear) * dt * 2.4);
+			}
 			f.group.position.set(
 				f.home.x + Math.cos(f.phase) * f.radius,
 				f.home.y + Math.sin(f.phase * 1.7) * 0.7,
@@ -1392,16 +1420,10 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// The backplate has to go at the same moment: it fades to nothing but still
 	// writes depth, so it would block the view through its own hole.
 	backplateFace.visible = false;
-	// The face sections fly FULLY off-screen — machine parts never turn
-	// invisible in this machine, they move. At the old 0.78 slide they parked
-	// mid-frame as four floating chunks with leather crossbars between them;
-	// the distance is computed from the real frame width so they exit on any
-	// screen, phones to ultrawide.
-	const irisThrow =
-		(Math.tan(THREE.MathUtils.degToRad(scene.camera.fov / 2)) * scene.camera.aspect * (5.35 - 0.4) +
-			1.6) *
-		1.42;
-	const opening = machine.openIris(irisThrow, 980);
+	// The face sections slide just clear of the window and PARK there, the
+	// same way the button sits on the rim — honest hardware framing the view
+	// as we fly through it.
+	const opening = machine.openIris(0.78, 820);
 	machine.portal.visible = false;
 	machine.setInnerGlow(0.15, 0x8fffb8);
 	tween(820, 'inOutQuad', (v) => {
@@ -1504,18 +1526,19 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	// ---- the last of it: rise to the turret and turn to the king
 	// the swoosh: right around the castle, climbing, ending on the king
-	await tween(4400, inOutSine, (v) => {
+	const swooshUp = tween(4400, inOutSine, (v) => {
 		travel = SPLIT + v * (1 - SPLIT);
 		gaze = Math.max(0, (v - 0.72) / 0.28);
 		sway = 1 - v * 0.85;
 	});
+	// the vocal draws breath while we round the last turret — his mouth has
+	// to be moving BEFORE the camera settles or he starts a second late
+	await delay(3400);
 
 	// ================================================================ THE KING
-	// Track map: he speaks from 13s to 20s — "By royal decree, I bestow upon
-	// you the Gift of Good Fortune!" — and the camera arrives just as he draws
-	// breath. Mouth, sway and gestures all run off one seven-second clock so
-	// he genuinely delivers the line.
-	sway = 0.12;
+	// Track map: he speaks "By royal decree, I bestow upon you the Gift of
+	// Good Fortune!" — mouth, sway and gestures all run off one seven-second
+	// clock so he genuinely delivers the line.
 	const SYLL: readonly (readonly [number, number])[] = [
 		[0.0, 0.25], [0.45, 0.3], [0.8, 0.2], [1.15, 0.25], [1.45, 0.55], // by ro-yal de-cree
 		[2.5, 0.3], [2.95, 0.2], [3.2, 0.45], [3.8, 0.2], [4.05, 0.2], [4.3, 0.45], // i be-stow up-on you
@@ -1542,6 +1565,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 		armL.rotation.z = -0.22 - gest * 0.55;
 		armL.rotation.x = -gest * 0.3;
 	});
+	await swooshUp; // the camera settles mid-phrase
+	sway = 0.12;
 	// he bows through the opening of the line...
 	await tween(1100, 'inOutQuad', (v) => {
 		const b = Math.sin(v * Math.PI);
@@ -1549,7 +1574,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 		head.rotation.x = b * 0.18;
 	});
 	// ...and the cup rises exactly on "the Gift of Good Fortune!"
-	await delay(3900);
+	await delay(2900);
 	haptics.vibrate([20, 40, 70]);
 	await tween(1000, 'outBack', (v) => {
 		armR.rotation.z = v * 2.05;
@@ -1565,11 +1590,16 @@ export async function play(ctx: EffectContext): Promise<void> {
 		cupGlowMat.opacity = 0.8 + v * 0.12;
 		cupBoost = v * 0.5;
 	});
-	await speech; // the line lands (~20s on the track)
+	await speech; // the line lands
 	const mouthAt = mouth.scale.y;
 	tween(350, 'outQuad', (v) => (mouth.scale.y = mouthAt + (0.24 - mouthAt) * v));
-	// he holds the gift aloft, beaming, and gives you a good long look at it
-	await delay(2100);
+	// he holds the gift aloft and turns to admire it himself, as one should —
+	// staring down the lens through the whole hold read as a waxwork
+	tween(750, 'inOutQuad', (v) => {
+		head.rotation.y = v * 0.62;
+		head.rotation.x = -v * 0.26;
+	});
+	await delay(2300);
 
 	// ---- the luck comes out of the cup and straight at you
 	const starMat = new THREE.SpriteMaterial({
@@ -1667,7 +1697,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// Shut it STRAIGHT AWAY. Waiting for the rim to fade and the sparks to fly
 	// before starting the iris left a second and a half of empty socket sitting
 	// there — the door closes under all of it instead.
-	const closing = machine.closeIris(980); // the sections fly back in from off-screen
+	const closing = machine.closeIris(820);
 	// the fairyland grade drains away with the doorway
 	tween(1100, 'inOutQuad', (v) => {
 		scene.setVignetteTint(vigTint.setRGB(0.26 * (1 - v), 0.06 * (1 - v), 0.34 * (1 - v)));
