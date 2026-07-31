@@ -43,8 +43,8 @@ import { dimLights, flashPulse, disposeObject } from './helpers';
 import { luckyWord } from './luckyWord';
 import type { EffectContext } from '../types';
 
-export const sound = 'cloudsTunnel';
-export const duration = 27500;
+export const sound = 'fairyKingdom';
+export const duration = 34500;
 
 // ---------------------------------------------------------------- palette
 const C = {
@@ -298,21 +298,37 @@ function buildCottage(): THREE.Group {
 
 /** A humpbacked stone bridge over the lake. */
 function buildBridge(): THREE.Group {
+	// slim arched footbridge, not a motorway: narrow warm deck, wooden posts,
+	// and handrails that follow the arc
 	const g = new THREE.Group();
-	const stone = toon(0xd8cdb8);
+	const deckMat = toon(0xe2d5ba);
+	const woodMat = toon(0xa8845c);
+	const arcY = (t: number) => Math.sin(t * Math.PI) * 2.6;
 	for (let i = 0; i <= 12; i++) {
 		const t = i / 12;
-		const seg = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.7, 5.4), stone);
-		seg.position.set(0, Math.sin(t * Math.PI) * 2.6, (t - 0.5) * 78);
+		const seg = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.42, 6.8), deckMat);
+		seg.position.set(0, arcY(t), (t - 0.5) * 78);
 		seg.rotation.x = Math.cos(t * Math.PI) * 0.14;
 		g.add(seg);
 	}
 	for (const side of [-1, 1]) {
 		for (let i = 0; i <= 12; i++) {
 			const t = i / 12;
-			const post = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.1, 0.5), stone);
-			post.position.set(side * 2.4, Math.sin(t * Math.PI) * 2.6 + 0.8, (t - 0.5) * 78);
+			const post = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.2, 0.3), woodMat);
+			post.position.set(side * 1.45, arcY(t) + 0.75, (t - 0.5) * 78);
 			g.add(post);
+		}
+		// handrail segments chasing the arc between post tops
+		for (let i = 0; i < 12; i++) {
+			const t0 = i / 12;
+			const t1 = (i + 1) / 12;
+			const z0 = (t0 - 0.5) * 78;
+			const z1 = (t1 - 0.5) * 78;
+			const len = Math.hypot(z1 - z0, arcY(t1) - arcY(t0));
+			const railSeg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, len + 0.2), woodMat);
+			railSeg.position.set(side * 1.45, (arcY(t0) + arcY(t1)) / 2 + 1.35, (z0 + z1) / 2);
+			railSeg.rotation.x = -Math.atan2(arcY(t1) - arcY(t0), z1 - z0);
+			g.add(railSeg);
 		}
 	}
 	return g;
@@ -332,10 +348,77 @@ function buildRainbow(): THREE.Group {
 	return g;
 }
 
+/** Near-white stone coursework — block rows with mortar lines and per-block
+ *  tonal wobble. White-based so each material's own colour still tints it. */
+let stoneBlocksTex: THREE.CanvasTexture | null = null;
+function stoneBlocks(): THREE.CanvasTexture {
+	if (stoneBlocksTex) return stoneBlocksTex;
+	const cv = document.createElement('canvas');
+	cv.width = cv.height = 256;
+	const c = cv.getContext('2d')!;
+	c.fillStyle = '#ffffff';
+	c.fillRect(0, 0, 256, 256);
+	for (let r = 0; r < 8; r++) {
+		const off = r % 2 ? 32 : 0;
+		for (let b = -1; b < 4; b++) {
+			c.fillStyle = `rgba(140, 118, 96, ${rand(0.02, 0.1).toFixed(3)})`;
+			c.fillRect(b * 64 + off + 2, r * 32 + 2, 60, 28);
+		}
+	}
+	c.strokeStyle = 'rgba(118, 98, 80, 0.25)';
+	c.lineWidth = 2;
+	for (let r = 0; r <= 8; r++) {
+		c.beginPath();
+		c.moveTo(0, r * 32);
+		c.lineTo(256, r * 32);
+		c.stroke();
+	}
+	for (let r = 0; r < 8; r++) {
+		const off = r % 2 ? 32 : 0;
+		for (let b = 0; b < 5; b++) {
+			const x = (b * 64 + off) % 256;
+			c.beginPath();
+			c.moveTo(x, r * 32);
+			c.lineTo(x, r * 32 + 32);
+			c.stroke();
+		}
+	}
+	const tex = new THREE.CanvasTexture(cv);
+	tex.colorSpace = THREE.SRGBColorSpace;
+	tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+	stoneBlocksTex = tex;
+	return tex;
+}
+
+/** A heraldic banner to hang on the keep: coloured field, gold border and a
+ *  lucky clover device. */
+function bannerTexture(bg: string): THREE.CanvasTexture {
+	const cv = document.createElement('canvas');
+	cv.width = 64;
+	cv.height = 128;
+	const c = cv.getContext('2d')!;
+	c.fillStyle = bg;
+	c.fillRect(0, 0, 64, 128);
+	c.strokeStyle = '#f2c14e';
+	c.lineWidth = 5;
+	c.strokeRect(3, 3, 58, 122);
+	c.fillStyle = '#f2c14e';
+	c.textAlign = 'center';
+	c.textBaseline = 'middle';
+	c.font = '34px Georgia, serif';
+	c.fillText('☘', 32, 58);
+	const tex = new THREE.CanvasTexture(cv);
+	tex.colorSpace = THREE.SRGBColorSpace;
+	return tex;
+}
+
 /** One tower: shaft, crown of crenellations, conical roof, finial and pennant. */
 function buildTower(radius: number, height: number, roof: number, flag = true, roofed = true): THREE.Group {
 	const g = new THREE.Group();
-	const shaft = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius * 1.08, height, 9), toon(C.stone));
+	const shaft = new THREE.Mesh(
+		new THREE.CylinderGeometry(radius, radius * 1.08, height, 9),
+		toon(C.stone, { map: stoneBlocks() })
+	);
 	shaft.position.y = height / 2;
 	g.add(shaft);
 	// a band of darker stone so the tower has a waist
@@ -349,6 +432,14 @@ function buildTower(radius: number, height: number, roof: number, flag = true, r
 		const cone = new THREE.Mesh(new THREE.ConeGeometry(radius * 1.24, height * 0.62, 9), toon(roof));
 		cone.position.y = height + height * 0.31 + 0.2;
 		g.add(cone);
+		// gold eaves trim where roof meets stone
+		const eaves = new THREE.Mesh(
+			new THREE.TorusGeometry(radius * 1.18, 0.07, 6, 18),
+			toon(C.gold, { emissive: 0x3a2a06, emissiveIntensity: 0.5 })
+		);
+		eaves.position.y = height + 0.26;
+		eaves.rotation.x = Math.PI / 2;
+		g.add(eaves);
 		const finial = new THREE.Mesh(new THREE.SphereGeometry(radius * 0.2, 8, 6), toon(C.gold, { emissive: 0x3a2a06, emissiveIntensity: 0.6 }));
 		finial.position.y = height + height * 0.62 + 0.3;
 		g.add(finial);
@@ -362,15 +453,16 @@ function buildTower(radius: number, height: number, roof: number, flag = true, r
 		pennant.userData.flag = true;
 		g.add(pennant);
 	}
-	// windows, some of them lit
-	for (let i = 0; i < 4; i++) {
+	// windows, some of them lit — enough of them that the big shafts read as
+	// lived-in during the close swoop, not blank plaster
+	for (let i = 0; i < 7; i++) {
 		const a = rand(0, 6.28);
 		const lit = Math.random() < 0.55;
 		const win = new THREE.Mesh(
 			new THREE.BoxGeometry(0.42, 0.62, 0.12),
 			toon(lit ? 0xffd98a : 0x4a3f52, lit ? { emissive: 0xffb347, emissiveIntensity: 1.5 } : {})
 		);
-		const y = 1.6 + (i / 4) * (height - 2.6);
+		const y = 1.6 + (i / 7) * (height - 2.6);
 		win.position.set(Math.cos(a) * radius * 0.99, y, Math.sin(a) * radius * 0.99);
 		win.rotation.y = -a + Math.PI / 2;
 		g.add(win);
@@ -393,7 +485,10 @@ function buildCastle(): { castle: THREE.Group; balcony: THREE.Vector3; pennants:
 	castle.add(rock);
 
 	// curtain wall
-	const wall = new THREE.Mesh(new THREE.CylinderGeometry(11, 11.6, 5.5, 10, 1, true), toon(C.stone, { side: THREE.DoubleSide }));
+	const wall = new THREE.Mesh(
+		new THREE.CylinderGeometry(11, 11.6, 5.5, 10, 1, true),
+		toon(C.stone, { side: THREE.DoubleSide, map: stoneBlocks() })
+	);
 	wall.position.y = 2.75;
 	castle.add(wall);
 	for (let i = 0; i < 30; i++) {
@@ -403,11 +498,56 @@ function buildCastle(): { castle: THREE.Group; balcony: THREE.Vector3; pennants:
 		merlon.rotation.y = -a;
 		castle.add(merlon);
 	}
+	// bartizans: little lookout turrets hung at the wall's quarters
+	for (let i = 0; i < 4; i++) {
+		const a = Math.PI / 4 + (i / 4) * Math.PI * 2;
+		const bart = new THREE.Group();
+		const drum = new THREE.Mesh(
+			new THREE.CylinderGeometry(0.95, 0.8, 2.4, 8),
+			toon(C.stone, { map: stoneBlocks() })
+		);
+		bart.add(drum);
+		const cap = new THREE.Mesh(new THREE.ConeGeometry(1.15, 1.7, 8), toon(i % 2 ? C.roofA : C.roofC));
+		cap.position.y = 2;
+		bart.add(cap);
+		bart.position.set(Math.cos(a) * 11.2, 6.2, Math.sin(a) * 11.2);
+		castle.add(bart);
+	}
 
-	// the keep
-	const keep = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 5.1, 13, 10), toon(C.stone));
+	// the keep, dressed: coursework, a ring of windows, heraldic banners
+	const keep = new THREE.Mesh(
+		new THREE.CylinderGeometry(4.6, 5.1, 13, 10),
+		toon(C.stone, { map: stoneBlocks() })
+	);
 	keep.position.y = 6.5;
 	castle.add(keep);
+	for (let i = 0; i < 8; i++) {
+		const a = (i / 8) * Math.PI * 2 + 0.35;
+		const lit = Math.random() < 0.55;
+		const win = new THREE.Mesh(
+			new THREE.BoxGeometry(0.55, 0.85, 0.14),
+			toon(lit ? 0xffd98a : 0x4a3f52, lit ? { emissive: 0xffb347, emissiveIntensity: 1.5 } : {})
+		);
+		const y = 4 + (i % 3) * 3.2;
+		const r = 5.05 - ((y - 4) / 13) * 0.5; // the keep tapers
+		win.position.set(Math.cos(a) * r * 0.99, y, Math.sin(a) * r * 0.99);
+		win.rotation.y = -a + Math.PI / 2;
+		castle.add(win);
+	}
+	for (const [side, bg] of [[-1, '#d45a8e'], [1, '#6f7fe0']] as const) {
+		const banner = new THREE.Mesh(
+			new THREE.PlaneGeometry(1.5, 3.6),
+			new THREE.MeshStandardMaterial({
+				map: bannerTexture(bg),
+				roughness: 0.9,
+				metalness: 0,
+				side: THREE.DoubleSide
+			})
+		);
+		banner.position.set(side * 2.6, 8.6, 4.3);
+		banner.rotation.x = -0.06; // hangs off the wall a touch
+		castle.add(banner);
+	}
 	const keepRoof = new THREE.Mesh(new THREE.ConeGeometry(5.8, 7.5, 10), toon(C.roofB));
 	keepRoof.position.y = 16.6;
 	castle.add(keepRoof);
@@ -415,7 +555,8 @@ function buildCastle(): { castle: THREE.Group; balcony: THREE.Vector3; pennants:
 	keepBall.position.y = 20.7;
 	castle.add(keepBall);
 
-	// the gate, facing the way we arrive (+z)
+	// the gatehouse, facing the way we arrive (+z): a proper entrance, not a
+	// brown slab — plank door, portcullis bars, and two flanking drum towers
 	const gate = new THREE.Mesh(new THREE.BoxGeometry(3.4, 4.6, 1.2), toon(0x8a5a3b));
 	gate.position.set(0, 2.3, 11.2);
 	castle.add(gate);
@@ -423,6 +564,28 @@ function buildCastle(): { castle: THREE.Group; balcony: THREE.Vector3; pennants:
 	arch.position.set(0, 4.6, 11.2);
 	arch.rotation.set(Math.PI / 2, 0, 0);
 	castle.add(arch);
+	// plank lines + iron straps on the door face
+	for (let i = -1; i <= 1; i++) {
+		const plank = new THREE.Mesh(new THREE.BoxGeometry(0.06, 4.4, 0.06), toon(0x6b4227));
+		plank.position.set(i * 1.05, 2.3, 11.84);
+		castle.add(plank);
+	}
+	for (const y of [1.2, 3.4]) {
+		const strap = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.18, 0.06), toon(0x3a3026));
+		strap.position.set(0, y, 11.86);
+		castle.add(strap);
+	}
+	// the portcullis, half-raised in welcome
+	for (let i = -2; i <= 2; i++) {
+		const bar = new THREE.Mesh(new THREE.BoxGeometry(0.09, 1.7, 0.09), toon(0x3a3026));
+		bar.position.set(i * 0.62, 4.4, 12.0);
+		castle.add(bar);
+	}
+	for (const side of [-1, 1]) {
+		const drum = buildTower(1.35, 7.5, side < 0 ? C.roofC : C.roofA, false, true);
+		drum.position.set(side * 3.4, 0, 11.3);
+		castle.add(drum);
+	}
 
 	const pennants: THREE.Mesh[] = [];
 	const towers: [number, number, number, number, number][] = [
@@ -456,7 +619,9 @@ function buildCastle(): { castle: THREE.Group; balcony: THREE.Vector3; pennants:
 	rugTrim.rotation.x = Math.PI / 2;
 	castle.add(rugTrim);
 
-	const rail = new THREE.Mesh(new THREE.CylinderGeometry(4.0, 4.0, 1.3, 12, 1, true), toon(C.stone, { side: THREE.DoubleSide }));
+	// shaded stone: sunlit C.stone here filled the bottom half of the hero
+	// shot with near-white and bloomed out under the cup glow
+	const rail = new THREE.Mesh(new THREE.CylinderGeometry(4.0, 4.0, 1.3, 12, 1, true), toon(C.stoneShade, { side: THREE.DoubleSide }));
 	rail.position.set(heroX, 14.5, heroZ);
 	castle.add(rail);
 	for (let i = 0; i < 12; i++) {
@@ -546,8 +711,10 @@ function buildTrophy(): THREE.Group {
 function buildKing(): {
 	king: THREE.Group;
 	armR: THREE.Group;
+	armL: THREE.Group;
 	head: THREE.Group;
 	brows: THREE.Mesh[];
+	mouth: THREE.Mesh;
 } {
 	const king = new THREE.Group();
 	const robeMat = toon(C.robe);
@@ -607,6 +774,18 @@ function buildKing(): {
 		tache.scale.set(1.1, 0.7, 0.8);
 		head.add(tache);
 	}
+	// a mouth in the beard, so he can actually deliver the decree
+	const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), toon(0x6b3438));
+	mouth.position.set(0, -0.24, 0.41);
+	mouth.scale.set(1.15, 0.24, 0.45);
+	head.add(mouth);
+	// rosy cheeks — he is a jolly king and he will look like one
+	for (const s of [-1, 1]) {
+		const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6), toon(0xf2a58e));
+		cheek.position.set(s * 0.245, -0.03, 0.3);
+		cheek.scale.set(1, 0.75, 0.5);
+		head.add(cheek);
+	}
 	// crown
 	const bandCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.19, 10), goldMat);
 	bandCrown.position.y = 0.42;
@@ -644,7 +823,16 @@ function buildKing(): {
 	armL.rotation.z = -0.22;
 	king.add(armL);
 
-	return { king, armR, head, brows };
+	// state dress: ermine collar and a gold belt cinching the robe
+	const collar = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.1, 8, 14), toon(0xfaf6ef));
+	collar.position.set(0, 1.42, 0.02);
+	collar.rotation.x = Math.PI / 2 - 0.12;
+	king.add(collar);
+	const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.4, 0.14, 10), goldMat);
+	belt.position.y = 0.6;
+	king.add(belt);
+
+	return { king, armR, armL, head, brows, mouth };
 }
 
 /** Fairy dust. One shared point cloud for every trail in the kingdom, living
@@ -717,6 +905,7 @@ class Dust {
 
 export async function play(ctx: EffectContext): Promise<void> {
 	const { scene, machine, particles, sprites, audio, haptics } = ctx;
+	const t0 = performance.now(); // the track starts with the effect; the final DONG waits on it
 	const btn = machine.buttonWorldPosition();
 	const btnHome = machine.buttonGroup.position.clone();
 
@@ -734,13 +923,11 @@ export async function play(ctx: EffectContext): Promise<void> {
 	machine.backdrop.visible = false;
 	const backplateFace = machine.backplate.children[0] as THREE.Mesh;
 
-	audio.sfx('clang', { pitch: 1.15, gain: 0.45 });
 	await machine.openClamps(420);
 	haptics.vibrate(30);
 	await tween(220, 'outQuad', (v) => {
 		machine.buttonGroup.position.z = btnHome.z + v * 0.24;
 	});
-	audio.sfx('swoosh', { pitch: 0.85, gain: 0.5 });
 	tween(680, 'outCubic', (v) => {
 		machine.buttonGroup.position.y = btnHome.y + v * 1.15;
 	});
@@ -874,7 +1061,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	await delay(0); // yield: the machine is mid-animation and must keep moving
 	// ---- the king, on his balcony, facing the way we come in
-	const { king, armR, head, brows } = buildKing();
+	const { king, armR, armL, head, brows, mouth } = buildKing();
 	const kingPos = balcony.clone().add(castle.position);
 	king.position.copy(kingPos);
 	king.scale.setScalar(1.15);
@@ -915,6 +1102,50 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// ---- fairies
 	const dust = new Dust(sprites.softDot);
 	world.add(dust.points);
+
+	// ---- mist: billboarded wisps hugging the terrain. The flight punches
+	// straight through them, which sells the speed better than anything else
+	// here — and a dense shroud around the castle mound means the castle is
+	// REVEALED, not merely approached. (Sprites billboard to the real camera
+	// in screen space, so they work unmodified under the virtual-camera rig.)
+	const mist = new THREE.Group();
+	const addMist = (x: number, z: number, s: number, o: number, lift = 0) => {
+		const m = new THREE.SpriteMaterial({
+			map: ctx.textures.cloudSprite,
+			color: 0xece2f8, // a whisper of the fairyland purple
+			transparent: true,
+			opacity: o,
+			depthWrite: false
+		});
+		const sp = new THREE.Sprite(m);
+		sp.position.set(x, groundHeight(x, z) + rand(1.5, 3.5) + lift, z);
+		sp.scale.set(s * rand(1.5, 2.3), s, 1);
+		sp.userData = { drift: rand(0.25, 0.8) * (Math.random() < 0.5 ? -1 : 1), base: o, phase: rand(0, 6.28) };
+		mist.add(sp);
+	};
+	// wisps strung along the whole valley route
+	for (let i = 0; i < 26; i++) {
+		addMist(rand(-30, 30), -16 - i * 6.5 + rand(-3, 3), rand(6, 12), rand(0.1, 0.2));
+	}
+	// the shroud: thick banks ringing the castle mound
+	for (let i = 0; i < 14; i++) {
+		const a = rand(0, Math.PI * 2);
+		addMist(
+			Math.cos(a) * rand(18, 34),
+			CASTLE_Z + 12 + Math.sin(a) * rand(16, 30),
+			rand(13, 20),
+			rand(0.22, 0.34),
+			rand(1, 5)
+		);
+	}
+	world.add(mist);
+	const stopMist = scene.addUpdatable((dt, time) => {
+		for (const sp of mist.children as THREE.Sprite[]) {
+			sp.position.x += sp.userData.drift * dt;
+			(sp.material as THREE.SpriteMaterial).opacity =
+				sp.userData.base * (0.75 + 0.25 * Math.sin(time * 0.4 + sp.userData.phase));
+		}
+	});
 	const fairyTints = [0xffd6f0, 0xbfffd8, 0xfff3cf, 0xc8d8ff, 0xffc9a8];
 	const fairies: {
 		group: THREE.Group;
@@ -1041,6 +1272,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	let gaze = 0; // 0 = look along the path, 1 = look at the king
 	let bank = 0;
 	let sway = 1;
+	let cupBoost = 0; // the sim owns the cup glow's scale; tweens drive this instead
 	let shakeAmt = 0;
 	let primed = false;
 
@@ -1145,7 +1377,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 		// ---- set dressing
 		for (const p of pennants) p.rotation.y = Math.sin(time * 3 + p.position.x) * 0.4;
-		cupGlow.scale.setScalar(0.62 + Math.sin(time * 3.4) * 0.09);
+		cupGlow.scale.setScalar(0.62 + cupBoost + Math.sin(time * 3.4) * 0.09);
 	});
 
 	world.traverse((o) => {
@@ -1160,7 +1392,16 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// The backplate has to go at the same moment: it fades to nothing but still
 	// writes depth, so it would block the view through its own hole.
 	backplateFace.visible = false;
-	const opening = machine.openIris(0.78, 820);
+	// The face sections fly FULLY off-screen — machine parts never turn
+	// invisible in this machine, they move. At the old 0.78 slide they parked
+	// mid-frame as four floating chunks with leather crossbars between them;
+	// the distance is computed from the real frame width so they exit on any
+	// screen, phones to ultrawide.
+	const irisThrow =
+		(Math.tan(THREE.MathUtils.degToRad(scene.camera.fov / 2)) * scene.camera.aspect * (5.35 - 0.4) +
+			1.6) *
+		1.42;
+	const opening = machine.openIris(irisThrow, 980);
 	machine.portal.visible = false;
 	machine.setInnerGlow(0.15, 0x8fffb8);
 	tween(820, 'inOutQuad', (v) => {
@@ -1200,7 +1441,6 @@ export async function play(ctx: EffectContext): Promise<void> {
 		fadeIn: 0.1
 	});
 	await opening;
-	audio.sfxLoop('wooWoo');
 
 	// ---- through the window.
 	//
@@ -1213,7 +1453,6 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// of the machine. The kingdom's own view is set by the virtual camera, so
 	// the dolly does not disturb it one bit.
 	await delay(180);
-	audio.sfx('swoosh', { pitch: 0.6, gain: 0.6 });
 	haptics.vibrate([25, 30, 90]);
 	const envIntensity0 = scene.scene.environmentIntensity;
 	const keep0 = scene.keyLight.intensity;
@@ -1225,6 +1464,12 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// radius needs the camera within ~2.3 units of the leather. 1.15 leaves
 	// room to spare and still flies you right into it.
 	const RIG_IN = 1.15;
+
+	// fairyland grade: the vignette blushes magenta-purple for the whole visit
+	const vigTint = new THREE.Color(0x000000);
+	tween(1800, 'inOutQuad', (v) => {
+		scene.setVignetteTint(vigTint.setRGB(0.26 * v, 0.06 * v, 0.34 * v));
+	});
 
 	await Promise.all([
 		tween(1400, 'inQuad', (v) => {
@@ -1247,23 +1492,17 @@ export async function play(ctx: EffectContext): Promise<void> {
 	scene.fillLight.intensity = 0;
 	scene.rimLight.intensity = 0;
 	scene.scene.fog = new THREE.Fog(0xe8dcc0, 150, 520);
-	audio.stopAllLoops(200);
-	audio.sfx('chime', { pitch: 1.3, gain: 0.6 });
 
 	// the whole run of the journey, one long unbroken sweep
 	const journey = tween(6000, inOutSine, (v) => {
 		travel = ENTRY_T * 1.6 + v * (SPLIT - ENTRY_T * 1.6);
 	});
 	await delay(1100);
-	audio.sfx('chime', { pitch: 0.9, gain: 0.35 });
 	await delay(2000);
-	audio.sfx('ding', { pitch: 1.8, gain: 0.22 });
 	await delay(1900);
-	audio.sfx('ding', { pitch: 2.1, gain: 0.2 });
 	await journey;
 
 	// ---- the last of it: rise to the turret and turn to the king
-	audio.sfx('swoosh', { pitch: 1.1, gain: 0.4 });
 	// the swoosh: right around the castle, climbing, ending on the king
 	await tween(4400, inOutSine, (v) => {
 		travel = SPLIT + v * (1 - SPLIT);
@@ -1272,16 +1511,46 @@ export async function play(ctx: EffectContext): Promise<void> {
 	});
 
 	// ================================================================ THE KING
+	// Track map: he speaks from 13s to 20s — "By royal decree, I bestow upon
+	// you the Gift of Good Fortune!" — and the camera arrives just as he draws
+	// breath. Mouth, sway and gestures all run off one seven-second clock so
+	// he genuinely delivers the line.
 	sway = 0.12;
-	audio.sfx('gong', { pitch: 1.05, gain: 0.5 });
-	// he bows
-	await tween(900, 'inOutQuad', (v) => {
+	const SYLL: readonly (readonly [number, number])[] = [
+		[0.0, 0.25], [0.45, 0.3], [0.8, 0.2], [1.15, 0.25], [1.45, 0.55], // by ro-yal de-cree
+		[2.5, 0.3], [2.95, 0.2], [3.2, 0.45], [3.8, 0.2], [4.05, 0.2], [4.3, 0.45], // i be-stow up-on you
+		[5.1, 0.2], [5.35, 0.45], [5.85, 0.2], [6.1, 0.35], [6.5, 0.3], [6.85, 0.6] // the gift of good for-tune
+	];
+	let mouthOpen = 0;
+	const speech = tween(7000, 'linear', (v) => {
+		const st = v * 7;
+		let target = 0;
+		for (const [sy, d] of SYLL) {
+			if (st >= sy && st <= sy + d) {
+				target = 0.8 + Math.sin(st * 31) * 0.2;
+				break;
+			}
+		}
+		mouthOpen += (target - mouthOpen) * 0.35;
+		mouth.scale.y = 0.24 + mouthOpen * 0.85;
+		// regal delivery: gentle sway, the head carrying each phrase
+		king.rotation.y = Math.sin(st * 1.1) * 0.055;
+		head.rotation.z = Math.sin(st * 0.9 + 0.5) * 0.045;
+		// the free hand opens outward through "I bestow upon you"
+		const gest =
+			THREE.MathUtils.clamp((st - 2.4) / 0.7, 0, 1) * THREE.MathUtils.clamp((5.3 - st) / 0.7, 0, 1);
+		armL.rotation.z = -0.22 - gest * 0.55;
+		armL.rotation.x = -gest * 0.3;
+	});
+	// he bows through the opening of the line...
+	await tween(1100, 'inOutQuad', (v) => {
 		const b = Math.sin(v * Math.PI);
 		king.rotation.x = b * 0.22;
-		head.rotation.x = b * 0.2;
+		head.rotation.x = b * 0.18;
 	});
-	// and raises the cup
-	audio.sfx('swoosh', { pitch: 1.5, gain: 0.35 });
+	// ...and the cup rises exactly on "the Gift of Good Fortune!"
+	await delay(3900);
+	haptics.vibrate([20, 40, 70]);
 	await tween(1000, 'outBack', (v) => {
 		armR.rotation.z = v * 2.05;
 		armR.rotation.x = -v * 0.25;
@@ -1290,18 +1559,19 @@ export async function play(ctx: EffectContext): Promise<void> {
 		trophy.rotation.x = 0.2 - v * 0.12;
 		for (const b of brows) b.position.y = 0.235 + v * 0.045;
 	});
-	audio.sfx('chime', { pitch: 1.15, gain: 0.6 });
-	haptics.vibrate([20, 40, 70]);
-	// the cup catches light
+	// the cup catches light — a bright halo, NOT a frame-swallower (the sim
+	// owns the glow's scale, so the boost routes through cupBoost)
 	tween(900, 'outCubic', (v) => {
-		cupGlowMat.opacity = 0.85 + v * 0.15;
-		cupGlow.scale.setScalar(0.62 + v * 1.5);
+		cupGlowMat.opacity = 0.8 + v * 0.12;
+		cupBoost = v * 0.5;
 	});
-	await delay(700);
+	await speech; // the line lands (~20s on the track)
+	const mouthAt = mouth.scale.y;
+	tween(350, 'outQuad', (v) => (mouth.scale.y = mouthAt + (0.24 - mouthAt) * v));
+	// he holds the gift aloft, beaming, and gives you a good long look at it
+	await delay(2100);
 
 	// ---- the luck comes out of the cup and straight at you
-	audio.sfx('zap', { pitch: 0.8, gain: 0.5 });
-	audio.sfx('gong', { pitch: 1.2, gain: 0.7 });
 	const starMat = new THREE.SpriteMaterial({
 		map: sprites.star4,
 		color: 0xfff2c8,
@@ -1331,8 +1601,6 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	// ================================================================ HOME AGAIN
 	// the same path, backwards, four times as fast, still facing the kingdom
-	audio.sfx('swoosh', { pitch: 0.5, gain: 0.75 });
-	audio.sfxLoop('wooWoo');
 	gaze = 0;
 	sway = 0.5;
 	tween(600, 'outQuad', (v) => {
@@ -1361,7 +1629,6 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// ---- back through the hole, the same way we came: the machine returns at
 	// the same distance we left it at, so it is still off-frame, and then the
 	// rig pulls back out until the window shrinks to a hole in the leather again
-	audio.sfx('boom', { pitch: 0.9, gain: 0.5 });
 	scene.rig.position.z = RIG_IN;
 	clip.constant = -0.78;
 	machine.group.visible = true;
@@ -1392,7 +1659,6 @@ export async function play(ctx: EffectContext): Promise<void> {
 	scene.fillLight.intensity = fill0;
 	scene.rimLight.intensity = rim0;
 	warp.stop();
-	audio.stopAllLoops(180);
 	scene.shake(0.35);
 	scene.camera.far = far0;
 	scene.camera.updateProjectionMatrix();
@@ -1401,7 +1667,11 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// Shut it STRAIGHT AWAY. Waiting for the rim to fade and the sparks to fly
 	// before starting the iris left a second and a half of empty socket sitting
 	// there — the door closes under all of it instead.
-	const closing = machine.closeIris(820);
+	const closing = machine.closeIris(980); // the sections fly back in from off-screen
+	// the fairyland grade drains away with the doorway
+	tween(1100, 'inOutQuad', (v) => {
+		scene.setVignetteTint(vigTint.setRGB(0.26 * (1 - v), 0.06 * (1 - v), 0.34 * (1 - v)));
+	});
 	tween(650, 'outCubic', (v) => (rimMat.opacity = 0.1 * (1 - v)));
 	particles.burst({
 		texture: sprites.star4,
@@ -1418,6 +1688,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	// ---- shut the door
 	stopSim();
+	stopMist();
 	scene.renderer.localClippingEnabled = clipping0;
 	scene.scene.remove(world);
 	disposeObject(world);
@@ -1432,21 +1703,22 @@ export async function play(ctx: EffectContext): Promise<void> {
 	await tween(620, 'outBack', (v) => {
 		machine.buttonGroup.position.y = btnHome.y + 1.15 * (1 - v);
 	});
-	audio.sfx('clack', { pitch: 0.85, gain: 0.5 });
 	await tween(220, 'outQuad', (v) => {
 		machine.buttonGroup.position.z = btnHome.z + 0.24 * (1 - v);
 	});
 	machine.buttonGroup.position.copy(btnHome);
+	scene.setVignetteTint(0x000000); // hard reset, whatever state the drain tween left
 	await machine.closeClamps(520);
 
 	await luckyWord(ctx, {
 		text: 'ROYAL LUCK',
 		color: 0xffe9ad,
 		colorB: 0xbfffd8,
-		y: -1.2,
+		y: 1.0, // above the machine — at -1.2 it clipped the frame bottom, worse on phones
 		gather: 800,
 		hold: 950,
-		scatter: 520
+		scatter: 520,
+		silent: true
 	});
 
 	scene.scene.remove(rimGlow);
@@ -1455,4 +1727,11 @@ export async function play(ctx: EffectContext): Promise<void> {
 	machine.setInnerGlow(0);
 	scene.fxLight.intensity = 0;
 	await restoreLights(800);
+
+	// the track sings itself out over the settled machine (it runs 33s); when
+	// it has finished — and only then — one great DONG seals the decree
+	await delay(Math.max(300, 33300 - (performance.now() - t0)));
+	audio.sfx('gong', { pitch: 0.85, gain: 0.85 });
+	flashPulse(machine, 0.35, 90, 700, 0xffe9ad);
+	await delay(900);
 }

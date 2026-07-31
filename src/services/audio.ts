@@ -42,7 +42,9 @@ const TRACKS: Record<string, { src: string; volume: number }> = {
 	pirateShanty: { src: '/soundfx/pirate-shanty.mp3', volume: 0.9 },
 	kpopLuck: { src: '/soundfx/kpop-luck.mp3', volume: 0.9 },
 	// 165bpm chiptune for manekiNeko — 21.888s, deliberately Nyan-Cat-adjacent
-	luckyCatWave: { src: '/soundfx/lucky-cat-wave.mp3', volume: 0.9 }
+	luckyCatWave: { src: '/soundfx/lucky-cat-wave.mp3', volume: 0.9 },
+	// 33s; the king speaks 13s-20s — fairyKingdom's choreography is timed to it
+	fairyKingdom: { src: '/soundfx/fairy-kingdom.mp3', volume: 0.9 }
 };
 
 export class AudioService {

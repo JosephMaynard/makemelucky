@@ -15,7 +15,10 @@ const FilmGradeShader = {
 		tDiffuse: { value: null as THREE.Texture | null },
 		uTime: { value: 0 },
 		uVignette: { value: 0.22 },
-		uGrain: { value: 0.045 }
+		uGrain: { value: 0.045 },
+		// the colour the vignette darkens towards — black reproduces the classic
+		// grade exactly; effects may tint it (and must restore it)
+		uVigTint: { value: new THREE.Color(0x000000) }
 	},
 	vertexShader: /* glsl */ `
 		varying vec2 vUv;
@@ -28,6 +31,7 @@ const FilmGradeShader = {
 		uniform float uTime;
 		uniform float uVignette;
 		uniform float uGrain;
+		uniform vec3 uVigTint;
 		varying vec2 vUv;
 		float hash(vec2 p) {
 			return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
@@ -39,7 +43,7 @@ const FilmGradeShader = {
 			float grain = (hash(vUv * (137.0 + mod(uTime, 61.0))) - 0.5) * uGrain;
 			// grain fades in the highlights so it reads as film, not dirt
 			float lum = dot(c.rgb, vec3(0.299, 0.587, 0.114));
-			gl_FragColor = vec4(c.rgb * fall + grain * (1.0 - lum * 0.75), c.a);
+			gl_FragColor = vec4(c.rgb * fall + uVigTint * (1.0 - fall) + grain * (1.0 - lum * 0.75), c.a);
 		}`
 };
 
@@ -361,6 +365,14 @@ export class LuckyScene {
 	setVignetteBoost(boost: number): void {
 		(this.filmPass.uniforms as typeof FilmGradeShader.uniforms).uVignette.value =
 			this.baseVignette + boost * 0.24;
+	}
+
+	/** Colour the vignette's edge falloff. Black (the default) is the classic
+	 *  grade; effects that tint it must restore black on teardown. */
+	setVignetteTint(color: THREE.ColorRepresentation): void {
+		((this.filmPass.uniforms as typeof FilmGradeShader.uniforms).uVigTint.value as THREE.Color).set(
+			color
+		);
 	}
 
 	_monitorQuality(dt: number, now: number) {
