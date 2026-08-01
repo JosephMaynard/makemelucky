@@ -890,6 +890,18 @@ p + p {
 	transform: translateY(-3px);
 	box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 22px rgba(240, 212, 136, 0.18);
 }
+.promo-logo {
+	display: block;
+	width: 52px;
+	height: 52px;
+	margin-bottom: 14px;
+	border-radius: 12px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+	transition: transform 0.18s ease;
+}
+.promo-card:hover .promo-logo {
+	transform: scale(1.08) rotate(-3deg);
+}
 .promo-card h3 {
 	margin: 0 0 6px;
 	color: var(--gold-bright);
