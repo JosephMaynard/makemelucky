@@ -877,7 +877,13 @@ p + p {
 	margin-top: 20px;
 }
 .promo-card {
-	display: block;
+	display: grid;
+	grid-template-columns: 52px 1fr;
+	grid-template-areas:
+		'logo title'
+		'desc desc';
+	column-gap: 16px;
+	align-items: center;
 	text-decoration: none;
 	border-radius: 16px;
 	padding: 24px 22px;
@@ -891,28 +897,42 @@ p + p {
 	box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 22px rgba(240, 212, 136, 0.18);
 }
 .promo-logo {
+	grid-area: logo;
 	display: block;
 	width: 52px;
 	height: 52px;
-	margin-bottom: 14px;
 	border-radius: 12px;
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 	transition: transform 0.18s ease;
 }
 .promo-card:hover .promo-logo {
 	transform: scale(1.08) rotate(-3deg);
 }
 .promo-card h3 {
-	margin: 0 0 6px;
+	grid-area: title;
+	margin: 0;
 	color: var(--gold-bright);
 }
 .promo-card p {
+	grid-area: desc;
+	margin-top: 12px;
+	margin-bottom: 0;
 	color: var(--text-dim);
 	font-size: 14.5px;
 }
+/* a card without a logo (PhonesOut) keeps its title on the full row */
+.promo-card h3:first-child {
+	grid-column: 1 / -1;
+}
+/* not ready yet: a real, crawlable link, but one that doesn't invite the
+   click — dimmed, no lift, no pointer flourish */
 .promo-card--soon {
 	opacity: 0.55;
 	filter: saturate(0.6);
+	cursor: default;
+}
+.promo-card--soon:hover {
+	transform: none;
+	box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
 }
 
 /* ============ FOOTER ============ */
