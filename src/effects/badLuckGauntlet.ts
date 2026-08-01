@@ -8,12 +8,12 @@
 
 import * as THREE from 'three';
 import { tween, delay } from '../core/anim';
-import { dimLights, flashPulse } from './helpers';
+import { dimLights, flashPulse, shockwave } from './helpers';
 import { luckyWord } from './luckyWord';
 import type { EffectContext } from '../types';
 
 export const sound = 'spinningRim';
-export const duration = 10800;
+export const duration = 11500;
 
 /** A hanging ladder: two stiles and six rungs of dark wood. */
 function buildLadder(): THREE.Group {
@@ -137,6 +137,49 @@ function buildUmbrella(): { umbrella: THREE.Group } {
 const COLD = new THREE.Color(0x9fb8d8);
 const WARM = new THREE.Color(0xffc478);
 
+// ---- the luck shield: a near-invisible bubble around the machine that
+// FLARES where bad luck strikes it. This is the whole point of the effect —
+// without a visible guardian, the superstitions just look like weather.
+// Ripples spread from each impact direction across the bubble's surface.
+const SHIELD_VERT = /* glsl */ `
+	varying vec3 vDir;
+	varying vec3 vNormal;
+	varying vec3 vView;
+	void main() {
+		vDir = normalize(position);
+		vNormal = normalMatrix * normal;
+		vec4 mv = modelViewMatrix * vec4(position, 1.0);
+		vView = -mv.xyz;
+		gl_Position = projectionMatrix * mv;
+	}`;
+
+const SHIELD_FRAG = /* glsl */ `
+	uniform float uTime;
+	uniform float uBase;
+	uniform vec3 uHitDir[3];
+	uniform float uHitT[3];
+	uniform vec3 uGold;
+	varying vec3 vDir;
+	varying vec3 vNormal;
+	varying vec3 vView;
+	void main() {
+		float fresnel = pow(1.0 - abs(dot(normalize(vNormal), normalize(vView))), 2.4);
+		// a faint woven shimmer so the idle bubble reads as a surface at all
+		float weave = pow(abs(sin(vDir.x * 24.0 + uTime * 0.6)) * abs(sin(vDir.y * 24.0 - uTime * 0.4)), 6.0);
+		float glow = fresnel * (0.13 + uBase * 1.2) + weave * uBase * 0.35;
+		// impact ripples: rings racing out from wherever bad luck touched
+		for (int i = 0; i < 3; i++) {
+			float age = uTime - uHitT[i];
+			if (age > 0.0 && age < 0.9) {
+				float ang = acos(clamp(dot(vDir, uHitDir[i]), -1.0, 1.0));
+				float ring = smoothstep(0.16, 0.0, abs(ang - age * 3.2)) * (1.0 - age / 0.9);
+				float core = smoothstep(0.5, 0.0, ang) * (1.0 - age / 0.35) ;
+				glow += ring * 1.3 + max(core, 0.0) * 0.9;
+			}
+		}
+		gl_FragColor = vec4(uGold * glow, glow * 0.85);
+	}`;
+
 export async function play(ctx: EffectContext): Promise<void> {
 	const { scene, machine, particles, lightning, sprites, audio, haptics } = ctx;
 	const btn = machine.buttonWorldPosition();
@@ -148,8 +191,51 @@ export async function play(ctx: EffectContext): Promise<void> {
 	tween(700, 'inOutQuad', (v) => (scene.fxLight.intensity = v * 1.4));
 	machine.setInnerGlow(0.2, 0xbfe8ff);
 
-	/** Bad luck bounces off: gold sparks and a shrugged little glow pulse. */
+	// ---- raise the shield
+	const shieldMat = new THREE.ShaderMaterial({
+		uniforms: {
+			uTime: { value: 0 },
+			uBase: { value: 0 },
+			uHitDir: { value: [new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 1, 0)] },
+			uHitT: { value: [-10, -10, -10] },
+			uGold: { value: new THREE.Color(0xffd27a) }
+		},
+		vertexShader: SHIELD_VERT,
+		fragmentShader: SHIELD_FRAG,
+		transparent: true,
+		depthWrite: false,
+		blending: THREE.AdditiveBlending,
+		side: THREE.DoubleSide
+	});
+	const shieldCentre = new THREE.Vector3(btn.x, btn.y, 0.1);
+	const shield = new THREE.Mesh(new THREE.SphereGeometry(1.95, 48, 32), shieldMat);
+	shield.position.copy(shieldCentre);
+	scene.scene.add(shield);
+	let shieldT = 0;
+	let hitSlot = 0;
+	const stopShield = scene.addUpdatable((dt) => {
+		shieldT += dt;
+		shieldMat.uniforms.uTime.value = shieldT;
+	});
+	/** Register an impact: the bubble ripples out from that direction. */
+	const shieldHit = (at: THREE.Vector3) => {
+		const dir = at.clone().sub(shieldCentre).normalize();
+		(shieldMat.uniforms.uHitDir.value as THREE.Vector3[])[hitSlot].copy(dir);
+		(shieldMat.uniforms.uHitT.value as number[])[hitSlot] = shieldT;
+		hitSlot = (hitSlot + 1) % 3;
+	};
+	// the shield charges a little with every save — by the finale it is FED UP
+	let shieldCharge = 0.08;
+	tween(600, 'outQuad', (v) => (shieldMat.uniforms.uBase.value = v * shieldCharge));
+	const chargeShield = (to: number) => {
+		const from = shieldCharge;
+		shieldCharge = to;
+		tween(500, 'outQuad', (v) => (shieldMat.uniforms.uBase.value = from + (to - from) * v));
+	};
+
+	/** Bad luck bounces off: shield ripple, gold sparks, a smug glow pulse. */
 	const deflect = (at: THREE.Vector3, gain = 1) => {
+		shieldHit(at);
 		audio.sfx('ding', { pitch: 1.5, gain: 0.4 * gain });
 		audio.sfx('pop', { pitch: 1.8, gain: 0.3 * gain });
 		haptics.vibrate(16);
@@ -173,28 +259,35 @@ export async function play(ctx: EffectContext): Promise<void> {
 	ladder.rotation.z = 0.5;
 	scene.scene.add(ladder);
 	audio.sfx('swoosh', { pitch: 0.7, gain: 0.5 });
+	// it falls FOR the machine and lands ON the bubble — the first save is
+	// physical: the ladder visibly rests against thin air
 	await tween(900, 'outCubic', (v) => {
-		ladder.position.y = 3.6 - v * 3.0;
-		ladder.rotation.z = 0.5 - v * 0.42;
+		ladder.position.y = 3.6 - v * 2.1;
+		ladder.rotation.z = 0.5 - v * 0.34;
 	});
 	audio.sfx('clack', { pitch: 0.55, gain: 0.5 });
 	scene.shake(0.14);
-	// it hangs there, ominously, right over the machine. Nothing happens.
-	await delay(420);
-	// a bolt of ill fortune slides down it and pings off the gold
+	deflect(new THREE.Vector3(btn.x - 0.05, btn.y + 1.75, 0.55), 0.8);
+	// a little settle-bounce on the shield's surface
+	await tween(360, 'outBack', (v) => {
+		ladder.position.y = 1.5 + Math.sin(v * Math.PI) * 0.12;
+	});
+	await delay(200);
+	// a bolt of ill fortune runs down it — and splashes across the bubble
 	lightning.strike(
-		new THREE.Vector3(btn.x - 0.1, 1.7, 0.85),
-		new THREE.Vector3(btn.x, btn.y + 0.2, 0.6),
+		new THREE.Vector3(btn.x - 0.1, 2.6, 0.7),
+		new THREE.Vector3(btn.x, btn.y + 1.7, 0.55),
 		{ width: 0.03, life: 0.3, jitter: 0.22, generations: 5 }
 	);
 	await delay(180);
-	deflect(new THREE.Vector3(btn.x, btn.y + 0.2, 0.6));
+	deflect(new THREE.Vector3(btn.x, btn.y + 1.7, 0.55));
+	chargeShield(0.16);
 	await delay(340);
 	// and up it goes again, embarrassed
 	audio.sfx('swoosh', { pitch: 1.1, gain: 0.35 });
 	tween(800, 'inCubic', (v) => {
-		ladder.position.y = 0.6 + v * 3.4;
-		ladder.rotation.z = 0.08 + v * 0.5;
+		ladder.position.y = 1.5 + v * 2.6;
+		ladder.rotation.z = 0.16 + v * 0.5;
 	}).then(() => {
 		scene.scene.remove(ladder);
 		(ladder.userData.dispose as () => void)();
@@ -228,10 +321,15 @@ export async function play(ctx: EffectContext): Promise<void> {
 		cat.position.y = -1.02 + v * 0.14; // stretches up at the button
 		cat.rotation.z = v * 0.16;
 	});
-	// it head-butts the machine. Affection, not malice.
+	// it head-butts the bubble. BONK. Sits back down, offended.
 	audio.sfx('pop', { pitch: 0.9, gain: 0.3 });
 	haptics.vibrate(20);
 	deflect(new THREE.Vector3(btn.x - 0.35, btn.y - 0.7, 0.9), 0.7);
+	chargeShield(0.24);
+	tween(420, 'outBack', (v) => {
+		cat.position.x = startX - 3.1 + v * 0.3; // recoils onto its haunches
+		cat.rotation.z = 0.16 - v * 0.22;
+	});
 	particles.burst({
 		texture: sprites.clover,
 		count: 14,
@@ -262,8 +360,9 @@ export async function play(ctx: EffectContext): Promise<void> {
 	umbrella.scale.set(0.06, 0.06, 0.06);
 	scene.scene.add(umbrella);
 	audio.sfx('swoosh', { pitch: 1.2, gain: 0.4 });
+	// it descends as far as the bubble's crown and no further
 	await tween(520, 'outQuad', (v) => {
-		umbrella.position.y = btn.y + 2.9 - v * 1.95;
+		umbrella.position.y = btn.y + 2.9 - v * 0.72;
 		umbrella.scale.set(0.06, 0.06 + v * 0.2, 0.06); // still furled
 	});
 	// FWUMP
@@ -275,20 +374,35 @@ export async function play(ctx: EffectContext): Promise<void> {
 		umbrella.scale.set(0.06 + v * 0.94, 0.26 + v * 0.74, 0.06 + v * 0.94);
 	});
 	await delay(260);
+	// an umbrella, indoors?! The shield has SEEN ENOUGH — one pulse and the
+	// offending article is yeeted into the stratosphere
+	deflect(new THREE.Vector3(btn.x, btn.y + 1.9, 0.5), 1.2);
+	chargeShield(0.34);
+	audio.sfx('zap', { pitch: 1.1, gain: 0.45 });
+	tween(650, 'inCubic', (v) => {
+		umbrella.position.y = btn.y + 2.18 + v * 3.2;
+		umbrella.rotation.z = v * 5;
+		umbrella.scale.setScalar(Math.max(0.05, 1 - v * 0.5));
+	}).then(() => {
+		scene.scene.remove(umbrella);
+		(umbrella.userData.dispose as () => void)();
+	});
+	await delay(400);
 
-	// it rains, but only money, and only under the umbrella
+	// it rains, but only money — and the shield lets it straight through,
+	// shimmering politely as each coin passes. It knows the difference.
 	audio.sfx('ding', { pitch: 1.1, gain: 0.5 });
 	const rain = particles.emitter({
 		texture: sprites.coin,
 		count: 260,
 		emitRate: 150,
-		origin: new THREE.Vector3(btn.x, btn.y + 1.05, 1.1),
+		origin: new THREE.Vector3(btn.x, btn.y + 2.4, 0.9), // from above the bubble
 		originSpread: 0.95,
 		direction: new THREE.Vector3(0, -1, 0),
 		cone: 0.14,
 		speed: [1.6, 3],
 		gravity: new THREE.Vector3(0, -3.4, 0),
-		life: [1, 1.9],
+		life: [1.3, 2.2],
 		size: [0.05, 0.12],
 		colors: [0xf7ce6b, 0xffe9ad, 0xd9a842],
 		spin: [-6, 6]
@@ -300,29 +414,42 @@ export async function play(ctx: EffectContext): Promise<void> {
 	});
 	await delay(1500);
 	rain.stop();
-	audio.sfx('swoosh', { pitch: 1.4, gain: 0.35 });
-	tween(700, 'inCubic', (v) => {
-		umbrella.position.y = btn.y + 0.95 + v * 3.1;
-		umbrella.scale.set(1 - v * 0.9, 1 - v * 0.7, 1 - v * 0.9);
-	}).then(() => {
-		scene.scene.remove(umbrella);
-		(umbrella.userData.dispose as () => void)();
-	});
 	// ================= the verdict =================
-	audio.sfx('gong', { pitch: 0.85, gain: 0.7 });
-	haptics.vibrate([30, 40, 90]);
-	scene.shake(0.28);
-	flashPulse(machine, 0.6, 110, 700, 0xffd27a);
+	// Three saves, fully charged: the shield gathers itself in tight...
+	await tween(550, 'inQuad', (v) => {
+		shieldMat.uniforms.uBase.value = 0.34 + v * 0.6;
+		shield.scale.setScalar(1 - v * 0.2);
+	});
+	// ...and DETONATES as pure lucky energy. For good luck. Obviously.
+	audio.sfx('gong', { pitch: 0.85, gain: 0.9 }); // THE DONG
+	audio.sfx('boom', { pitch: 0.7, gain: 0.6 });
+	haptics.vibrate([40, 40, 120]);
+	scene.shake(0.35);
+	flashPulse(machine, 0.7, 100, 750, 0xffd27a);
+	tween(750, 'outCubic', (v) => {
+		shield.scale.setScalar(0.8 + v * 2.6);
+		shieldMat.uniforms.uBase.value = 0.94 * (1 - v);
+	}).then(() => {
+		scene.scene.remove(shield);
+		shield.geometry.dispose();
+		shieldMat.dispose();
+	});
+	shockwave(scene.scene, new THREE.Vector3(btn.x, btn.y, 0.5), {
+		color: 0xffd27a,
+		maxScale: 5.5,
+		duration: 800,
+		z: 0.5
+	});
 	particles.burst({
 		texture: sprites.star4,
-		count: 90,
+		count: 130,
 		origin: new THREE.Vector3(btn.x, btn.y, 0.6),
-		originSpread: 0.2,
-		speed: [1.4, 4],
+		originSpread: 0.25,
+		speed: [1.8, 4.8],
 		gravity: new THREE.Vector3(0, -2, 0),
-		life: [0.7, 1.6],
-		size: [0.03, 0.1],
-		colors: [0xffd27a, 0xfff3cf, 0xffe0a0]
+		life: [0.8, 1.8],
+		size: [0.03, 0.11],
+		colors: [0xffd27a, 0xfff3cf, 0xffe0a0, 0xbfffd8]
 	});
 	await luckyWord(ctx, {
 		text: 'STILL LUCKY',
@@ -334,6 +461,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	});
 
 	// ---- teardown
+	stopShield();
 	scene.crossfadeEnvironment('lounge');
 	tween(900, 'outQuad', (v) => {
 		machine.setInnerGlow(0.6 * (1 - v));
