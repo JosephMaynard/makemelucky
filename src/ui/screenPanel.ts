@@ -86,15 +86,21 @@ export class ScreenPanel {
 
 	/** Show items in order (interval ms apart), then keep cycling loopItems.
 	 *  Only the one-shot `items` are announced to screen readers — loopItems
-	 *  is the perpetual decorative idle cycle and stays silent forever. */
-	sequence(items: ScreenMessage[], loopItems: ScreenMessage[] | null = null, interval = 1360): void { // 1700 * 0.8 — +20% faster pacing
+	 *  is the perpetual decorative idle cycle and stays silent forever.
+	 *  `firstHold` lets the opening item linger (quips need reading time). */
+	sequence(
+		items: ScreenMessage[],
+		loopItems: ScreenMessage[] | null = null,
+		interval = 1360, // 1700 * 0.8 — +20% faster pacing
+		firstHold?: number
+	): void {
 		this.seq++;
 		const mySeq = this.seq;
 		this._stopLoop();
 		let i = 0;
 		const all = items.slice();
 		this._render(all[0], true);
-		this.timer = setInterval(() => {
+		const step = () => {
 			if (mySeq !== this.seq) return;
 			i++;
 			if (i < all.length) {
@@ -103,8 +109,11 @@ export class ScreenPanel {
 				this._render(loopItems[(i - all.length) % loopItems.length], false);
 			} else {
 				this._stopLoop();
+				return;
 			}
-		}, interval);
+			this.timer = setTimeout(step, interval);
+		};
+		this.timer = setTimeout(step, firstHold ?? interval);
 	}
 
 	welcome(isReturn: boolean, streak?: number): void {
@@ -132,6 +141,8 @@ export class ScreenPanel {
 			items.push([adv, '']);
 		}
 		items.push(['LUCKY!', '', 'giant']);
-		this.sequence(items, [pick(MORE_LUCK), pick(PRESS_AGAIN)]);
+		// a quip leads the sequence and gets an extra second on screen —
+		// at the standard tick the good ones went unread
+		this.sequence(items, [pick(MORE_LUCK), pick(PRESS_AGAIN)], undefined, quip ? 2360 : undefined);
 	}
 }
