@@ -555,9 +555,15 @@ export async function play(ctx: EffectContext): Promise<void> {
 		});
 	}
 	danceOn = false;
+	// the rim clicks onto its nearest quarter-turn mark — the face is 4-fold
+	// symmetric, so anything else leaves the iris sections visibly off-station
+	// for whatever effect opens them next
+	const spinFrom = machine.faceSpin.rotation.z;
+	const spinTo = Math.round(spinFrom / (Math.PI / 2)) * (Math.PI / 2);
 	tween(600, 'outQuad', (v) => {
 		machine.group.rotation.z *= 1 - v;
 		machine.group.position.y = baseY;
+		machine.faceSpin.rotation.z = spinFrom + (spinTo - spinFrom) * v;
 	});
 	// the music finishes... then, into the silence, three DONGs rising
 	await delay(1100);

@@ -9,7 +9,7 @@ import { luckyWord } from './luckyWord';
 import type { EffectContext } from '../types';
 
 export const sound = 'luckySymbol';
-export const duration = 10500;
+export const duration = 8100;
 
 let glyphTexCache: THREE.CanvasTexture[] | null = null;
 function codeGlyphs(): THREE.CanvasTexture[] {
@@ -74,13 +74,13 @@ export async function play(ctx: EffectContext): Promise<void> {
 	});
 	haptics.vibrate(25);
 
-	await delay(4200);
+	await delay(2200);
 
 	// the code compiles… faster and faster
 	speedMul = 2.4;
 	machine.setInnerGlow(0.85, 0x39ff5e);
 	haptics.vibrate([20, 30, 20, 30, 80]);
-	await delay(1400);
+	await delay(1000);
 
 	// ---- decoded: the rain resolves into one giant emerald clover
 	for (const col of columns) col.emitter.stop();

@@ -39,12 +39,14 @@ export async function play(ctx: EffectContext): Promise<void> {
 	});
 	const geo = new THREE.ConeGeometry(0.17, 0.62, 6);
 	const crystals: THREE.Mesh[] = [];
-	const N = 11;
+	const N = 16;
 	for (let i = 0; i < N; i++) {
 		const a = (i / N) * Math.PI * 2 + 0.2;
 		const r = 1.72 + rand(-0.12, 0.2);
 		const m = new THREE.Mesh(geo, crystalMat);
-		m.position.set(Math.cos(a) * r, Math.sin(a) * r * 0.78 - 0.42, -0.45 + Math.sin(a * 2) * 0.5);
+		// depth stays in front of the backdrop plane (z = -0.75) — the old ±0.5
+		// swing pushed the top-left and bottom-right of the ring behind it
+		m.position.set(Math.cos(a) * r, Math.sin(a) * r * 0.78 - 0.42, -0.3 + Math.sin(a * 2) * 0.3);
 		m.rotation.set(rand(-0.3, 0.3), rand(0, 6.28), a * 0.4 + rand(-0.2, 0.2));
 		m.scale.set(0.001, 0.001, 0.001);
 		m.userData.tall = rand(1.4, 2.6);
@@ -94,7 +96,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 			if (v >= 1) m.userData.grown = true;
 		});
 		if (i % 3 === 0) audio.sfx('tick', { pitch: 1.5 + i * 0.09, gain: 0.16 });
-		await delay(88);
+		await delay(62); // more crystals, same overall grow time
 	}
 	await delay(420);
 

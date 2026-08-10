@@ -9,7 +9,7 @@ import { luckyWord } from './luckyWord';
 import type { EffectContext } from '../types';
 
 export const sound = 'lucky';
-export const duration = 12000;
+export const duration = 9800;
 
 export async function play(ctx: EffectContext): Promise<void> {
 	const { scene, machine, particles, sprites, haptics } = ctx;
@@ -41,10 +41,10 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	const swarm = particles.emitter({
 		texture: sprites.softDot,
-		count: 400,
-		emitRate: 140,
+		count: 560,
+		emitRate: 260,
 		origin: new THREE.Vector3(0, -0.32, 0.35),
-		originSpread: 1.2,
+		originSpread: 2,
 		speed: [0.3, 1.1],
 		gravity: new THREE.Vector3(0, 0, 0),
 		drag: 0.97,
@@ -57,9 +57,9 @@ export async function play(ctx: EffectContext): Promise<void> {
 	haptics.vibrate(20);
 
 	// let them wander wide…
-	await delay(3000);
+	await delay(1900);
 	attraction = 0.12; // roam further out
-	await delay(2400);
+	await delay(1300);
 
 	// …then the swarm gets organised: the fireflies spell out the good news
 	attraction = 4.5;

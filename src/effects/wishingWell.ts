@@ -86,23 +86,24 @@ export async function play(ctx: EffectContext): Promise<void> {
 	const frameHalfW = (z: number) =>
 		Math.tan(THREE.MathUtils.degToRad(scene.camera.fov / 2)) * scene.camera.aspect * (5.35 - z);
 
-	const restore = dimLights(scene, 0.26, 900);
+	// moonlit, not murky — the well is a hopeful place, keep the room readable
+	const restore = dimLights(scene, 0.38, 900);
 	scene.crossfadeEnvironment('nightSky', 900);
 	// moonlit stone: the room goes cold before the water appears
 	const wipe = backdropWipe(machine.backdrop, ctx.textures.quilt.map, 'ice');
 	wipe.in(2000);
 	scene.fxLight.color.set(0x86c5e8);
 	scene.fxLight.position.set(0, 0.6, 1.6);
-	tween(900, 'inOutQuad', (v) => (scene.fxLight.intensity = v * 1.6));
+	tween(900, 'inOutQuad', (v) => (scene.fxLight.intensity = v * 2.4));
 
 	// ---- open the well: the iris parts and the button is lifted off and set
 	// down in the bottom-left like a well lid, well clear of the mouth.
 	const btnHome = machine.buttonGroup.position.clone();
-	const parkX = -Math.min(1.72, frameHalfW(0.9) - 0.6);
+	const parkX = -Math.min(1.72, frameHalfW(0.9) - 0.7);
 	const parkY = btnHome.y - 1.02;
 	const opening = machine.openIris(0.62, 1300);
 	machine.portal.visible = false;
-	machine.setInnerGlow(0.06, 0x86c5e8);
+	machine.setInnerGlow(0.12, 0x86c5e8);
 	audio.sfx('clack', { pitch: 0.7, gain: 0.4 });
 	tween(1300, 'inOutCubic', (v) => {
 		// out towards the viewer first, so it clears the rings before it travels
@@ -110,8 +111,9 @@ export async function play(ctx: EffectContext): Promise<void> {
 		machine.buttonGroup.position.x = btnHome.x + (parkX - btnHome.x) * v;
 		machine.buttonGroup.position.y = btnHome.y + (parkY - btnHome.y) * v + lift * 0.5;
 		machine.buttonGroup.position.z = btnHome.z + 0.55 * v + lift;
-		machine.buttonGroup.rotation.z = v * -0.42; // set down at a lazy angle
-		machine.buttonGroup.scale.setScalar(1 - v * 0.42);
+		// turns as it's carried, settling at a lazy angle in the corner
+		machine.buttonGroup.rotation.z = v * -0.42 - lift * 0.7;
+		machine.buttonGroup.scale.setScalar(1 - v * 0.22);
 	});
 
 	// The water surface. This started life as a ripple SHADER and never drew a
@@ -126,10 +128,10 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// reads as a dome — a bubble, not a pool. Rough and non-metallic keeps it
 	// looking like standing water in shadow; the rings supply all the life.
 	const waterMat = new THREE.MeshStandardMaterial({
-		color: 0x0e2430,
+		color: 0x16323f,
 		roughness: 0.82,
 		metalness: 0,
-		envMapIntensity: 0.22
+		envMapIntensity: 0.4
 	});
 	const water = new THREE.Mesh(new THREE.CircleGeometry(1.12, 64), waterMat);
 	water.position.set(0, 0, -0.12);
@@ -240,7 +242,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 			size: [0.02, 0.05],
 			colors: [0xffffff, 0xbfe8f4]
 		});
-		machine.setInnerGlow(0.1, 0x86c5e8);
+		machine.setInnerGlow(0.16, 0x86c5e8);
 	};
 
 	await delay(260);
@@ -258,8 +260,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 	haptics.vibrate([18, 50, 24]);
 	ripple(0, 0, 2.1); // the well stirs from the middle
 	tween(900, 'inOutQuad', (v) => {
-		machine.setInnerGlow(0.1 + v * 0.42, 0x9fd8e8);
-		scene.fxLight.intensity = 1.6 + v * 2.4;
+		machine.setInnerGlow(0.16 + v * 0.42, 0x9fd8e8);
+		scene.fxLight.intensity = 2.4 + v * 1.8;
 	});
 	// a fat bubble climbs out of the shaft, wobbling as it goes
 	const bubbleMat = new THREE.SpriteMaterial({
@@ -350,15 +352,16 @@ export async function play(ctx: EffectContext): Promise<void> {
 	});
 
 	// ---- teardown: the water drains, the button floats back up, the well closes
-	tween(700, 'inOutQuad', (v) => waterMat.color.setRGB(0.027 * (1 - v), 0.086 * (1 - v), 0.122 * (1 - v)));
+	const drainFrom = waterMat.color.clone();
+	tween(700, 'inOutQuad', (v) => waterMat.color.copy(drainFrom).multiplyScalar(1 - v));
 	audio.sfx('clack', { pitch: 0.85, gain: 0.4 });
 	tween(1000, 'inOutCubic', (v) => {
 		const lift = Math.sin(Math.PI * v) * 0.4;
 		machine.buttonGroup.position.x = parkX + (btnHome.x - parkX) * v;
 		machine.buttonGroup.position.y = parkY + (btnHome.y - parkY) * v + lift * 0.5;
 		machine.buttonGroup.position.z = btnHome.z + 0.55 * (1 - v) + lift;
-		machine.buttonGroup.rotation.z = -0.42 * (1 - v);
-		machine.buttonGroup.scale.setScalar(0.58 + v * 0.42);
+		machine.buttonGroup.rotation.z = -0.42 * (1 - v) - lift * 0.7;
+		machine.buttonGroup.scale.setScalar(0.78 + v * 0.22);
 	});
 	await machine.closeIris(1100);
 	machine.buttonGroup.position.copy(btnHome);
@@ -374,8 +377,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 	wipe.out(1000);
 	scene.crossfadeEnvironment('lounge');
 	tween(800, 'outQuad', (v) => {
-		machine.setInnerGlow(0.52 * (1 - v));
-		scene.fxLight.intensity = 4 * (1 - v);
+		machine.setInnerGlow(0.58 * (1 - v));
+		scene.fxLight.intensity = 4.2 * (1 - v);
 	});
 	await restore(900);
 }
