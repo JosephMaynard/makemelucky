@@ -46,7 +46,9 @@ const TRACKS: Record<string, { src: string; volume: number }> = {
 	// 33s; the king speaks 13s-20s — fairyKingdom's choreography is timed to it
 	fairyKingdom: { src: '/soundfx/fairy-kingdom.mp3', volume: 0.9 },
 	// 24s mariachi-reggaeton at 126bpm: sung intro 0-9, build 9-13, drop 13-24
-	luckyTacos: { src: '/soundfx/lucky-tacos.mp3', volume: 0.9 }
+	luckyTacos: { src: '/soundfx/lucky-tacos.mp3', volume: 0.9 },
+	// 18.4s electro-swing at 128bpm; lyrics 0-15s, instrumental outro to the end
+	stillLuckyTonight: { src: '/soundfx/still-lucky-tonight.mp3', volume: 0.9 }
 };
 
 export class AudioService {
