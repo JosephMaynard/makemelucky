@@ -29,11 +29,7 @@
 			<div id="button">Make Me Lucky!</div>
 			<h1 id="output" align="center">Need a Bit of Luck?<br/>Hit the button...</h1>
 
-	      <div id="socialmedia" class="decoration">
-	        <div class="twitter">
-	          <a href="https://twitter.com/share" class="twitter-share-button" data-url="https://www.makemelucky.com/" data-text="Make Me Lucky the internet's luck generator and good luck charm!" data-via="JosephMaynard" data-hashtags="MakeMeLucky"  data-count="vertical">Tweet</a>
-	        </div>
-	      </div>
+			<a href="/" id="newSiteBtn">&#10024; This is the 2011 original &mdash;<br/>try the NEW Make Me Lucky!</a>
 
 			<a href="#" id="aboutBtn" class="navLinks">About</a>
 		</div>
@@ -58,10 +54,30 @@
 	<script src="jquery.min.js"></script>
 	<script src="makemelucky.js"></script>
 	<script>
-		function gameLoop() { 
+		function gameLoop() {
 			emitter.update();
 		}
-		setInterval(gameLoop, 1000/30); 
+		setInterval(gameLoop, 1000/30);
+	</script>
+	<script>
+		// PostHog, cookieless — same project, first-party proxy and privacy
+		// settings as the main site, so museum-piece traffic shows up alongside
+		// everything else. This is the public client key from the main bundle.
+		!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures getActiveMatchingSurveys getSurveys onSessionId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+		posthog.init('phc_q6teUyUKw7f5xhFEzhFKPUAFfZ2zD6imePptPr5eMY3G', {
+			api_host: 'https://luck.makemelucky.com',
+			persistence: 'memory',
+			autocapture: false,
+			capture_pageview: true,
+			disable_session_recording: true,
+			disable_surveys: true
+		});
+		document.getElementById('newSiteBtn').addEventListener('click', function () {
+			posthog.capture('v1_new_site_click');
+		});
+		document.getElementById('button').addEventListener('click', function () {
+			posthog.capture('v1_button_pressed');
+		});
 	</script>
 
 <img src="luckyStar.png" width="1" height="1"/>

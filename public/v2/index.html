@@ -67,7 +67,24 @@
 <!-- Remove tap highlight on Windows Phone -->
 <meta name="msapplication-tap-highlight" content="no" />
 
-<script>function fireEvent(){/* analytics removed in archive */}</script>
+<script>
+	// PostHog, cookieless — same project, first-party proxy and privacy
+	// settings as the main site and /v1. Public client key from the main bundle.
+	!function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once unregister opt_out_capturing has_opted_out_capturing opt_in_capturing reset isFeatureEnabled onFeatureFlags getFeatureFlag getFeatureFlagPayload group updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures getActiveMatchingSurveys getSurveys onSessionId".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+	posthog.init('phc_q6teUyUKw7f5xhFEzhFKPUAFfZ2zD6imePptPr5eMY3G', {
+		api_host: 'https://luck.makemelucky.com',
+		persistence: 'memory',
+		autocapture: false,
+		capture_pageview: true,
+		disable_session_recording: true,
+		disable_surveys: true
+	});
+	// The 2015 code funnels every event through fireEvent (was Google
+	// Analytics, stubbed out in the archive) — forward them to PostHog.
+	function fireEvent(action, label){
+		posthog.capture('v2_' + String(action).toLowerCase().replace(/\W+/g, '_'), { label: label });
+	}
+</script>
 
 <noscript><style>html,body,#mainArea{height:100%;} #loading,#adStrip,#socialMedia,#luckyCharms,#pageDown,#mute,#muteOverlay,#pageDownOverlay{display: none;}</style></noscript>
 
