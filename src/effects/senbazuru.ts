@@ -3,10 +3,11 @@
 // themselves mid-air, and stream around the machine in a ribbon before one
 // breaks formation and settles on the button.
 //
-// The fold is real, not a swap: the wings, neck and tail are separate meshes on
-// their hinges, lying flat inside the paper square until the fold tween sweeps
-// them into the pose. Building the crane facing +Z means Object3D.lookAt() can
-// fly it — the one orientation convention that never fights three.js.
+// The fold is real, not a swap: the square is two triangles hinged on its
+// diagonal that crease shut while the wings, neck and tail — hidden until then,
+// since all of them overhang the sheet — grow out of the crease. Building the
+// crane facing +Z means Object3D.lookAt() can fly it — the one orientation
+// convention that never fights three.js.
 //
 // Two things the fold needs to be WATCHABLE, both learned the hard way: the
 // flock has to hold station while it happens (nobody can follow a fold on an
@@ -37,19 +38,46 @@ interface Crane {
 	group: THREE.Group;
 	wings: [THREE.Group, THREE.Group];
 	body: THREE.Group;
-	sheet: THREE.Mesh;
+	bird: THREE.Group;
+	sheet: THREE.Group;
+	halves: [THREE.Group, THREE.Group];
+	sheetMat: THREE.MeshStandardMaterial;
 	phase: number;
 	flap: number;
 	landing: boolean;
 }
 
-function buildCrane(mat: THREE.Material, sheetMat: THREE.Material): Crane {
+function buildCrane(mat: THREE.Material, sheetMat: THREE.MeshStandardMaterial): Crane {
 	const group = new THREE.Group();
 
-	// the unfolded square, visible only until the fold takes
-	const sheet = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.3), sheetMat);
+	// The unfolded square is two triangles hinged on its own diagonal, so the
+	// fold can be a crease instead of a crossfade. They are cut diamond-wise
+	// (corners on the axes) because a hinge is cheapest along a local axis; the
+	// crease group is then turned 45° to stand the square back up square-on.
+	const D = 0.15 * Math.SQRT2; // half-diagonal of a 0.3 square
+	const sheet = new THREE.Group();
+	const crease = new THREE.Group();
+	crease.rotation.z = Math.PI / 4;
+	sheet.add(crease);
+	const halves: [THREE.Group, THREE.Group] = [new THREE.Group(), new THREE.Group()];
+	for (let s = 0; s < 2; s++) {
+		const tri =
+			s === 0
+				? triangle([-D, 0, 0], [D, 0, 0], [0, D, 0])
+				: triangle([D, 0, 0], [-D, 0, 0], [0, -D, 0]);
+		halves[s].add(new THREE.Mesh(tri, sheetMat));
+		crease.add(halves[s]);
+	}
 	// squared up to the viewer; the caller counter-rotates it against the pose
 	group.add(sheet);
+
+	// Everything below is crane, and every piece of it is wider or longer than
+	// the sheet — it stays hidden until the fold starts or it shows as shrapnel
+	// sticking out of a square that is supposed to be flat paper.
+	const bird = new THREE.Group();
+	bird.visible = false;
+	bird.scale.setScalar(0.0001);
+	group.add(bird);
 
 	// body: a four-sided keel pointing the way it flies
 	const body = new THREE.Group();
@@ -67,7 +95,7 @@ function buildCrane(mat: THREE.Material, sheetMat: THREE.Material): Crane {
 	tail.rotation.x = -Math.PI / 2 + 0.42;
 	body.add(tail);
 	body.scale.set(1, 0.02, 1); // flat until folded
-	group.add(body);
+	bird.add(body);
 
 	// wings, hinged on the spine so a rotation.z is a wingbeat
 	const wingGeo = triangle([0, 0, 0.02], [0.4, 0.05, -0.16], [0.04, 0, -0.24]);
@@ -76,10 +104,10 @@ function buildCrane(mat: THREE.Material, sheetMat: THREE.Material): Crane {
 		const w = new THREE.Mesh(wingGeo, mat);
 		wings[s].add(w);
 		wings[s].scale.x = s === 0 ? 1 : -1;
-		group.add(wings[s]);
+		bird.add(wings[s]);
 	}
 
-	return { group, wings, body, sheet, phase: 0, flap: 0, landing: false };
+	return { group, wings, body, bird, sheet, halves, sheetMat, phase: 0, flap: 0, landing: false };
 }
 
 export async function play(ctx: EffectContext): Promise<void> {
@@ -184,15 +212,28 @@ export async function play(ctx: EffectContext): Promise<void> {
 	await delay(420);
 	for (let i = 0; i < N; i++) {
 		const c = cranes[i];
-		const sheetMat = c.sheet.material as THREE.MeshStandardMaterial;
 		audio.sfx('tick', { pitch: 1.7 + rand(-0.2, 0.2), gain: 0.18 });
 		tween(700, 'outBack', (v) => {
+			// outBack overshoots past 1; the crease may snap, scales and opacity
+			// may not
+			const f = Math.min(1, Math.max(0, v));
 			c.group.userData.fold = v;
-			c.body.scale.set(1, 0.02 + v * 0.98, 1);
-			// the sheet folds itself away: it narrows and lifts, it doesn't
-			// simply dissolve
-			sheetMat.opacity = Math.max(0, 1 - v * 1.35);
-			c.sheet.scale.set(1.25 * (1 - v * 0.75), 1.25 * (1 - v), 1);
+			// first the square hinges shut on its diagonal — both halves lift
+			// towards the viewer, which is the one direction the crease reads from
+			c.halves[0].rotation.x = v * 1.32;
+			c.halves[1].rotation.x = -v * 1.32;
+			// then the paper is drawn into the crease as the bird grows out of it
+			const drawn = Math.max(0, (f - 0.42) / 0.58);
+			c.halves[0].scale.set(1 - drawn * 0.42, 1 - drawn * 0.95, 1);
+			c.halves[1].scale.copy(c.halves[0].scale);
+			c.sheetMat.opacity = 1 - drawn * drawn;
+			// the bird only breaks cover once the paper is well into the crease
+			// and thinning — any earlier and a half-scale crane reads as a speck
+			// of dirt on a flat square
+			const grown = Math.min(1, Math.max(0, (f - 0.5) / 0.42));
+			c.bird.visible = grown > 0;
+			c.bird.scale.setScalar(Math.max(0.0001, grown));
+			c.body.scale.set(1, 0.02 + f * 0.98, 1);
 		});
 		await delay(105);
 	}

@@ -7,7 +7,7 @@ import { dimLights, flashPulse, disposeObject } from './helpers';
 import type { EffectContext } from '../types';
 
 export const sound = 'luckySymbol';
-export const duration = 9500;
+export const duration = 8400;
 
 interface Bumper {
 	p: THREE.Vector3;
@@ -103,8 +103,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 			const d = ball.position.distanceTo(b.p);
 			if (d < 0.42) {
 				const n = ball.position.clone().sub(b.p).normalize();
-				const speed = Math.max(vel.length(), 2.6) * 1.28;
-				vel.copy(n.multiplyScalar(Math.min(speed, 6)));
+				const speed = Math.max(vel.length(), 2.4) * 1.16;
+				vel.copy(n.multiplyScalar(Math.min(speed, 5)));
 				ball.position.copy(b.p).addScaledVector(n, 0.43);
 				flick(b);
 				bump(b.p, 1);
@@ -114,14 +114,19 @@ export async function play(ctx: EffectContext): Promise<void> {
 		}
 	});
 
-	await delay(5600);
+	await delay(4200);
 
 	// drain shot: the button becomes a MOUTH and eats the ball
 	playing = false;
 	haptics.vibrate([30, 40, 30, 40, 120]);
 	const bg = machine.buttonGroup; // child of the machine centre — animate LOCAL
 
-	// the mouth opens: lift up and tip back, baring the dark socket behind it
+	// the mouth opens: OUT toward the viewer first so it clears the face
+	// rings (the fairyKingdom pattern — straight up clips them), THEN lift
+	// and tip back, baring the dark socket behind it
+	await tween(180, 'outQuad', (v) => {
+		bg.position.z = 0.26 * v;
+	});
 	await tween(280, 'outQuad', (v) => {
 		bg.position.y = 0.38 * v;
 		bg.rotation.x = -0.3 * v;
@@ -143,13 +148,14 @@ export async function play(ctx: EffectContext): Promise<void> {
 	trail.stop();
 	stopSim();
 
-	// the mouth closes with a satisfied little gulp
+	// the mouth closes with a satisfied little gulp — settle down, then back in
 	audio.sfx('gulp');
 	await tween(200, 'outBack', (v) => {
 		bg.position.y = 0.38 * (1 - v);
 		bg.rotation.x = -0.3 * (1 - v);
 		bg.scale.y = 1 - Math.sin(v * Math.PI) * 0.06; // squash pulse
 	});
+	await tween(160, 'inQuad', (v) => (bg.position.z = 0.26 * (1 - v)));
 	// restore the buttonGroup exactly
 	bg.position.set(0, 0, 0);
 	bg.rotation.set(0, 0, 0);

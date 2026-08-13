@@ -133,7 +133,10 @@ export async function play(ctx: EffectContext): Promise<void> {
 		metalness: 0,
 		envMapIntensity: 0.4
 	});
-	const water = new THREE.Mesh(new THREE.CircleGeometry(1.12, 64), waterMat);
+	// radius must beat the socket bore (R*1.045 ≈ 1.36) or a ring of leather
+	// shows between the water and the iris edge — portalDrop's sky disc is the
+	// reference for filling the opening completely
+	const water = new THREE.Mesh(new THREE.CircleGeometry(1.38, 64), waterMat);
 	water.position.set(0, 0, -0.12);
 	// present from the first frame so the parting iris REVEALS it, rather than
 	// it appearing all at once the moment the doors finish

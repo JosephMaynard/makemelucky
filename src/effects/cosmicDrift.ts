@@ -8,26 +8,40 @@ import { flashPulse } from './helpers';
 import type { EffectContext } from '../types';
 
 export const sound = 'rimLight';
-export const duration = 7400;
+export const duration = 5900;
 
 export async function play(ctx: EffectContext): Promise<void> {
-	const { scene, machine, particles, sprites, haptics } = ctx;
+	const { scene, machine, particles, sprites, haptics, audio } = ctx;
 
-	// night falls hard — the leather wall fades into the void
+	// night falls — a void-coloured cover plane fades in OVER the leather
+	// wall, then the wall hides behind it. Fading the wall's own material
+	// meant flipping `transparent` on an already-compiled MeshStandardMaterial
+	// and eating the recompile hitch mid-transition — that hitch WAS the jank.
 	const key0 = scene.keyLight.intensity;
 	const fill0 = scene.fillLight.intensity;
 	const env0 = scene.scene.environmentIntensity;
 	const bg0 = scene.scene.background;
 	const backdrop = machine.backdrop as THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
-	await tween(1000, 'inOutQuad', (v) => {
+	const nightMat = new THREE.MeshBasicMaterial({
+		color: 0x040510,
+		transparent: true,
+		opacity: 0,
+		depthWrite: false
+	});
+	const night = new THREE.Mesh(new THREE.PlaneGeometry(16, 8), nightMat);
+	night.position.set(0, 0, -0.7); // just in front of the wall
+	scene.scene.add(night);
+	scene.scene.background = new THREE.Color(0x040510);
+	await tween(800, 'inOutQuad', (v) => {
 		scene.keyLight.intensity = key0 * (1 - v * 0.72);
 		scene.fillLight.intensity = fill0 * (1 - v * 0.45);
 		scene.scene.environmentIntensity = env0 * (1 - v * 0.7);
-		backdrop.material.opacity = 1 - v;
+		nightMat.opacity = v;
 	});
-	backdrop.material.transparent = true;
+	// the wall is fully covered and the cover matches the background colour,
+	// so both of these are invisible switches
 	backdrop.visible = false;
-	scene.scene.background = new THREE.Color(0x040510);
+	night.visible = false;
 
 	// starfield — twinkles for instant depth, plus two drifting parallax
 	// layers so space itself feels like it's slowly sliding past
@@ -41,7 +55,9 @@ export async function play(ctx: EffectContext): Promise<void> {
 				originSpread: 7,
 				speed: [0.005, 0.02],
 				gravity: new THREE.Vector3(0, 0, 0),
-				life: [9, 12],
+				// life ends with the effect — 9-12s stars used to hang in front
+				// of the restored lounge like glitter nobody swept up
+				life: [4.5, 6.5],
 				size: [size * 0.6, size * 1.6],
 				colors: [0xffffff, 0xcfe2ff, 0xffe9c0],
 				fadeIn: 0.12
@@ -61,7 +77,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 				cone: 0.05,
 				speed: sp,
 				gravity: new THREE.Vector3(0, 0, 0),
-				life: [5, 8],
+				life: [3.5, 5.5],
 				size: [size * 0.6, size * 1.5],
 				colors: [0xffffff, 0xcfe2ff, 0xffe9c0],
 				fadeIn: 0.25
@@ -153,16 +169,22 @@ export async function play(ctx: EffectContext): Promise<void> {
 	const stopRings = scene.addUpdatable((dt) => updateRings(dt));
 	for (const ring of rings) tween(1500, 'inOutQuad', (v) => (ring.mat.opacity = v * ring.maxOpacity));
 
-	// the machine levitates, weightless
+	// the machine levitates, weightless, its glow slowly breathing through the
+	// nebula palette — and the camera heels over a few degrees with it, which
+	// is what actually sells "adrift" rather than "bobbing on a spring"
 	const baseY = machine.group.position.y;
+	const glowCol = new THREE.Color();
 	let drifting = true;
 	const stopDrift = scene.addUpdatable((dt, t) => {
 		if (!drifting) return;
 		machine.group.position.y = baseY + Math.sin(t * 0.7) * 0.12 + 0.06;
 		machine.group.rotation.z = Math.sin(t * 0.5) * 0.035;
 		machine.group.rotation.x = Math.cos(t * 0.44) * 0.02;
+		glowCol.setHSL(0.62 + Math.sin(t * 0.35) * 0.09, 0.6, 0.72);
+		machine.setInnerGlow(0.42 + Math.sin(t * 1.1) * 0.08, glowCol);
 		for (const n of nebulae) n.position.x += Math.sin(t * 0.2) * dt * 0.03;
 	});
+	tween(2200, 'inOutQuad', (v) => (scene.cameraRoll = v * 0.045));
 	machine.setInnerGlow(0.45, 0xcfe2ff);
 	haptics.vibrate(30);
 
@@ -185,11 +207,55 @@ export async function play(ctx: EffectContext): Promise<void> {
 				colors: [0xffffff, 0xcfe2ff],
 				spin: [0, 0]
 			});
-			await delay(rand(420, 900));
+			await delay(rand(360, 720));
 		}
 	})();
 
-	await delay(4200);
+	// ---- the showpiece: one huge comet arcs behind the machine, trailing ice
+	const _ca = new THREE.Vector3();
+	const _cb = new THREE.Vector3();
+	delay(400).then(async () => {
+		const headMat = new THREE.SpriteMaterial({
+			map: sprites.softDot,
+			color: 0xdff2ff,
+			transparent: true,
+			opacity: 0,
+			blending: THREE.AdditiveBlending,
+			depthWrite: false
+		});
+		const head = new THREE.Sprite(headMat);
+		const from = new THREE.Vector3(-4.2, 2.4, -2.2);
+		const peak = new THREE.Vector3(0.4, 1.5, -2.6);
+		const to = new THREE.Vector3(4.4, -0.8, -2.2);
+		head.position.copy(from);
+		scene.scene.add(head);
+		const trail = particles.emitter({
+			texture: sprites.softDot,
+			count: 200,
+			emitRate: 130,
+			origin: head.position,
+			originSpread: 0.06,
+			speed: [0.05, 0.25],
+			gravity: new THREE.Vector3(0, 0, 0),
+			life: [0.8, 1.6],
+			size: [0.05, 0.16],
+			colors: [0xdff2ff, 0x9fc8ff, 0xfff3cf],
+			fadeIn: 0.05
+		});
+		audio.sfx('swoosh', { pitch: 0.55, gain: 0.45 });
+		await tween(1500, 'inOutQuad', (v) => {
+			_ca.lerpVectors(from, peak, v);
+			_cb.lerpVectors(peak, to, v);
+			head.position.lerpVectors(_ca, _cb, v);
+			headMat.opacity = Math.min(1, Math.sin(v * Math.PI) * 2.2) * 0.9;
+			head.scale.setScalar(0.4 + Math.sin(v * Math.PI) * 0.25);
+		});
+		trail.stop();
+		scene.scene.remove(head);
+		headMat.dispose();
+	});
+
+	await delay(2000);
 
 	// wish granted — a bright star falls INTO the button
 	shooting = false;
@@ -228,6 +294,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 		machine.group.position.y = baseY + (1 - v) * 0.06;
 		machine.group.rotation.z *= 1 - v;
 		machine.group.rotation.x *= 1 - v;
+		scene.cameraRoll = 0.045 * (1 - v);
 		for (const n of nebulae) n.material.opacity = 0.33 * (1 - v);
 		for (const ring of rings) ring.mat.opacity = ring.maxOpacity * (1 - v);
 		machine.setInnerGlow(0.3 * (1 - v), 0xcfe2ff);
@@ -244,14 +311,22 @@ export async function play(ctx: EffectContext): Promise<void> {
 	}
 	for (const s of stars) s.emitting = false;
 	for (const d of drifters) d.stop();
+	// dawn: the cover comes back up (invisible — it matches the void), the
+	// lounge background and wall return BEHIND it, and it fades away as the
+	// lights come up. No material recompiles anywhere in the round trip.
+	night.visible = true;
+	nightMat.opacity = 1;
+	scene.scene.background = bg0;
 	backdrop.visible = true;
 	await tween(900, 'inOutQuad', (v) => {
 		scene.keyLight.intensity = key0 * (0.15 + v * 0.85);
 		scene.fillLight.intensity = fill0 * (0.4 + v * 0.6);
 		scene.scene.environmentIntensity = env0 * (0.2 + v * 0.8);
-		backdrop.material.opacity = v;
+		nightMat.opacity = 1 - v;
 	});
-	scene.scene.background = bg0;
+	scene.scene.remove(night);
+	night.geometry.dispose();
+	nightMat.dispose();
 	machine.group.position.y = baseY;
 	machine.group.rotation.set(0, 0, 0);
 }

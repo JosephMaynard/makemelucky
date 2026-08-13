@@ -1,9 +1,9 @@
 // Effect 24 — GENIE OF THE MACHINE: the iris cracks open and something far
-// stranger than smoke rises out — a coiling braid of iridescent light, hue
-// rolling from teal through violet to magenta, orbited by sharp streaks of
-// escaping glow. It dances, condenses into the words you were hoping for,
-// and then the machine swallows the whole apparition back down with one
-// satisfied gulp. Wish granted; receipts retained.
+// stranger than smoke erupts — a four-armed vortex of iridescent light
+// bursting out to north, east, south and west, hue rolling from teal through
+// violet to magenta, orbited by sharp streaks of escaping glow. It churns,
+// condenses into the words you were hoping for, and then the machine
+// swallows the whole apparition back down with one satisfied gulp.
 
 import * as THREE from 'three';
 import { tween, delay, rand } from '../core/anim';
@@ -48,8 +48,11 @@ const FRAG = /* glsl */ `
 		float bands = 0.55 + 0.45 * sin(vUv.y * 24.0 + uTime * 5.0 + vUv.x * 6.0);
 		float edge = smoothstep(0.0, 0.22, vUv.x) * smoothstep(1.0, 0.78, vUv.x);
 		float tip = smoothstep(1.0, 0.86, vUv.y); // feather the crown
+		// feather the root too — an unfaded base ring reads as a bright stub
+		// stamped ON the machine face instead of light growing out of it
+		float root = smoothstep(0.0, 0.14, vUv.y);
 		float hue = fract(vUv.y * 0.5 - uTime * 0.11 + vUv.x * 0.12);
-		gl_FragColor = vec4(hue2rgb(hue), bands * edge * tip * uAlpha);
+		gl_FragColor = vec4(hue2rgb(hue), bands * edge * tip * root * uAlpha);
 	}
 `;
 
@@ -133,34 +136,68 @@ export async function play(ctx: EffectContext): Promise<void> {
 	scene.crossfadeEnvironment('neon', 800);
 	haptics.vibrate(35);
 
-	// ---- THE EMERGENCE: a braid of three helical ribbons rises and dances
+	// ---- THE EMERGENCE: braids of helical ribbon burst OUT OF THE MACHINE at
+	// four separate points — the iris mouth as ever, and then the left rim,
+	// the right rim and the bottom rim, each arm pointing away from the
+	// machine like it's sprung leaks in every direction. Emerging from the
+	// EDGES (not all radiating from the centre) is what keeps the button and
+	// its lettering readable underneath the show. Each arm spins about its
+	// own axis via a spinner group nested inside the arm's compass rotation.
 	const genie = new THREE.Group();
-	genie.position.copy(MOUTH);
+	genie.position.set(0, -0.32, 0.4); // machine centre; arms offset to its rim
 	scene.scene.add(genie);
 	const ribbons: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial>[] = [];
-	for (let i = 0; i < 3; i++) {
-		const mat = new THREE.ShaderMaterial({
-			uniforms: {
-				uTime: { value: 0 },
-				uPhase: { value: (i / 3) * Math.PI * 2 },
-				uRise: { value: 0 },
-				uAlpha: { value: 0 }
-			},
-			vertexShader: VERT,
-			fragmentShader: FRAG,
-			transparent: true,
-			depthWrite: false,
-			blending: THREE.AdditiveBlending,
-			side: THREE.DoubleSide
-		});
-		const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1, 10, 72), mat);
-		genie.add(mesh);
-		ribbons.push(mesh);
+	const arms: { spinner: THREE.Group; mats: THREE.ShaderMaterial[]; riseDelay: number }[] = [];
+	// Four IDENTICAL copies of the original vortex, anchored at the button's
+	// edge and turned in 90° steps about it: the original rose from 0.37
+	// above the button centre, so each copy keeps that offset rotated with
+	// it. Same length, same girth — the compass arms are the original's
+	// equals, not accessories.
+	const EDGE = 0.37;
+	const ARM_DEFS = [
+		{ x: 0, y: EDGE, rotZ: 0, riseDelay: 0 }, // north — the original
+		{ x: EDGE, y: 0, rotZ: -Math.PI / 2, riseDelay: 380 }, // east
+		{ x: -EDGE, y: 0, rotZ: Math.PI / 2, riseDelay: 380 }, // west
+		{ x: 0, y: -EDGE, rotZ: Math.PI, riseDelay: 720 } // south
+	];
+	for (const def of ARM_DEFS) {
+		const arm = new THREE.Group();
+		arm.position.set(def.x, def.y, 0);
+		arm.rotation.z = def.rotZ;
+		const spinner = new THREE.Group();
+		arm.add(spinner);
+		genie.add(arm);
+		const armMats: THREE.ShaderMaterial[] = [];
+		for (let i = 0; i < 3; i++) {
+			const mat = new THREE.ShaderMaterial({
+				uniforms: {
+					uTime: { value: 0 },
+					uPhase: { value: (i / 3) * Math.PI * 2 },
+					uRise: { value: 0 },
+					uAlpha: { value: 0 }
+				},
+				vertexShader: VERT,
+				fragmentShader: FRAG,
+				transparent: true,
+				depthWrite: false,
+				blending: THREE.AdditiveBlending,
+				side: THREE.DoubleSide
+			});
+			const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1, 10, 72), mat);
+			spinner.add(mesh);
+			ribbons.push(mesh);
+			armMats.push(mat);
+		}
+		arms.push({ spinner, mats: armMats, riseDelay: def.riseDelay });
 	}
 	const stopDance = scene.addUpdatable((dt, t) => {
 		for (const r of ribbons) r.material.uniforms.uTime.value = t;
-		genie.rotation.y = t * 0.5; // the whole braid slowly revolves…
-		genie.rotation.z = Math.sin(t * 0.7) * 0.07; // …and sways on its hips
+		// neighbouring arms counter-rotate so the vortex churns rather than
+		// turning as one rigid pinwheel
+		for (let i = 0; i < arms.length; i++) {
+			arms[i].spinner.rotation.y = t * (0.5 + i * 0.08) * (i % 2 ? -1 : 1);
+		}
+		genie.rotation.z = Math.sin(t * 0.7) * 0.07; // sways on its hips
 	});
 
 	// sharp streaks of light orbiting the column — escaping glow, not smoke
@@ -189,19 +226,33 @@ export async function play(ctx: EffectContext): Promise<void> {
 	});
 
 	audio.sfx('swoosh', { pitch: 0.5, gain: 1.0 });
-	await tween(1300, 'outCubic', (v) => {
-		for (const r of ribbons) {
-			r.material.uniforms.uRise.value = v;
-			r.material.uniforms.uAlpha.value = v * 0.85;
-		}
-	});
-	// let it dance — glints pop inside the braid like thoughts forming
-	for (let i = 0; i < 3; i++) {
-		delay(300 + i * 600).then(() =>
+	for (const arm of arms) {
+		delay(arm.riseDelay).then(() => {
+			if (arm.riseDelay) audio.sfx('swoosh', { pitch: 0.7 + arm.riseDelay * 0.0005, gain: 0.5 });
+			tween(1300, 'outCubic', (v) => {
+				for (const m of arm.mats) {
+					m.uniforms.uRise.value = v;
+					m.uniforms.uAlpha.value = v * 0.85;
+				}
+			});
+		});
+	}
+	await delay(2000); // the last arm finishes unfurling
+	// let it dance — glints pop along all four arms like thoughts forming
+	const GLINT_ARMS: [number, number, number, number][] = [
+		[0, 0.05, 0, 1], // baseX, baseY, dirX, dirY — matching ARM_DEFS in world space
+		[0.37, -0.32, 1, 0],
+		[0, -0.69, 0, -1],
+		[-0.37, -0.32, -1, 0]
+	];
+	for (let i = 0; i < 4; i++) {
+		const [bx, by, dx, dy] = GLINT_ARMS[i];
+		const along = rand(0.4, 1.6);
+		delay(200 + i * 450).then(() =>
 			particles.burst({
 				texture: sprites.star4,
 				count: 8,
-				origin: MOUTH.clone().add(new THREE.Vector3(rand(-0.25, 0.25), rand(0.4, 1.7), rand(-0.2, 0.2))),
+				origin: new THREE.Vector3(bx + dx * along, by + dy * along, 0.4 + rand(-0.15, 0.15)),
 				speed: [0.05, 0.3],
 				life: [0.4, 0.9],
 				size: [0.02, 0.05],
@@ -209,7 +260,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 			})
 		);
 	}
-	await delay(1900);
+	await delay(1600);
 
 	// ---- condensation: the braid draws down tight as the words gather from it
 	audio.sfx('gong', { pitch: 1.35, gain: 0.5 });

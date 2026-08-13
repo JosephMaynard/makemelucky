@@ -7,7 +7,7 @@ import { dimLights, flashPulse } from './helpers';
 import type { EffectContext } from '../types';
 
 export const sound = 'buttonFall';
-export const duration = 9500;
+export const duration = 8750;
 
 let dieMaterials: THREE.MeshStandardMaterial[] | null = null;
 
@@ -69,8 +69,12 @@ export async function play(ctx: EffectContext): Promise<void> {
 	}
 
 	let tumbling = true;
+	const _n = new THREE.Vector3();
+	const _rel = new THREE.Vector3();
+	let clackBudget = 0; // at most one collision clack per frame
 	const stopSim = scene.addUpdatable((dt) => {
 		if (!tumbling) return;
+		clackBudget = 1;
 		for (const die of dice) {
 			const v = die.userData.vel;
 			v.y -= 4.2 * dt;
@@ -106,9 +110,47 @@ export async function play(ctx: EffectContext): Promise<void> {
 			if (die.position.z < 0.68 && v.z < 0) v.z = -v.z;
 			if (die.position.z > 1.05 && v.z > 0) v.z = -v.z;
 		}
+		// dice-vs-dice: equal-mass sphere impulse. REACH is a compromise: at the
+		// corner diagonal (0.59) dice hover apart "balanced" on invisible
+		// spheres; at face contact (0.42) corners clip. 0.47 keeps contacts
+		// looking like touches and only rare corner-to-corner hits overlap.
+		// Five dice is ten pairs — no broadphase needed.
+		const REACH = 0.47;
+		for (let i = 0; i < dice.length; i++) {
+			for (let j = i + 1; j < dice.length; j++) {
+				const a = dice[i];
+				const b = dice[j];
+				_n.subVectors(b.position, a.position);
+				const d = _n.length();
+				if (d === 0 || d >= REACH) continue;
+				_n.divideScalar(d);
+				// resolve the overlap symmetrically, then exchange the closing
+				// velocity along the contact normal (restitution ~0.8)
+				const push = (REACH - d) / 2;
+				a.position.addScaledVector(_n, -push);
+				b.position.addScaledVector(_n, push);
+				const va = a.userData.vel as THREE.Vector3;
+				const vb = b.userData.vel as THREE.Vector3;
+				const closing = _rel.subVectors(va, vb).dot(_n);
+				if (closing <= 0) continue; // glancing past, not colliding
+				// damped but lively enough that pairs drift apart after a hit
+				// instead of going dead and clumping mid-air
+				va.addScaledVector(_n, -closing * 0.72);
+				vb.addScaledVector(_n, closing * 0.72);
+				// contact scrubs some spin and knocks in a little new tumble
+				for (const ang of [a.userData.ang as THREE.Vector3, b.userData.ang as THREE.Vector3]) {
+					ang.multiplyScalar(0.8);
+					ang.x += rand(-1, 1);
+				}
+				if (closing > 1 && clackBudget > 0) {
+					clackBudget--;
+					audio.sfx('clack', { pitch: 1.1 + Math.random() * 0.4, gain: 0.35 });
+				}
+			}
+		}
 	});
 
-	await delay(3800);
+	await delay(3050);
 	tumbling = false;
 	stopSim();
 

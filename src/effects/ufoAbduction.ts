@@ -7,7 +7,7 @@ import { dimLights, flashPulse, shockwave, disposeObject } from './helpers';
 import type { EffectContext } from '../types';
 
 export const sound = 'rimLight';
-export const duration = 11000;
+export const duration = 11300;
 
 function buildSaucer() {
 	const g = new THREE.Group();
@@ -30,6 +30,7 @@ function buildSaucer() {
 	);
 	dome.position.y = 0.12;
 	g.add(hull, dome);
+	const domeMat = dome.material as THREE.MeshPhysicalMaterial;
 	// blinking rim lights
 	const lights: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>[] = [];
 	for (let i = 0; i < 10; i++) {
@@ -42,7 +43,7 @@ function buildSaucer() {
 		g.add(lamp);
 		lights.push(lamp);
 	}
-	return { g, lights };
+	return { g, lights, domeMat };
 }
 
 export async function play(ctx: EffectContext): Promise<void> {
@@ -53,26 +54,30 @@ export async function play(ctx: EffectContext): Promise<void> {
 	saucer.g.position.set(-4.2, 2.6, 0.4);
 	scene.scene.add(saucer.g);
 
-	// blink loop + hover wobble
+	// blink loop + hover wobble; the dome throbs while the scan is running
 	let hovering = true;
+	let scanning = false;
 	let blink = 0;
 	const stopHover = scene.addUpdatable((dt, t) => {
 		blink += dt * 9;
 		saucer.lights.forEach((l, i) => {
 			l.material.color.setHex((Math.floor(blink) + i) % 10 < 5 ? 0x9fdcff : 0x2a4a6a);
 		});
+		saucer.domeMat.emissiveIntensity = scanning ? 0.9 + Math.sin(t * 14) * 0.5 : 0.6;
 		if (hovering) {
 			saucer.g.rotation.z = Math.sin(t * 2.2) * 0.06;
 			saucer.g.position.y += Math.sin(t * 1.7) * 0.0016;
 		}
 	});
 
-	// wobble in and park above the machine
+	// wobble in and park above the machine, dome in frame; the button's hold
+	// pose is kept low instead so it never reaches the hull
+	const PARK_Y = 1.1;
 	const stopWoo = audio.sfxLoop('wooWoo'); // eerie descending whistle
 	haptics.vibrate(25);
 	await tween(1800, 'inOutQuad', (v) => {
 		saucer.g.position.x = -4.2 + v * 4.2;
-		saucer.g.position.y = 2.6 - Math.sin(v * Math.PI) * 0.35 - v * 1.5;
+		saucer.g.position.y = 2.6 - Math.sin(v * Math.PI) * 0.35 - v * (2.6 - PARK_Y);
 	});
 
 	// tractor beam on
@@ -120,18 +125,44 @@ export async function play(ctx: EffectContext): Promise<void> {
 		// it pops forward out of its housing first, THEN rises and spins,
 		// so the rim never carves through the outer rings
 		button.position.z = startZ + Math.min(v * 4, 1) * 0.55;
-		button.position.y = startY + v * 0.95;
+		button.position.y = startY + v * 0.55;
 		// spin to 4π (even) so the red face ends up pointing at the camera,
-		// and shrink to 0.6 while being "scanned" — smaller reads better in
-		// the beam and stops the rim clipping the cone
+		// and shrink to 0.55 while being "scanned" — smaller reads better in
+		// the beam and keeps it well clear of both the cone and the hull
 		button.rotation.y = Math.max(0, (v - 0.22) / 0.78) * Math.PI * 4;
 		button.rotation.x = Math.sin(v * Math.PI * 2) * 0.2;
-		button.scale.setScalar(1 - v * 0.4);
+		button.scale.setScalar(1 - v * 0.45);
 	});
 
-	// scanning pause… the button shivers nervously in the beam
-	const holdY = startY + 0.95;
+	// scanning pause… the button shivers nervously in the beam while a scan
+	// ring sweeps it top to bottom like a barcode reader
+	const holdY = startY + 0.55;
 	const holdZ = startZ + 0.55;
+	scanning = true;
+	const ringMat = new THREE.MeshBasicMaterial({
+		color: 0x9fe8d8,
+		transparent: true,
+		opacity: 0,
+		blending: THREE.AdditiveBlending,
+		depthWrite: false,
+		side: THREE.DoubleSide
+	});
+	const scanRing = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.02, 8, 40), ringMat);
+	scanRing.rotation.x = Math.PI / 2;
+	scanRing.position.set(0, holdY, holdZ);
+	scene.scene.add(scanRing);
+	audio.sfx('tick', { pitch: 2.2, gain: 0.3 });
+	tween(1100, 'inOutQuad', (v) => {
+		// two full sweeps, fading in and out at the ends of the pass
+		const sweep = Math.sin(v * Math.PI * 2);
+		scanRing.position.y = holdY + sweep * 0.34;
+		ringMat.opacity = Math.min(1, Math.sin(v * Math.PI) * 2.5) * 0.7;
+		scanRing.scale.setScalar(1 + Math.abs(sweep) * 0.25);
+	}).then(() => {
+		scene.scene.remove(scanRing);
+		scanRing.geometry.dispose();
+		ringMat.dispose();
+	});
 	let jiggling = true;
 	const stopJiggle = scene.addUpdatable((dt, t) => {
 		if (!jiggling) return;
@@ -140,22 +171,26 @@ export async function play(ctx: EffectContext): Promise<void> {
 		button.position.y = holdY + Math.sin(t * 27 + 1.3) * 0.03;
 		button.rotation.z = Math.sin(t * 34) * 0.06;
 	});
-	await delay(900);
+	await delay(1200);
 	jiggling = false;
 	stopJiggle();
+	scanning = false;
 	// snap back exactly onto the hold pose before the descent begins
 	button.position.set(0, holdY, holdZ);
 	button.rotation.z = 0;
 	haptics.vibrate([20, 30, 20]);
 	dust.stop();
-	// nope, too lucky. Put it back — grow to full size, unwind the spin.
+	// verdict: TOO LUCKY. A flat double-blip — nuh-uh — and the merchandise
+	// goes back where it came from.
+	audio.sfx('pop', { pitch: 0.7, gain: 0.45 });
+	audio.sfx('pop', { pitch: 0.55, gain: 0.45 });
 	await tween(900, 'inQuad', (v) => {
-		button.position.y = startY + 0.95 - v * 0.95;
+		button.position.y = startY + 0.55 - v * 0.55;
 		// finish the spin early (4π → 0), tuck back into the housing at the end
 		button.rotation.y = Math.PI * 4 * Math.max(0, 1 - v * 1.4);
 		button.rotation.x = 0;
 		button.position.z = startZ + 0.55 * (1 - Math.max(0, (v - 0.72) / 0.28));
-		button.scale.setScalar(0.6 + v * 0.4);
+		button.scale.setScalar(0.55 + v * 0.45);
 	});
 	home.attach(button);
 	button.position.set(0, 0, 0);
@@ -188,7 +223,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	});
 	await tween(650, 'inQuart', (v) => {
 		saucer.g.position.x = v * 5.2;
-		saucer.g.position.y = 1.1 + v * 2.1;
+		saucer.g.position.y = PARK_Y + v * 2.1;
 		saucer.g.rotation.z = -v * 0.4;
 	});
 
