@@ -48,7 +48,9 @@ const TRACKS: Record<string, { src: string; volume: number }> = {
 	// 24s mariachi-reggaeton at 126bpm: sung intro 0-9, build 9-13, drop 13-24
 	luckyTacos: { src: '/soundfx/lucky-tacos.mp3', volume: 0.9 },
 	// 18.4s electro-swing at 128bpm; lyrics 0-15s, instrumental outro to the end
-	stillLuckyTonight: { src: '/soundfx/still-lucky-tonight.mp3', volume: 0.9 }
+	stillLuckyTonight: { src: '/soundfx/still-lucky-tonight.mp3', volume: 0.9 },
+	// 26.57s bhangra-Bollywood at a measured 139.5bpm (first downbeat 0.90s) — bhangraBaraat dances to it
+	bollywoodLuck: { src: '/soundfx/bollywood-luck.mp3', volume: 0.9 }
 };
 
 export class AudioService {

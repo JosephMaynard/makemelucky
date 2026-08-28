@@ -44,7 +44,8 @@ const EFFECTS: Record<string, () => Promise<EffectModule>> = {
 	badLuckGauntlet: () => import('./badLuckGauntlet'),
 	manekiNeko: () => import('./manekiNeko'),
 	luckyTacos: () => import('./luckyTacos'),
-	fairyKingdom: () => import('./fairyKingdom')
+	fairyKingdom: () => import('./fairyKingdom'),
+	bhangraBaraat: () => import('./bhangraBaraat')
 };
 
 // What a prefers-reduced-motion visitor is allowed to see. The bar: nothing
