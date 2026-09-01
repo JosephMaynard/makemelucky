@@ -919,22 +919,6 @@ p + p {
 	color: var(--text-dim);
 	font-size: 14.5px;
 }
-/* a card without a logo (PhonesOut) keeps its title on the full row */
-.promo-card h3:first-child {
-	grid-column: 1 / -1;
-}
-/* not ready yet: a real, crawlable link, but one that doesn't invite the
-   click — dimmed, no lift, no pointer flourish */
-.promo-card--soon {
-	opacity: 0.55;
-	filter: saturate(0.6);
-	cursor: default;
-}
-.promo-card--soon:hover {
-	transform: none;
-	box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
-}
-
 /* ============ FOOTER ============ */
 
 #footer {
