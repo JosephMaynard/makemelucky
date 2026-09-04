@@ -12,6 +12,14 @@ import { tween, tweensActive, updateTweens } from './anim';
 // it is the single biggest reason a device warms up during a long effect.
 const EFFECT_FPS_CAP = 60;
 
+// Geometry anti-aliasing. Every frame goes through the EffectComposer, whose
+// buffers carry no multisampling, so until now the whole site rendered with
+// NO edge anti-aliasing at all — every rim and clamp crawled. The samples go
+// on the ONE buffer the scene is drawn into (see the constructor); everything
+// after that is a full-screen quad, which has no edges to smooth. The
+// quality governor drops this to 0 on a struggling GPU before it touches bloom.
+const MSAA_SAMPLES = 4;
+
 // The grade — gentle vignette + animated film grain — folded INTO the output
 // pass: tone mapping, sRGB encoding and the grade in ONE full-screen pass
 // instead of two. Every full-screen pass re-touches every pixel on the
@@ -98,6 +106,10 @@ class GradedOutputPass extends OutputPass {
 		} satisfies GradeUniforms);
 		this.material.fragmentShader = GRADED_OUTPUT_FRAG;
 		this.material.needsUpdate = true;
+		// this is always the last pass and always renders to screen, so the
+		// buffer swap Pass requests by default would only shuffle which buffer
+		// the NEXT frame's scene lands in — and only one of them is multisampled
+		this.needsSwap = false;
 	}
 }
 
@@ -114,6 +126,8 @@ export class LuckyScene {
 	fxLight: THREE.PointLight;
 	rimLight: THREE.DirectionalLight;
 	composer: EffectComposer;
+	/** The composer buffer the scene is rendered into — the multisampled one. */
+	msaaTarget: THREE.WebGLRenderTarget;
 	renderPass: RenderPass;
 	bloomPass: UnrealBloomPass;
 	/** Tone mapping + sRGB + the film grade, as one pass. */
@@ -210,6 +224,15 @@ export class LuckyScene {
 
 		// Post-processing
 		this.composer = new EffectComposer(this.renderer);
+		// RenderPass draws the scene into the composer's READ buffer (renderTarget2)
+		// and none of our passes swaps, so that is the only buffer that needs
+		// samples; renderTarget1 never even gets allocated. Multisampling both
+		// would double a large half-float allocation and add a resolve per frame
+		// for zero edges. tick() re-asserts the pairing so it can never drift.
+		this.msaaTarget = this.composer.renderTarget2;
+		this.msaaTarget.samples = Math.min(MSAA_SAMPLES, this.renderer.capabilities.maxSamples);
+		// nothing reads the depth back, so don't pay to resolve it every frame
+		this.msaaTarget.resolveDepthBuffer = false;
 		this.renderPass = new RenderPass(this.scene, this.camera);
 		this.bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.38, 0.8, 0.88);
 		this.filmPass = new GradedOutputPass();
@@ -409,7 +432,12 @@ export class LuckyScene {
 		for (const fn of this.updatables) fn(dt, this.elapsed);
 
 		this.filmPass.uniforms.uTime.value = this.elapsed;
-		if (this._canvasVisible) this.composer.render();
+		if (this._canvasVisible) {
+			// the scene must land in the multisampled buffer every frame
+			this.composer.readBuffer = this.msaaTarget;
+			this.composer.writeBuffer = this.composer.renderTarget1;
+			this.composer.render();
+		}
 		if (interval === 0) {
 			this._monitorQuality(dt, now);
 		} else {
@@ -445,6 +473,15 @@ export class LuckyScene {
 		});
 	}
 
+	/** Change the scene buffer's sample count (0 = off). The framebuffer is
+	 *  rebuilt on its next use, so this is safe to call between frames. */
+	setMSAA(samples: number): void {
+		const want = Math.min(samples, this.renderer.capabilities.maxSamples);
+		if (this.msaaTarget.samples === want) return;
+		this.msaaTarget.samples = want;
+		this.msaaTarget.dispose();
+	}
+
 	/** Vignette strength, from the base grade (0) to full dark-effect grade (1). */
 	setVignetteBoost(boost: number): void {
 		this.filmPass.uniforms.uVignette.value = this.baseVignette + boost * 0.24;
@@ -463,10 +500,15 @@ export class LuckyScene {
 		const avg = this._fpsSamples.reduce((a, b) => a + b, 0) / this._fpsSamples.length;
 		this._fpsSamples.length = 0;
 		const fps = 1 / avg;
+		// the ladder, walked down as the GPU struggles: resolution, then
+		// multisampling, then (last resort) bloom — and back up in reverse
 		if (fps < 42 && this.qualityDPR > 1) {
 			this._goodStreak = 0;
 			this.qualityDPR = Math.max(1, this.qualityDPR - 0.5);
 			this.resize();
+		} else if (fps < 42 && this.msaaTarget.samples > 0) {
+			this._goodStreak = 0;
+			this.setMSAA(0);
 		} else if (fps < 30 && this.qualityDPR <= 1 && this.bloomPass.enabled) {
 			// last resort: drop bloom
 			this._goodStreak = 0;
@@ -474,12 +516,14 @@ export class LuckyScene {
 		} else if (fps > 55) {
 			// recovery: a transient stutter (boot jank, a busy tab) must not
 			// pin us at low quality forever. Two comfortable windows in a row
-			// buys back one step, bloom first, then resolution.
+			// buys back one step.
 			this._goodStreak += 1;
 			if (this._goodStreak >= 2) {
 				this._goodStreak = 0;
 				if (!this.bloomPass.enabled) {
 					this.bloomPass.enabled = true;
+				} else if (this.msaaTarget.samples < MSAA_SAMPLES) {
+					this.setMSAA(MSAA_SAMPLES);
 				} else if (this.qualityDPR < this._baseDPR) {
 					this.qualityDPR = Math.min(this._baseDPR, this.qualityDPR + 0.5);
 					this.resize();
