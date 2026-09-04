@@ -40,6 +40,10 @@ export interface EffectModule {
 	/** Nominal length in ms — the director keeps the screen away this long. */
 	duration: number;
 	play(ctx: EffectContext): Promise<void>;
+	/** Optional: build anything heavy and reusable ahead of time. The director
+	 *  calls it in idle time once this effect is next in the bag, so play()
+	 *  doesn't stall the run-up (or the soundtrack) constructing a set. */
+	warm?(ctx: EffectContext): void;
 }
 
 declare global {

@@ -38,10 +38,11 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { tween, delay, rand, pick } from '../core/anim';
+import { tween, delay, rand, pick, nextFrame } from '../core/anim';
 import { dimLights, flashPulse, disposeObject } from './helpers';
 import { luckyWord } from './luckyWord';
 import type { EffectContext } from '../types';
+import type { LuckyScene } from '../core/scene';
 
 export const sound = 'fairyKingdom';
 export const duration = 34500;
@@ -129,7 +130,7 @@ function groundHeight(x: number, z: number): number {
 /** The ground: one big plane, displaced, then split into loose triangles so
  *  each facet takes a single colour. That faceting IS the low-poly look — a
  *  smooth-shaded hill just reads as a beanbag. */
-function buildGround(): THREE.Mesh {
+function buildGroundGeometry(): THREE.BufferGeometry {
 	const geo = new THREE.PlaneGeometry(680, 680, 72, 72).toNonIndexed();
 	geo.translate(0, 0, -110); // the kingdom runs a long way back
 	geo.rotateX(-Math.PI / 2);
@@ -156,7 +157,161 @@ function buildGround(): THREE.Mesh {
 	}
 	geo.setAttribute('color', new THREE.BufferAttribute(colours, 3));
 	geo.computeVertexNormals();
-	return new THREE.Mesh(geo, toon(0xffffff, { vertexColors: true }));
+	return geo;
+}
+
+/** Trees, toadstools and clouds are static scenery, and built naively they
+ *  were ~600 draw calls on their own — far too many for the phone this is
+ *  really for. Bake each one into a bucket keyed by colour and merge, which
+ *  gets the whole scatter down to a handful of meshes. */
+function bakeScatter(): [number, THREE.BufferGeometry][] {
+	const buckets = new Map<number, THREE.BufferGeometry[]>();
+	const bake = (prop: THREE.Object3D) => {
+		prop.updateMatrixWorld(true);
+		prop.traverse((o) => {
+			const m = o as THREE.Mesh;
+			if (!(m as unknown as { isMesh?: boolean }).isMesh) return;
+			const g = m.geometry.clone();
+			g.applyMatrix4(m.matrixWorld);
+			const key = (m.material as THREE.MeshStandardMaterial).color.getHex();
+			const bucket = buckets.get(key);
+			if (bucket) bucket.push(g);
+			else buckets.set(key, [g]);
+		});
+	};
+
+	for (let i = 0; i < 320; i++) {
+		const x = rand(-120, 120);
+		const z = rand(-10, -300);
+		const nearPath = Math.abs(x) < 10;
+		if (nearPath && Math.random() < 0.8) continue;
+		if (Math.hypot(x, z - CASTLE_Z) < 22) continue; // keep the castle plateau clear
+		if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r * 0.95) continue; // and the lake wet
+		const thing = Math.random() < 0.76 ? buildTree(rand(0.85, 1.9)) : buildToadstool(rand(0.9, 1.9));
+		thing.position.set(x, groundHeight(x, z) - 0.1, z);
+		thing.rotation.y = rand(0, 6.28);
+		bake(thing);
+	}
+	for (let i = 0; i < 26; i++) {
+		const cloud = buildCloud();
+		cloud.position.set(rand(-110, 110), rand(26, 44), rand(-12, -300));
+		cloud.rotation.y = rand(0, 6.28);
+		bake(cloud);
+	}
+	const merged: [number, THREE.BufferGeometry][] = [];
+	for (const [hex, geos] of buckets) {
+		const geo = mergeGeometries(geos, false);
+		for (const g of geos) g.dispose();
+		if (geo) merged.push([hex, geo]);
+	}
+	return merged;
+}
+
+// ── The static set ──────────────────────────────────────────────────────────
+// The hills and the scatter are the expensive part of the build and they never
+// change, so they are built ONCE and kept. The director calls warm() in idle
+// time as soon as this effect is next in the bag, so by the time the button is
+// pressed there is nothing heavy left to do; a cold visit (the very first
+// press, or a forced ?fx=) builds the same thing in slices between frames.
+// Only the CPU-side geometry survives between visits — disposeObject() still
+// frees the GPU buffers at the end of every one, and three re-uploads them the
+// next time they are drawn.
+interface StaticSet {
+	ground: THREE.BufferGeometry;
+	scatter: [number, THREE.BufferGeometry][];
+}
+let staticSet: StaticSet | null = null;
+let staticBuild: Promise<StaticSet> | null = null;
+
+function buildStaticSet(): Promise<StaticSet> {
+	if (staticSet) return Promise.resolve(staticSet);
+	staticBuild ??= (async () => {
+		const ground = buildGroundGeometry();
+		await nextFrame();
+		const scatter = bakeScatter();
+		staticSet = { ground, scatter };
+		return staticSet;
+	})();
+	return staticBuild;
+}
+
+/** Build the kingdom's heavy, reusable parts ahead of time (see above). */
+export function warm(): void {
+	buildStaticSet().catch(() => { /* play() will simply build it itself */ });
+}
+
+/** Compile every shader the kingdom needs BEFORE it is on screen. Done on the
+ *  first visible frame instead, a cold compile cost over a second on a Mac —
+ *  the frame froze with the music playing on through it, and everything after
+ *  ran late. Two variants are needed: clear air (the view through the hole)
+ *  and the flight's fog.
+ *
+ *  Three subtleties, each verified by diffing the renderer's program cache:
+ *  (1) compile() keys each shader on the renderer's CURRENT clipping-plane
+ *      count — whatever the last object drawn happened to use, not the
+ *      material's own planes — so a clipped speck is drawn off-screen first to
+ *      make that count 1, or every program compiled here is a wasted variant.
+ *  (2) Lights are part of a shader's identity, and compile() counts the target
+ *      scene's lights plus the object's own — the kingdom is detached while it
+ *      compiles so its sun isn't counted twice.
+ *  (3) The fog variant is compiled with the fog on the REAL room, which is
+ *      safe because compile() itself is synchronous: the fog is gone again
+ *      before the next frame, so the machine's materials never see it. */
+async function precompile(
+	scene: LuckyScene,
+	world: THREE.Group,
+	kingdomLights: THREE.Object3D[],
+	fog: THREE.Fog,
+	clip: THREE.Plane
+): Promise<void> {
+	const { renderer, camera } = scene;
+	const room = scene.scene;
+	const target = new THREE.WebGLRenderTarget(1, 1);
+	const speckGeo = new THREE.PlaneGeometry(0.001, 0.001);
+	/** Draw one speck so the renderer's clipping-plane count is `planes.length`. */
+	const drawSpeck = (planes: THREE.Plane[]) => {
+		const speck = new THREE.Mesh(speckGeo, new THREE.MeshBasicMaterial({ clippingPlanes: planes }));
+		speck.frustumCulled = false;
+		const probe = new THREE.Scene();
+		probe.add(speck);
+		renderer.render(probe, camera);
+		speck.material.dispose();
+	};
+	try {
+		// Everything compiles as it will be DRAWN — into the composer's linear
+		// buffer, no tone mapping. Compiled for the screen instead, every variant
+		// was one the real frames never used.
+		renderer.setRenderTarget(target);
+
+		// 1. The machine under the kingdom's lights. Shaders are keyed on how
+		// many lights of each kind are in the room, so the sun and sky light
+		// arriving recompiles the WHOLE machine on the next frame. Lend the
+		// lights to the room for the synchronous part of the compile.
+		drawSpeck([]);
+		for (const light of kingdomLights) room.add(light);
+		const machineReady = renderer.compileAsync(room, camera);
+		for (const light of kingdomLights) world.add(light);
+
+		// 2. The kingdom itself, in clear air and in fog. It stays detached (its
+		// own sun would otherwise be counted twice), and the fog goes on the real
+		// room only for the synchronous call — no frame ever renders under it.
+		drawSpeck([clip]);
+		const clear = renderer.compileAsync(world, camera, room);
+		room.fog = fog;
+		const foggy = renderer.compileAsync(world, camera, room);
+		room.fog = null;
+		renderer.setRenderTarget(null);
+		await Promise.all([machineReady, clear, foggy]);
+	} catch (err) {
+		// a failed precompile costs a stall at worst, never the effect
+		room.fog = null;
+		renderer.setRenderTarget(null);
+		for (const light of kingdomLights) if (light.parent !== world) world.add(light);
+		if (import.meta.env.DEV) console.warn('fairyKingdom precompile failed:', err);
+	} finally {
+		target.dispose();
+		speckGeo.dispose();
+	}
 }
 
 /** A storybook tree: a leaning trunk and two or three stacked canopies. */
@@ -943,14 +1098,22 @@ export async function play(ctx: EffectContext): Promise<void> {
 	machine.backdrop.visible = false;
 	const backplateFace = machine.backplate.children[0] as THREE.Mesh;
 
-	await machine.openClamps(420);
-	haptics.vibrate(30);
-	await tween(220, 'outQuad', (v) => {
-		machine.buttonGroup.position.z = btnHome.z + v * 0.24;
-	});
-	tween(680, 'outCubic', (v) => {
-		machine.buttonGroup.position.y = btnHome.y + v * 1.15;
-	});
+	// The heavy part of the set is (almost always) already built — see warm().
+	// Either way it is asked for now, so a cold build overlaps the clamps.
+	const staticReady = buildStaticSet();
+
+	// The run-up plays UNDER the build: the clamps and button keep moving while
+	// the kingdom is assembled in slices between frames.
+	const runUp = (async () => {
+		await machine.openClamps(420);
+		haptics.vibrate(30);
+		await tween(220, 'outQuad', (v) => {
+			machine.buttonGroup.position.z = btnHome.z + v * 0.24;
+		});
+		tween(680, 'outCubic', (v) => {
+			machine.buttonGroup.position.y = btnHome.y + v * 1.15;
+		});
+	})();
 
 	// ================================================================ THE KINGDOM
 	// The scene runs a 200-unit far plane, which is fine for a machine five units
@@ -962,9 +1125,10 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	const world = new THREE.Group();
 	world.matrixAutoUpdate = false; // we drive its matrix directly, every frame
-	// visible from the outset: it is what you SEE through the hole, so there is
-	// nothing to reveal later
-	scene.scene.add(world);
+	// It joins the room only once its shaders are compiled (see precompile):
+	// its sun changes the room's light count, and that alone would recompile
+	// every material on the machine mid-run-up. By the time the iris opens it
+	// is standing behind the wall, so there is still nothing to reveal later.
 
 	const sky = new THREE.Mesh(
 		new THREE.SphereGeometry(420, 24, 16),
@@ -995,55 +1159,14 @@ export async function play(ctx: EffectContext): Promise<void> {
 	const fill = new THREE.HemisphereLight(0xcfe8ff, 0x5a7a3a, 1.15);
 	world.add(fill);
 
-	await delay(0); // yield: the machine is mid-animation and must keep moving
-	world.add(buildGround());
-
-	// Trees, toadstools and clouds are static scenery, and built naively they
-	// were ~600 draw calls on their own — far too many for the phone this is
-	// really for. Bake each one into a bucket keyed by colour and merge, which
-	// gets the whole scatter down to a handful of meshes.
-	const buckets = new Map<number, THREE.BufferGeometry[]>();
-	const bake = (prop: THREE.Object3D) => {
-		prop.updateMatrixWorld(true);
-		prop.traverse((o) => {
-			const m = o as THREE.Mesh;
-			if (!(m as unknown as { isMesh?: boolean }).isMesh) return;
-			const g = m.geometry.clone();
-			g.applyMatrix4(m.matrixWorld);
-			const key = (m.material as THREE.MeshStandardMaterial).color.getHex();
-			const bucket = buckets.get(key);
-			if (bucket) bucket.push(g);
-			else buckets.set(key, [g]);
-		});
-	};
-
-	for (let i = 0; i < 320; i++) {
-		const x = rand(-120, 120);
-		const z = rand(-10, -300);
-		const nearPath = Math.abs(x) < 10;
-		if (nearPath && Math.random() < 0.8) continue;
-		if (Math.hypot(x, z - CASTLE_Z) < 22) continue; // keep the castle plateau clear
-		if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r * 0.95) continue; // and the lake wet
-		const thing = Math.random() < 0.76 ? buildTree(rand(0.85, 1.9)) : buildToadstool(rand(0.9, 1.9));
-		thing.position.set(x, groundHeight(x, z) - 0.1, z);
-		thing.rotation.y = rand(0, 6.28);
-		bake(thing);
-	}
-	for (let i = 0; i < 26; i++) {
-		const cloud = buildCloud();
-		cloud.position.set(rand(-110, 110), rand(26, 44), rand(-12, -300));
-		cloud.rotation.y = rand(0, 6.28);
-		bake(cloud);
-	}
-	for (const [hex, geos] of buckets) {
-		const merged = mergeGeometries(geos, false);
-		for (const g of geos) g.dispose();
-		if (!merged) continue;
+	const set = await staticReady;
+	world.add(new THREE.Mesh(set.ground, toon(0xffffff, { vertexColors: true })));
+	for (const [hex, geo] of set.scatter) {
 		const isCloud = hex === C.cloud;
-		world.add(new THREE.Mesh(merged, toon(hex, isCloud ? { emissive: 0x30343c, emissiveIntensity: 0.3 } : {})));
+		world.add(new THREE.Mesh(geo, toon(hex, isCloud ? { emissive: 0x30343c, emissiveIntensity: 0.3 } : {})));
 	}
 
-	await delay(0); // yield: the machine is mid-animation and must keep moving
+	await nextFrame(); // yield: the machine is mid-animation and must keep moving
 	// ---- landmarks, so the journey has things to pass rather than just hills
 	const lakeMat = toon(0x4aa8d8, { roughness: 0.25, metalness: 0.15, flatShading: false });
 	const lake = new THREE.Mesh(new THREE.CircleGeometry(LAKE.r * 0.92, 40), lakeMat);
@@ -1074,12 +1197,12 @@ export async function play(ctx: EffectContext): Promise<void> {
 	rainbow.rotation.y = 0.22;
 	world.add(rainbow);
 
-	await delay(0); // yield: the machine is mid-animation and must keep moving
+	await nextFrame(); // yield: the machine is mid-animation and must keep moving
 	const { castle, balcony, pennants } = buildCastle();
 	castle.position.set(0, groundHeight(0, CASTLE_Z) - 1.5, CASTLE_Z);
 	world.add(castle);
 
-	await delay(0); // yield: the machine is mid-animation and must keep moving
+	await nextFrame(); // yield: the machine is mid-animation and must keep moving
 	// ---- the king, on his balcony, facing the way we come in
 	const { king, armR, armL, head, brows, mouth } = buildKing();
 	const kingPos = balcony.clone().add(castle.position);
@@ -1091,7 +1214,23 @@ export async function play(ctx: EffectContext): Promise<void> {
 	trophy.scale.setScalar(1.5);
 	armR.add(trophy);
 	trophy.position.set(0, -0.72, 0.1);
-	trophy.rotation.x = 0.2;
+	// He PRESENTS the cup: arm out to the side and a little forward, so it
+	// stands upright beside his chest — clear of the robe, and clear of his
+	// face (held straight out in front, its handle crossed his eye). Hanging at
+	// his side (the old rest pose) the bowl was buried in his sash and his
+	// forearm ran through it for the whole speech. The raise tweens from here.
+	const ARM_REST = { x: -0.55, z: 0.95 };
+	const ARM_ALOFT = { x: -0.25, z: 2.05 };
+	armR.rotation.set(ARM_REST.x, 0, ARM_REST.z);
+	const cupTilt = new THREE.Quaternion();
+	const X_AXIS = new THREE.Vector3(1, 0, 0);
+	/** The cup rides the arm; undo the arm's rotation so it stays upright,
+	 *  leaning toward the camera by `tilt`. */
+	const holdCupUpright = (tilt: number) => {
+		cupTilt.setFromAxisAngle(X_AXIS, tilt);
+		trophy.quaternion.copy(armR.quaternion).invert().multiply(cupTilt);
+	};
+	holdCupUpright(0.2);
 
 	// a little glow living in the cup
 	const cupGlowMat = new THREE.SpriteMaterial({
@@ -1107,7 +1246,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	cupGlow.position.set(0, 0.62, 0);
 	trophy.add(cupGlow);
 
-	await delay(0); // yield: the machine is mid-animation and must keep moving
+	await nextFrame(); // yield: the machine is mid-animation and must keep moving
 	// Anything of the kingdom that lands in FRONT of the wall in world space —
 	// the near lip of the ground, a tree at the edge of the plane, a fairy that
 	// wandered close — renders in the machine room, floating in the lounge. A
@@ -1414,6 +1553,13 @@ export async function play(ctx: EffectContext): Promise<void> {
 		for (const m of Array.isArray(mat) ? mat : [mat]) m.clippingPlanes = [clip];
 	});
 
+	// the flight's aerial perspective — assigned at the dive, but its shader
+	// variant is compiled now, along with everything else (see precompile)
+	const fog = new THREE.Fog(0xe8dcc0, 150, 520);
+	await precompile(scene, world, [sun, fill], fog, clip);
+	scene.scene.add(world);
+	await runUp; // in practice long finished; on a cold device the iris waits
+
 	// ---- and NOW open it. The kingdom above is already standing behind the
 	// wall, so the iris uncovers a view rather than an empty socket — which is
 	// what it did while this was built afterwards.
@@ -1513,15 +1659,19 @@ export async function play(ctx: EffectContext): Promise<void> {
 	scene.keyLight.intensity = 0;
 	scene.fillLight.intensity = 0;
 	scene.rimLight.intensity = 0;
-	scene.scene.fog = new THREE.Fog(0xe8dcc0, 150, 520);
+	scene.scene.fog = fog;
 
-	// the whole run of the journey, one long unbroken sweep
-	const journey = tween(6000, inOutSine, (v) => {
+	// The whole run of the journey, one long unbroken sweep. The king's line is
+	// at 13s on the track and the choreography has to arrive on it whatever
+	// the device: if the run-up overran (a cold shader compile, a slow build
+	// on an old phone), the journey gives the time back by flying a little
+	// faster, rather than letting everything after it run late.
+	const JOURNEY_MS = 6000;
+	const NOMINAL_JOURNEY_START = 3040; // clamps 420 + pop 220 + iris 820 + 180 + dive 1400
+	const overrun = THREE.MathUtils.clamp(performance.now() - t0 - NOMINAL_JOURNEY_START, 0, 1500);
+	const journey = tween(JOURNEY_MS - overrun, inOutSine, (v) => {
 		travel = ENTRY_T * 1.6 + v * (SPLIT - ENTRY_T * 1.6);
 	});
-	await delay(1100);
-	await delay(2000);
-	await delay(1900);
 	await journey;
 
 	// ---- the last of it: rise to the turret and turn to the king
@@ -1577,11 +1727,9 @@ export async function play(ctx: EffectContext): Promise<void> {
 	await delay(2900);
 	haptics.vibrate([20, 40, 70]);
 	await tween(1000, 'outBack', (v) => {
-		armR.rotation.z = v * 2.05;
-		armR.rotation.x = -v * 0.25;
-		// the cup rides the arm, so without this it ends up pouring sideways
-		trophy.rotation.z = -v * 2.05;
-		trophy.rotation.x = 0.2 - v * 0.12;
+		armR.rotation.z = ARM_REST.z + v * (ARM_ALOFT.z - ARM_REST.z);
+		armR.rotation.x = ARM_REST.x + v * (ARM_ALOFT.x - ARM_REST.x);
+		holdCupUpright(0.2 - v * 0.12); // still upright, leaning a touch toward us
 		for (const b of brows) b.position.y = 0.235 + v * 0.045;
 	});
 	// the cup catches light — a bright halo, NOT a frame-swallower (the sim
@@ -1632,7 +1780,9 @@ export async function play(ctx: EffectContext): Promise<void> {
 		transparent: true,
 		opacity: 0,
 		blending: THREE.AdditiveBlending,
-		depthWrite: false
+		depthWrite: false,
+		// same shader variant as the mist sprites, so it needs no compile of its own
+		clippingPlanes: [clip]
 	});
 	const star = new THREE.Sprite(starMat);
 	const cupWorld = new THREE.Vector3();

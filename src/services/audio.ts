@@ -124,13 +124,52 @@ export class AudioService {
 		}
 	}
 
-	playTrack(name: string): void {
+	/** The Howl for a named track, built (and its download started) on first ask. */
+	_track(name: string): Howl {
 		let track = this.tracks[name];
 		if (!track) {
 			const def = TRACKS[name];
 			track = new Howl({ src: [def.src], volume: def.volume, preload: true });
 			this.tracks[name] = track;
 		}
+		return track;
+	}
+
+	/** Start fetching a sound now so it can begin the instant it is asked for.
+	 *  The director calls this for the upcoming effect's soundtrack: a track
+	 *  that is still downloading when its effect starts plays LATE (Howler
+	 *  queues the play until the file lands) and everything choreographed to
+	 *  it lands early. Muted visitors don't download music they won't hear. */
+	preload(name: string): void {
+		if (!name || this.muted) return;
+		if (SPRITE[name]) this.warm();
+		else if (TRACKS[name]) this._track(name);
+	}
+
+	/** Resolves once the named sound can start without delay: decoded and
+	 *  ready. Bounded, so a slow connection holds an effect back by at most
+	 *  `timeoutMs` instead of playing it out of time; muted visitors and
+	 *  unknown names never wait at all. */
+	ready(name: string, timeoutMs = 2500): Promise<void> {
+		if (!name || this.muted) return Promise.resolve();
+		const howl = SPRITE[name] ? this.howl : TRACKS[name] ? this._track(name) : null;
+		if (!howl || howl.state() === 'loaded') return Promise.resolve();
+		if (howl.state() === 'unloaded') howl.load();
+		return new Promise((resolve) => {
+			const done = () => {
+				clearTimeout(timer);
+				howl.off('load', done);
+				howl.off('loaderror', done);
+				resolve();
+			};
+			const timer = setTimeout(done, timeoutMs);
+			howl.once('load', done);
+			howl.once('loaderror', done);
+		});
+	}
+
+	playTrack(name: string): void {
+		const track = this._track(name);
 		track.stop(); // never let a track overlap itself
 		track.volume(TRACKS[name].volume);
 		track.play();

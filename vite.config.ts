@@ -37,7 +37,9 @@ export default defineConfig({
 						options: {
 							cacheName: 'soundfx',
 							expiration: {
-								maxEntries: 10,
+								// the sprite, the bell and every soundtrack — with room to grow.
+							// At 10 the cache was already full and evicting tunes.
+							maxEntries: 24,
 								maxAgeSeconds: 60 * 60 * 24 * 365
 							},
 							cacheableResponse: {

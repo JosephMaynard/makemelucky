@@ -127,7 +127,8 @@
 
 		<link rel="preload" href="/fonts/RobotoSlab-Bold-webfont.woff2" as="font" type="font/woff2" crossorigin />
 		<link rel="preload" href="/fonts/RobotoSlab-Regular-webfont.woff2" as="font" type="font/woff2" crossorigin />
-		<link rel="preconnect" href="https://us.i.posthog.com" crossorigin />
+		<!-- analytics go through the first-party proxy, not posthog.com directly -->
+		<link rel="preconnect" href="https://luck.makemelucky.com" crossorigin />
 
 		<script type="application/ld+json">
 			{

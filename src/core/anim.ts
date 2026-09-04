@@ -95,6 +95,24 @@ export function delay(ms: number) {
 	});
 }
 
+/** Resolves just after the next frame has been painted, so a long piece of
+ *  synchronous work can be sliced up without the scene freezing between the
+ *  slices. Falls back to a short timer where nothing is painting (a hidden
+ *  tab, a headless probe) so the caller can never hang on it. */
+export function nextFrame(): Promise<void> {
+	return new Promise<void>((resolve) => {
+		const fallback = setTimeout(resolve, 120);
+		requestAnimationFrame(() => {
+			// the rAF callback runs BEFORE the frame renders; a zero timer lands
+			// after it, so the next slice starts with the frame already on screen
+			setTimeout(() => {
+				clearTimeout(fallback);
+				resolve();
+			}, 0);
+		});
+	});
+}
+
 /** Linear interpolate */
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 

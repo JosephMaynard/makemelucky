@@ -24,6 +24,7 @@ import { initLottoPicker } from './luck/lottoPicker';
 import { initDossier } from './luck/dossier';
 import { AudioService } from './services/audio';
 import { Haptics } from './services/haptics';
+import { WakeLock } from './services/wakeLock';
 import { initAnalytics, track } from './services/analytics';
 import type { EffectContext, TextureBundle } from './types';
 
@@ -43,6 +44,7 @@ async function boot(): Promise<void> {
 	const store = new LuckStore();
 	const audio = new AudioService();
 	const haptics = new Haptics();
+	const wakeLock = new WakeLock();
 	audio.setMuted(!store.data.soundOn);
 	haptics.enabled = store.data.vibrationOn !== false;
 
@@ -136,7 +138,7 @@ async function boot(): Promise<void> {
 	if (params.get('fx')) director.forced = params.get('fx');
 	// dev-only: exporting THREE here would pin the whole namespace into the bundle
 	if (import.meta.env.DEV) {
-		window.__mml = { scene, machine, director, particles, lightning, store, ctx, THREE };
+		window.__mml = { scene, machine, director, particles, lightning, store, ctx, wakeLock, THREE };
 	}
 
 	scene.start();
@@ -151,6 +153,7 @@ async function boot(): Promise<void> {
 	// animation (and a compositor layer) alive forever
 	setTimeout(() => loading?.remove(), 1000);
 	audio.warm(); // boot's done with the bandwidth — fetch the sound sprite now
+	director.prefetchNext(); // and the first effect's code, soundtrack and set
 	track('page_loaded', { visits: store.data.visits, luckyness: store.data.luckyness });
 	screen.welcome(store.data.visits > 1, store.data.streak);
 
@@ -212,6 +215,24 @@ async function boot(): Promise<void> {
 	let effectSeq = 0;
 	let prevEffect: string | null = null;
 
+	// Every performance goes through here, whichever way it was summoned: the
+	// screen is held awake for the whole run (a phone's idle timer would dim it
+	// mid-finale — the last touch was the press, half a minute ago) and released
+	// a few seconds after, once the parting quip has been read.
+	async function performEffect(via: Record<string, unknown>): Promise<string | null> {
+		wakeLock.hold();
+		let fx: string | null = null;
+		try {
+			fx = await director.play();
+		} finally {
+			wakeLock.release(4000);
+		}
+		effectSeq += 1;
+		track('effect_played', { effect: fx, ...via, seq: effectSeq, prev: prevEffect });
+		prevEffect = fx;
+		return fx;
+	}
+
 	async function completePress(holdSeconds: number): Promise<void> {
 		if (director.running) return;
 		const isRitual = store.ritualAvailable();
@@ -226,10 +247,7 @@ async function boot(): Promise<void> {
 			await new Promise((r) => setTimeout(r, 1300));
 		}
 		screen.blank();
-		const fx = await director.play();
-		effectSeq += 1;
-		track('effect_played', { effect: fx, ritual: isRitual, seq: effectSeq, prev: prevEffect });
-		prevEffect = fx;
+		const fx = await performEffect({ ritual: isRitual });
 		celebrateCharms(awarded);
 		const quip = isRitual ? todaysFortune() : fx ? QUIPS[fx] : undefined;
 		screen.youAreNowLucky(store.data.luckyness, awarded.length > 0, quip);
@@ -268,11 +286,8 @@ async function boot(): Promise<void> {
 		// remember any ?fx= override rather than clobbering it
 		const wasForced = director.forced;
 		director.forced = name;
-		const fx = await director.play();
+		const fx = await performEffect({ via: 'console' });
 		director.forced = wasForced;
-		effectSeq += 1;
-		track('effect_played', { effect: fx, via: 'console', seq: effectSeq, prev: prevEffect });
-		prevEffect = fx;
 		screen.youAreNowLucky(store.data.luckyness, false, fx ? QUIPS[fx] : undefined);
 		// reduced motion substitutes something from the calm shortlist
 		return fx === name ? `Played ${fx} 🍀` : `Played ${fx} instead — you've asked for reduced motion. 🍀`;

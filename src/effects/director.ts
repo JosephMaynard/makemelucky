@@ -76,7 +76,9 @@ export class Director {
 		this._loaded = new Map();
 	}
 
-	_next(): string {
+	/** The effect the next press will draw, without drawing it. Reshuffles the
+	 *  bag when it is empty, exactly as _next() would, so the answer is final. */
+	_peek(): string {
 		if (this.index >= this.bag.length) {
 			this.bag = shuffle(this.names);
 			// avoid an immediate repeat across the reshuffle boundary
@@ -85,8 +87,14 @@ export class Director {
 			}
 			this.index = 0;
 		}
-		if (import.meta.env.DEV) console.log('Now playing: ', this.bag[this.index]);
-		return this.bag[this.index++];
+		return this.bag[this.index];
+	}
+
+	_next(): string {
+		const name = this._peek();
+		this.index += 1;
+		if (import.meta.env.DEV) console.log('Now playing: ', name);
+		return name;
 	}
 
 	/** Reduced-motion visitors draw from the calm shortlist instead of the bag. */
@@ -105,11 +113,23 @@ export class Director {
 		return mod;
 	}
 
-	/** Warm the chunk for whatever is next, so the following press is instant. */
-	_prefetchNext(): void {
-		const upcoming = this.bag[this.index];
-		if (!upcoming || this._loaded.has(upcoming)) return;
-		this._load(upcoming).catch(() => { /* it'll be fetched on demand */ });
+	/** Get the next effect ready in the background: its code, its soundtrack,
+	 *  and any heavy set it can build ahead of time. A track that is still
+	 *  downloading when its effect begins starts late and the whole
+	 *  choreography lands early, so this is what keeps the scored effects in
+	 *  time on a first visit. Call it at boot and after every play. */
+	prefetchNext(): void {
+		// a reduced-motion visitor draws at random from the calm list, which
+		// can't be predicted; those effects are tiny and unscored anyway
+		if (this.ctx.scene.reducedMotion) return;
+		const upcoming = this.forced && EFFECTS[this.forced] ? this.forced : this._peek();
+		if (!upcoming) return;
+		this._load(upcoming)
+			.then((mod) => {
+				if (mod.sound) this.ctx.audio.preload(mod.sound);
+				if (mod.warm) whenIdle(() => mod.warm!(this.ctx));
+			})
+			.catch(() => { /* it'll be fetched on demand */ });
 	}
 
 	// Everything a crashed effect could plausibly have left behind. Snapshotted
@@ -189,6 +209,10 @@ export class Director {
 		const snap = this._snapshot();
 		try {
 			const effect = await this._load(name);
+			// a scored effect must not start until its music can: half of these
+			// are choreographed to the second, and Howler would otherwise queue
+			// the track and start it whenever the download finished
+			if (effect.sound) await this.ctx.audio.ready(effect.sound);
 			this.ctx.audio.play(effect.sound ?? '');
 			this.ctx.machine.mechSpeed = 5; // the machinery works hard during a luck event
 			await effect.play(this.ctx);
@@ -198,10 +222,17 @@ export class Director {
 		} finally {
 			this.ctx.machine.mechSpeed = 1;
 			this.running = false;
-			this._prefetchNext();
+			this.prefetchNext();
 		}
 		return name;
 	}
+}
+
+/** Run `fn` when the browser has nothing better to do (with a deadline, so a
+ *  busy page can't postpone it for ever). Safari has no requestIdleCallback. */
+function whenIdle(fn: () => void): void {
+	if (typeof requestIdleCallback === 'function') requestIdleCallback(() => fn(), { timeout: 4000 });
+	else setTimeout(fn, 800);
 }
 
 /** What the console is allowed to summon for a reduced-motion visitor. */

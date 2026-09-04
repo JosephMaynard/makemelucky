@@ -95,7 +95,7 @@ function stubCtx(): EffectContext {
 			backdrop: { visible: true, material: { userData: {} } }
 		},
 		particles: { clear: vi.fn() },
-		audio: { play: vi.fn(), stopAllLoops: vi.fn(), stopAllTracks: vi.fn() },
+		audio: { play: vi.fn(), preload: vi.fn(), ready: vi.fn(async () => {}), stopAllLoops: vi.fn(), stopAllTracks: vi.fn() },
 		lightning: { clear: vi.fn() }
 	} as unknown as EffectContext;
 }
