@@ -12,6 +12,14 @@ export const duration = 5900;
 
 export async function play(ctx: EffectContext): Promise<void> {
 	const { scene, machine, particles, sprites, haptics, audio } = ctx;
+	// stopDrift removes the levitation/glow callback from scene.updatables.
+	// Declared here (not `const` at its addUpdatable call site) so the
+	// `finally` below can always reach it, including if something throws
+	// before teardown runs — otherwise a failed performance leaks the
+	// callback forever, same as an uncaught one used to on every replay.
+	let stopDrift: (() => void) | null = null;
+
+	try {
 
 	// night falls — a void-coloured cover plane fades in OVER the leather
 	// wall, then the wall hides behind it. Fading the wall's own material
@@ -175,7 +183,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	const baseY = machine.group.position.y;
 	const glowCol = new THREE.Color();
 	let drifting = true;
-	const stopDrift = scene.addUpdatable((dt, t) => {
+	stopDrift = scene.addUpdatable((dt, t) => {
 		if (!drifting) return;
 		machine.group.position.y = baseY + Math.sin(t * 0.7) * 0.12 + 0.06;
 		machine.group.rotation.z = Math.sin(t * 0.5) * 0.035;
@@ -329,4 +337,11 @@ export async function play(ctx: EffectContext): Promise<void> {
 	nightMat.dispose();
 	machine.group.position.y = baseY;
 	machine.group.rotation.set(0, 0, 0);
+
+	} finally {
+		// guaranteed even if a failure interrupts the performance above —
+		// the sweep that found this leak went 1 callback → 2 → 3 → 4 across
+		// replays because this never ran on the happy path either
+		stopDrift?.();
+	}
 }

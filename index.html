@@ -125,6 +125,26 @@
 			}
 		</style>
 
+		<!-- No JavaScript, no machine — and nothing to ever clear the overlay.
+		     So it simply never appears, and the hero says why instead. -->
+		<noscript>
+			<style>
+				#loading {
+					display: none;
+				}
+				#no-js {
+					position: absolute;
+					inset: auto 6vw 12vh;
+					margin: 0;
+					text-align: center;
+					color: #c9a959;
+					font-family: 'Roboto Slab', Georgia, serif;
+					font-size: 15px;
+					line-height: 1.5;
+				}
+			</style>
+		</noscript>
+
 		<link rel="preload" href="/fonts/RobotoSlab-Bold-webfont.woff2" as="font" type="font/woff2" crossorigin />
 		<link rel="preload" href="/fonts/RobotoSlab-Regular-webfont.woff2" as="font" type="font/woff2" crossorigin />
 		<!-- analytics go through the first-party proxy, not posthog.com directly -->
@@ -175,6 +195,13 @@
 				<div class="loading-ring"></div>
 				<p>Charging the Luck&nbsp;Machine…</p>
 			</div>
+
+			<noscript>
+				<p id="no-js">
+					JavaScript is switched off, so the Luck Machine is having a lie-down. Everything written below still works —
+					and consider yourself wished luck anyway.
+				</p>
+			</noscript>
 		</header>
 
 		<!-- ============ CRAWLER-READABLE CONTENT ============ -->
@@ -269,17 +296,18 @@
 					Your birthday and name are never transmitted anywhere. No server, no analytics, nobody. The cosmos
 					operates strictly offline.
 				</p>
-				<div class="dossier-controls">
+				<form id="dossier-form" class="dossier-controls">
 					<div class="dossier-field">
 						<label for="dossier-dob">Your date of birth</label>
-						<input id="dossier-dob" type="date" class="dossier-input" />
+						<input id="dossier-dob" type="date" class="dossier-input" aria-describedby="dossier-status" />
 					</div>
 					<div class="dossier-field">
 						<label for="dossier-name">Your name <span class="dossier-optional">(optional, stage names welcome)</span></label>
 						<input id="dossier-name" type="text" class="dossier-input" maxlength="80" autocomplete="off" placeholder="The Bearer" />
 					</div>
-					<button id="dossier-go" class="lng-spin" type="button">📜 Compile my dossier</button>
-				</div>
+					<button id="dossier-go" class="lng-spin" type="submit">📜 Compile my dossier</button>
+				</form>
+				<p id="dossier-status" class="dossier-status" aria-live="polite"></p>
 				<div id="dossier-out" class="dossier-out"></div>
 				<p><button id="dossier-burn" class="dossier-burn" type="button" hidden>🗂️ Strike me from the record</button></p>
 				<p class="dossier-small">Astrological data: real. Its predictive power: decorative.</p>

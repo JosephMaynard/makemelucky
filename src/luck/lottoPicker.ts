@@ -17,30 +17,46 @@ import { track } from '../services/analytics';
    DATA
    ====================================================================== */
 
-interface GameConfig {
+export interface GameConfig {
 	range: number;
 	count: number;
-	bonusRange: number;
+	bonusRange: number; // count of distinct values in the bonus pool
 	bonusCount: number;
+	/** Lowest value in the bonus pool. Default 1 — most bonus balls are drawn
+	 *  1-based, same as the main draw. Some ticket-assigned digits (Superzahl,
+	 *  Reintegro) start at 0, so this is explicit rather than assumed. */
+	bonusMin?: number;
 }
-interface Game {
+export interface Game {
 	name: string;
 	themeHue: number;
 	config: GameConfig;
+	/** Set when the "bonus" isn't a selectable number at all but a single
+	 *  ticket-assigned digit (Superzahl, Reintegro). Used in place of the
+	 *  generic "Bonus" label so we don't imply it was picked the same way. */
+	bonusLabel?: string;
 }
 
 // Formats verified against official sources, July 2026. Games whose bonus ball
 // is drawn from the SAME pool as the main draw (UK Bonus Ball, Oz supps, La
 // Primitiva's Complementario) are modeled main-draw-only — our bonus pool is
-// independent. NOTE: EuroMillions has a format change slated for 30 Sept 2026.
+// independent. NOTE: EuroMillions has a format change slated for 30 Sept 2026;
+// that claim is unverified, so it is deliberately left unchanged here.
+//
+// Bonus-pool floors (bonusMin) and ticket-assigned digit labels (bonusLabel)
+// re-verified September 2026 against:
+//   - German Lotto 6aus49 Superzahl is 0–9 (not 1–10): https://www.lotto.de/lotto-6aus49/spielregeln
+//   - La Primitiva Reintegro is 0–9 (not 1–10): https://www.loteriasyapuestas.es/es/centro-de-ayuda/como-se-juega/jugar-a-la-primitiva
+//   - South African Lotto is 6 from 1–58 (not 1–52), per the operator's game
+//     rules & regulations, effective 10 Oct 2025.
 const GAMES: Record<string, Game> = {
 	canadaLottoMax: { name: 'Lotto Max CAN', themeHue: 330, config: { range: 52, count: 7, bonusRange: 1, bonusCount: 0 } },
 	euroJackpot: { name: 'EuroJackpot', themeHue: 40, config: { range: 50, count: 5, bonusRange: 12, bonusCount: 2 } },
 	euromillions: { name: 'EuroMillions', themeHue: 220, config: { range: 50, count: 5, bonusRange: 12, bonusCount: 2 } },
 	franceLoto: { name: 'French Loto', themeHue: 250, config: { range: 49, count: 5, bonusRange: 10, bonusCount: 1 } },
-	germanyLotto: { name: 'German Lotto 6aus49', themeHue: 55, config: { range: 49, count: 6, bonusRange: 10, bonusCount: 1 } },
+	germanyLotto: { name: 'German Lotto 6aus49', themeHue: 55, config: { range: 49, count: 6, bonusRange: 10, bonusCount: 1, bonusMin: 0 }, bonusLabel: 'Superzahl' },
 	japanLoto7: { name: 'Japan Loto 7', themeHue: 190, config: { range: 37, count: 7, bonusRange: 1, bonusCount: 0 } },
-	laPrimitiva: { name: 'La Primitiva ES', themeHue: 0, config: { range: 49, count: 6, bonusRange: 10, bonusCount: 1 } },
+	laPrimitiva: { name: 'La Primitiva ES', themeHue: 0, config: { range: 49, count: 6, bonusRange: 10, bonusCount: 1, bonusMin: 0 }, bonusLabel: 'Reintegro' },
 	lotto: { name: 'UK National', themeHue: 120, config: { range: 59, count: 6, bonusRange: 1, bonusCount: 0 } },
 	megamillions: { name: 'Mega Millions', themeHue: 25, config: { range: 70, count: 5, bonusRange: 24, bonusCount: 1 } },
 	megaSena: { name: 'Mega-Sena BR', themeHue: 145, config: { range: 60, count: 6, bonusRange: 1, bonusCount: 0 } },
@@ -48,9 +64,13 @@ const GAMES: Record<string, Game> = {
 	powerball: { name: 'Powerball USA', themeHue: 345, config: { range: 69, count: 5, bonusRange: 26, bonusCount: 1 } },
 	powerballAus: { name: 'Powerball AUS', themeHue: 200, config: { range: 35, count: 7, bonusRange: 20, bonusCount: 1 } },
 	setForLife: { name: 'Set For Life UK', themeHue: 285, config: { range: 47, count: 5, bonusRange: 10, bonusCount: 1 } },
-	southAfricaLotto: { name: 'SA Lotto', themeHue: 305, config: { range: 52, count: 6, bonusRange: 1, bonusCount: 0 } }
+	southAfricaLotto: { name: 'SA Lotto', themeHue: 305, config: { range: 58, count: 6, bonusRange: 1, bonusCount: 0 } }
 };
 const DEFAULT_CUSTOM: GameConfig = { range: 50, count: 5, bonusRange: 10, bonusCount: 1 };
+
+// exported purely for boundary/unit testing (pool maths, odds string, zero
+// handling) — initLottoPicker() below is still the only real entry point.
+export { GAMES };
 
 const MANTRA = 'THE OWLS ARE NOT WHAT THEY SEEM';
 const INCANTATIONS = [
@@ -164,16 +184,19 @@ const nChooseK = (n: number, k: number): bigint => {
 	return res;
 };
 
-const oddsString = ({ range, count, bonusRange, bonusCount }: GameConfig): string => {
+export const oddsString = ({ range, count, bonusRange, bonusCount }: GameConfig): string => {
+	// bonusRange is a count of values regardless of where the pool starts
+	// (bonusMin), so the odds maths is unaffected by a 0-based bonus pool.
 	const odds = nChooseK(range, count) * (bonusCount ? nChooseK(bonusRange, bonusCount) : 1n);
 	return odds > 0n ? `1 in ${formatBigInt(odds)}` : '—';
 };
 
 /* Fisher-Yates using the supplied cosmic rng() — the draw itself is honestly,
-   boringly uniform. The numerology is applied AFTER, purely as decoration. */
-function pickUnique(range: number, count: number, rng: () => number): number[] {
+   boringly uniform. The numerology is applied AFTER, purely as decoration.
+   `min` lets a pool start below 1 (Superzahl/Reintegro are drawn 0–9). */
+export function pickUnique(range: number, count: number, rng: () => number, min = 1): number[] {
 	if (count > range) throw new RangeError('count > range');
-	const pool = Array.from({ length: range }, (_, i) => i + 1);
+	const pool = Array.from({ length: range }, (_, i) => i + min);
 	for (let i = pool.length - 1; i > 0; i--) {
 		const j = Math.floor(rng() * (i + 1));
 		[pool[i], pool[j]] = [pool[j], pool[i]];
@@ -194,8 +217,11 @@ const LUNAR_SYNODIC = 29.530588853; // days per lunation
 const LUNAR_EPOCH_MS = 947182440000; // a documented new moon, 2000-01-06 18:14 UTC
 const TAU = Math.PI * 2;
 
-// Pythagorean 9-reduction: keep summing digits until one remains (1–9).
-const digitalRoot = (n: number): number => 1 + ((Math.abs(n) - 1 + 9) % 9);
+// Pythagorean 9-reduction: keep summing digits until one remains (1–9). A
+// closed-form formula, not a summing loop, so a bonus pool that now reaches
+// 0 (Superzahl, Reintegro) can never spin it into an infinite loop or NaN —
+// digitalRoot(0) resolves to 9, same as any other multiple of 9.
+export const digitalRoot = (n: number): number => 1 + ((Math.abs(n) - 1 + 9) % 9);
 
 const isPrime = (n: number): boolean => {
 	if (n < 2) return false;
@@ -265,7 +291,7 @@ function luckResonance(n: number, phase: number): number {
 	return Math.round(40 + squashed * 59); // 40..99%
 }
 
-function numerology(n: number, phase: number): Numerology {
+export function numerology(n: number, phase: number): Numerology {
 	const root = digitalRoot(n);
 	const tags: string[] = [];
 	if (isPrime(n)) tags.push('prime');
@@ -541,8 +567,11 @@ export function initLottoPicker(): void {
 	gameSelect.insertAdjacentHTML('beforeend', '<option value="custom">Custom (your rules)</option>');
 	gameSelect.value = currentGameKey;
 
-	const savePrefs = () =>
-		localStorage.setItem(LOCAL_KEY, JSON.stringify({ gameKey: currentGameKey, custom: customConfig }));
+	const savePrefs = () => {
+		try {
+			localStorage.setItem(LOCAL_KEY, JSON.stringify({ gameKey: currentGameKey, custom: customConfig }));
+		} catch { /* storage blocked/full — the picker still works in-memory */ }
+	};
 
 	// clamp so odd custom settings (count > range) never throw
 	const getActiveConfig = (): GameConfig => {
@@ -553,7 +582,9 @@ export function initLottoPicker(): void {
 			range,
 			count: Math.min(Math.max(1, c.count), range),
 			bonusRange,
-			bonusCount: Math.min(Math.max(0, c.bonusCount), bonusRange)
+			bonusCount: Math.min(Math.max(0, c.bonusCount), bonusRange),
+			// custom games are always 1-based; only presets (Superzahl/Reintegro) set bonusMin
+			bonusMin: c.bonusMin ?? 1
 		};
 	};
 
@@ -590,7 +621,40 @@ export function initLottoPicker(): void {
 	/* ---- the luck field: a canvas of ripples behind the orbs ---- */
 	const DPR = Math.min(2, window.devicePixelRatio || 1);
 	const hasRAF = typeof requestAnimationFrame === 'function';
-	const reduceMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+	// live, not a one-off read: an OS-level motion preference flipped mid-session
+	// used to leave the balls tumbling regardless (see scene.ts for the same fix
+	// applied to the main renderer).
+	const motionMql = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+	let reduceMotion = motionMql?.matches ?? false;
+
+	// The loop only ever needs to run while there's something to animate AND a
+	// human could plausibly see it: tab focused, section actually on screen,
+	// motion allowed. Any one of those failing stops rAF outright — zero
+	// putImageData calls — rather than merely skipping the paint inside it.
+	let sectionVisible = true;
+	function canRun(): boolean {
+		return hasRAF && !reduceMotion && !document.hidden && sectionVisible && orbs.length > 0;
+	}
+	function syncLoop(): void {
+		if (canRun()) startLoop();
+		else stopLoop();
+	}
+	if (typeof IntersectionObserver === 'function') {
+		new IntersectionObserver((entries) => {
+			sectionVisible = entries[entries.length - 1]?.isIntersecting ?? true;
+			syncLoop();
+		}).observe(root!);
+	}
+	document.addEventListener('visibilitychange', syncLoop);
+	motionMql?.addEventListener('change', (e) => {
+		reduceMotion = e.matches;
+		if (reduceMotion) {
+			stopLoop();
+			if (orbs.length) renderStaticFrame(); // freeze on a single upright, rippleless paint
+		} else {
+			syncLoop();
+		}
+	});
 
 	interface Ripple {
 		x: number; y: number; hue: number; born: number; speed: number; max: number; width: number;
@@ -599,9 +663,18 @@ export function initLottoPicker(): void {
 	let ripples: Ripple[] = [];
 	let fieldCanvas: HTMLCanvasElement | null = null;
 	let fieldCtx: CanvasRenderingContext2D | null = null;
+	// the lattice background never moves, so it's baked once per size into an
+	// offscreen canvas — each animation frame then only has to composite that
+	// plus the moving ripples, instead of redrawing hundreds of fillRects.
+	let latticeCanvas: HTMLCanvasElement | null = null;
+	let latticeCtx: CanvasRenderingContext2D | null = null;
 	let rafId = 0;
 	let startPerf = 0;
 	let looping = false;
+	// decorative-only: capped well below display refresh, since nobody needs a
+	// tumbling numerology ball at 90/120fps.
+	const FRAME_INTERVAL_MS = 1000 / 30;
+	let lastFrameMs = 0;
 
 	/* ---- last draw, kept for the share button (cheaper + more honest than
 	   parsing it back out of the rendered DOM / status line) ---- */
@@ -610,14 +683,17 @@ export function initLottoPicker(): void {
 		main: number[];
 		bonus: number[];
 		resonance: number;
+		bonusLabel?: string;
 	}
 	let lastDraw: LastDraw | null = null;
 	const activeGameName = (): string => (currentGameKey === 'custom' ? 'Custom' : GAMES[currentGameKey].name);
+	const activeGame = (): Game | null => (currentGameKey === 'custom' ? null : GAMES[currentGameKey]);
 
 	async function shareNumbers(btn: HTMLButtonElement): Promise<void> {
 		if (!lastDraw) return;
-		const { game, main, bonus, resonance } = lastDraw;
-		const bonusPart = bonus.length ? ` + bonus ${bonus.join(', ')}` : '';
+		const { game, main, bonus, resonance, bonusLabel } = lastDraw;
+		const bonusWord = bonusLabel ?? 'bonus';
+		const bonusPart = bonus.length ? ` + ${bonusWord} ${bonus.join(', ')}` : '';
 		const text = `My lucky numbers: ${main.join(', ')}${bonusPart} (${game}, resonance ${resonance}%). Conjured at makemelucky.com 🍀`;
 		let shared = false;
 		try {
@@ -637,6 +713,23 @@ export function initLottoPicker(): void {
 		if (shared) track('numbers_shared', { game: currentGameKey });
 	}
 
+	function drawLattice(w: number, h: number): void {
+		if (!latticeCanvas) latticeCanvas = document.createElement('canvas');
+		latticeCanvas.width = w;
+		latticeCanvas.height = h;
+		latticeCtx = latticeCanvas.getContext('2d');
+		if (!latticeCtx) return;
+		// a faint triangular lattice — the "luck field" the ripples travel through.
+		// Static, so it's baked once here rather than redrawn every frame.
+		latticeCtx.fillStyle = 'rgba(240,212,136,0.05)';
+		const step = 26 * DPR;
+		for (let y = 0, r = 0; y < h; y += step, r++) {
+			for (let x = (r % 2 ? step / 2 : 0); x < w; x += step) {
+				latticeCtx.fillRect(x, y, DPR, DPR);
+			}
+		}
+	}
+
 	function ensureField(): void {
 		if (!fieldCanvas) {
 			fieldCanvas = document.createElement('canvas');
@@ -647,8 +740,15 @@ export function initLottoPicker(): void {
 		}
 		const w = root!.clientWidth || 1;
 		const h = root!.clientHeight || 96;
-		fieldCanvas.width = Math.round(w * DPR);
-		fieldCanvas.height = Math.round(h * DPR);
+		const pw = Math.round(w * DPR);
+		const ph = Math.round(h * DPR);
+		// setting .width/.height always resets the canvas bitmap, even to an
+		// unchanged size — skip it (and re-baking the lattice) when nothing moved
+		if (fieldCanvas.width !== pw || fieldCanvas.height !== ph) {
+			fieldCanvas.width = pw;
+			fieldCanvas.height = ph;
+			drawLattice(pw, ph);
+		}
 	}
 
 	function drawField(tMs: number): void {
@@ -656,15 +756,8 @@ export function initLottoPicker(): void {
 		const w = fieldCanvas.width;
 		const h = fieldCanvas.height;
 		fieldCtx.clearRect(0, 0, w, h);
-		// a faint triangular lattice — the "luck field" the ripples travel through
-		fieldCtx.fillStyle = 'rgba(240,212,136,0.05)';
-		const step = 26 * DPR;
-		for (let y = 0, r = 0; y < h; y += step, r++) {
-			for (let x = (r % 2 ? step / 2 : 0); x < w; x += step) {
-				fieldCtx.fillRect(x, y, DPR, DPR);
-			}
-		}
-		// living ripples
+		if (latticeCanvas) fieldCtx.drawImage(latticeCanvas, 0, 0); // cached static background
+		// living ripples — the only part of the field that actually changes
 		for (let k = ripples.length - 1; k >= 0; k--) {
 			const rp = ripples[k];
 			const rr = ((tMs - rp.born) / 1000) * rp.speed;
@@ -682,9 +775,25 @@ export function initLottoPicker(): void {
 		if (ripples.length > 80) ripples.splice(0, ripples.length - 80);
 	}
 
+	// One frame, no loop: used for the initial reduced-motion render and to
+	// freeze the balls the instant the OS motion preference flips mid-session.
+	function renderStaticFrame(): void {
+		const geom = orbs[0]?.canvas ? sphereGeom(orbs[0].canvas.width) : null;
+		if (geom) for (const orb of orbs) drawOrb(orb, geom, orb.phase);
+		drawField(performance.now());
+	}
+
 	function frame(now: number): void {
-		const t = (now - startPerf) / 1000;
-		if (!document.hidden) {
+		// canRun() also covers document.hidden/section-visibility/reduced-motion,
+		// but re-check here too: nothing schedules the next rAF when it's false,
+		// so an off-screen/hidden/reduced-motion section paints nothing at all.
+		if (!canRun()) {
+			stopLoop();
+			return;
+		}
+		if (now - lastFrameMs >= FRAME_INTERVAL_MS) {
+			lastFrameMs = now;
+			const t = (now - startPerf) / 1000;
 			const geom = orbs[0]?.canvas ? sphereGeom(orbs[0].canvas.width) : null;
 			if (geom) for (const orb of orbs) drawOrb(orb, geom, t * orb.speed + orb.phase);
 			// ripples reach the far corners of the whole panel
@@ -714,9 +823,10 @@ export function initLottoPicker(): void {
 		looping = false;
 	}
 	function startLoop(): void {
-		if (looping || !hasRAF) return;
+		if (looping || !canRun()) return;
 		looping = true;
 		startPerf = performance.now();
+		lastFrameMs = 0;
 		rafId = requestAnimationFrame(frame);
 	}
 
@@ -734,6 +844,7 @@ export function initLottoPicker(): void {
 		const S = Math.round(62 * DPR);
 		const phase = lunarPhase(Date.now());
 		const all = [...main, ...bonus];
+		const bonusLabel = activeGame()?.bonusLabel;
 
 		all.forEach((n, i) => {
 			const isBonus = i >= main.length;
@@ -753,7 +864,10 @@ export function initLottoPicker(): void {
 			const ball = document.createElement('div');
 			ball.className = 'lng-ball';
 			ball.setAttribute('role', 'img'); // the golden bonus ring is paint-only, so say it out loud
-			ball.setAttribute('aria-label', `${isBonus ? 'Bonus' : 'Main'} number ${n}`);
+			// a ticket-assigned digit (Superzahl, Reintegro) wasn't "picked" like a
+			// number, so it gets its own label instead of the generic "Bonus number"
+			const ariaLabel = isBonus ? (bonusLabel ?? 'Bonus number') : 'Main number';
+			ball.setAttribute('aria-label', `${ariaLabel} ${n}`);
 			ball.style.setProperty('--delay', `${i * 70}ms`);
 
 			const canvas = document.createElement('canvas');
@@ -792,7 +906,7 @@ export function initLottoPicker(): void {
 			});
 		});
 
-		lastDraw = { game: activeGameName(), main, bonus, resonance };
+		lastDraw = { game: activeGameName(), main, bonus, resonance, bonusLabel };
 		const shareBtn = document.createElement('button');
 		shareBtn.type = 'button';
 		shareBtn.className = 'lng-share';
@@ -811,11 +925,9 @@ export function initLottoPicker(): void {
 		});
 
 		if (reduceMotion) {
-			// one static, upright frame — no tumble, no ripples
-			const geom = orbs[0]?.canvas ? sphereGeom(orbs[0].canvas.width) : null;
-			if (geom) for (const orb of orbs) drawOrb(orb, geom, orb.phase);
+			renderStaticFrame(); // one static, upright frame — no tumble, no ripples
 		} else {
-			startLoop();
+			syncLoop(); // starts immediately only while the section is actually visible
 		}
 
 		return;
@@ -863,7 +975,7 @@ export function initLottoPicker(): void {
 
 			const cfg = getActiveConfig();
 			const main = pickUnique(cfg.range, cfg.count, rng);
-			const bonus = cfg.bonusCount ? pickUnique(cfg.bonusRange, cfg.bonusCount, rng) : [];
+			const bonus = cfg.bonusCount ? pickUnique(cfg.bonusRange, cfg.bonusCount, rng, cfg.bonusMin ?? 1) : [];
 
 			// average resonance drives the field readout (and the share text)
 			const phase = lunarPhase(Date.now());

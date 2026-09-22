@@ -16,6 +16,7 @@ import {
 import { Director } from './effects/director';
 import { ScreenPanel } from './ui/screenPanel';
 import { CharmsUI } from './ui/charmsUI';
+import { PressController } from './ui/pressController';
 import { QUIPS } from './ui/quips';
 import { printConsoleBanner, printEffectList } from './ui/console';
 import { LuckStore } from './luck/store';
@@ -26,7 +27,32 @@ import { AudioService } from './services/audio';
 import { Haptics } from './services/haptics';
 import { WakeLock } from './services/wakeLock';
 import { initAnalytics, track } from './services/analytics';
+import { dayIndex } from './luck/days';
 import type { EffectContext, TextureBundle } from './types';
+
+// Whatever boot managed to wire before anything went wrong. If the 3D machine
+// never starts, the fallback presses these pieces back into service; an earlier
+// failure simply means there are fewer of them.
+const kit: {
+	store?: LuckStore;
+	charmsUI?: CharmsUI;
+	screen?: ScreenPanel;
+	/** How a charm gets its ceremony right now. Boot upgrades this to the full
+	 *  version (sound, particles) once the scene exists; until then, and for
+	 *  ever if the machine never starts, it is the DOM-only one below. */
+	celebrate: (awarded: Charm[]) => void;
+} = { celebrate: plainCelebrate };
+
+/** Toast, grid card, analytics, progress — everything a charm ceremony needs
+ *  that does not need a renderer. */
+function plainCelebrate(awarded: Charm[]): void {
+	for (const charm of awarded) {
+		kit.charmsUI?.showToast(charm);
+		kit.charmsUI?.addCharm(charm);
+		track('charm_awarded', { charm: charm.id });
+	}
+	kit.charmsUI?.updateProgress();
+}
 
 // rAF with a timeout fallback (headless/background tabs may not paint)
 const nextFrame = () =>
@@ -42,6 +68,7 @@ async function boot(): Promise<void> {
 	initAnalytics();
 
 	const store = new LuckStore();
+	kit.store = store;
 	const audio = new AudioService();
 	const haptics = new Haptics();
 	const wakeLock = new WakeLock();
@@ -51,6 +78,8 @@ async function boot(): Promise<void> {
 	const screen = new ScreenPanel();
 	const charmsUI = new CharmsUI(store);
 	charmsUI.renderAll();
+	kit.screen = screen;
+	kit.charmsUI = charmsUI;
 
 	// the below-the-fold features are self-contained; wire them up now so they
 	// work even before the WebGL scene finishes booting
@@ -68,7 +97,10 @@ async function boot(): Promise<void> {
 					'Compiled a Birthday Dossier. The stars now have you on file. (Your device does. The stars know nothing.)',
 					'🔭'
 				);
-				if (charm) celebrateCharms([charm]);
+				// through the kit, not celebrateCharms directly: the dossier can be
+				// compiled before the scene exists (or after it failed to), and the
+				// full ceremony needs particles that may never have been built
+				if (charm) kit.celebrate([charm]);
 			}
 		});
 	} catch {
@@ -118,6 +150,7 @@ async function boot(): Promise<void> {
 	window.addEventListener('resize', syncParticleScale);
 
 	const ctx: EffectContext = { scene, machine, particles, lightning, sprites, glyphTextures, textures, audio, haptics };
+	kit.celebrate = celebrateCharms; // the scene is up: charms get the full ceremony from here on
 	const director = new Director(ctx);
 	// effects hold full frame rate for their whole run, including the delay()
 	// gaps between tweens where particles are still flying
@@ -152,7 +185,10 @@ async function boot(): Promise<void> {
 	// remove it once faded — a merely-transparent overlay keeps its spinner
 	// animation (and a compositor layer) alive forever
 	setTimeout(() => loading?.remove(), 1000);
-	audio.warm(); // boot's done with the bandwidth — fetch the sound sprite now
+	// boot's done with the bandwidth — but a muted visitor is not spending
+	// 900KB on a sprite they have told us they don't want to hear. Unmuting
+	// warms it instead.
+	if (store.data.soundOn) audio.warm();
 	director.prefetchNext(); // and the first effect's code, soundtrack and set
 	track('page_loaded', { visits: store.data.visits, luckyness: store.data.luckyness });
 	screen.welcome(store.data.visits > 1, store.data.streak);
@@ -164,8 +200,6 @@ async function boot(): Promise<void> {
 
 	// ---- button wiring
 	const pressTarget = document.getElementById('press-target')!;
-	let holdStart = 0;
-	let pointerHeld = false;
 
 	// The one true charm celebration: sound, toast, grid entry, analytics,
 	// sparkle, progress. Every award path routes through here.
@@ -185,7 +219,8 @@ async function boot(): Promise<void> {
 				colors: [0xfff3cf, 0xffd27a]
 			});
 		}
-		if (awarded.length) charmsUI.updateProgress();
+		// (addCharm refreshes the progress line itself; the press counter is
+		// refreshed on every press, award or not, in completePress)
 	}
 
 	// The Daily Luck Ritual: the first press of each calendar day gets a
@@ -207,7 +242,9 @@ async function boot(): Promise<void> {
 		['TODAY BENDS', 'YOUR WAY'],
 		['DESTINY LEFT', 'THE DOOR OPEN']
 	];
-	const todaysFortune = () => FORTUNES[Math.floor(Date.now() / 86400000) % FORTUNES.length];
+	// dayIndex() is the LOCAL calendar day, so the fortune turns over at the
+	// visitor's own midnight — the one the machine promises — and not at UTC's.
+	const todaysFortune = () => FORTUNES[dayIndex() % FORTUNES.length];
 
 	// effect_played carries seq + prev so exit analysis is free: the number of
 	// sessions whose LAST effect was E = plays(E) minus events where prev = E.
@@ -233,11 +270,18 @@ async function boot(): Promise<void> {
 		return fx;
 	}
 
+	// Runs inside the press controller's busy window: from the moment the press
+	// is accepted until this settles, no other press, key or console summons
+	// gets in — including during the ritual's 1.3-second announcement, when the
+	// director is not yet "running" and a second press used to slip through.
 	async function completePress(holdSeconds: number): Promise<void> {
 		if (director.running) return;
 		const isRitual = store.ritualAvailable();
 		if (isRitual) store.registerRitual();
 		const awarded = [...store.registerPress(), ...store.registerHold(holdSeconds)];
+		// the visible counter belongs to the press, not to the charm ceremony:
+		// it used to sit inside celebrateCharms and only moved on milestones
+		charmsUI.updateProgress();
 		track('button_pressed', { count: store.data.luckyness, ritual: isRitual });
 		if (isRitual) {
 			const stamp = new Date()
@@ -253,10 +297,26 @@ async function boot(): Promise<void> {
 		screen.youAreNowLucky(store.data.luckyness, awarded.length > 0, quip);
 	}
 
+	// Pointer, keyboard and the bare click assistive technology sends all go
+	// through one door, which refuses a second press while the first is still
+	// being served. The hold is measured for the eight-second Steady Hand charm.
+	const press = new PressController({
+		target: pressTarget,
+		blocked: () => director.running,
+		onDown: () => {
+			charmsUI.hideToast(); // a new press clears the old celebration instantly
+			void machine.pressDown();
+			audio.play('button');
+			haptics.vibrate(25);
+		},
+		onUp: () => machine.pressUp(),
+		onComplete: (holdSeconds) => completePress(holdSeconds)
+	});
+
 	// party trick: run any effect from the console without waiting for the
 	// shuffle bag. Curiosity is its own kind of luck — it earns a charm.
 	window.showEffect = async (name?: string): Promise<string> => {
-		if (director.running) return 'An effect is already running. Patience is lucky too.';
+		if (press.busy || director.running) return 'An effect is already running. Patience is lucky too.';
 		// gentleGlow isn't in the bag (it's the reduced-motion stand-in) but it is
 		// a real effect, so the console is allowed to ask for it by name
 		const summonable = [...director.names, 'gentleGlow'];
@@ -282,70 +342,26 @@ async function boot(): Promise<void> {
 			'🧙'
 		);
 		if (charm) celebrateCharms([charm]);
-		screen.blank();
-		// remember any ?fx= override rather than clobbering it
-		const wasForced = director.forced;
-		director.forced = name;
-		const fx = await performEffect({ via: 'console' });
-		director.forced = wasForced;
+		// the console borrows the same busy window as the button, so a summoned
+		// effect and a pressed one can never share the stage
+		const played = await press.run(async () => {
+			screen.blank();
+			// remember any ?fx= override rather than clobbering it
+			const wasForced = director.forced;
+			director.forced = name;
+			try {
+				return { fx: await performEffect({ via: 'console' }) };
+			} finally {
+				director.forced = wasForced;
+			}
+		});
+		if (!played) return 'An effect is already running. Patience is lucky too.';
+		const fx = played.fx;
 		screen.youAreNowLucky(store.data.luckyness, false, fx ? QUIPS[fx] : undefined);
 		// reduced motion substitutes something from the calm shortlist
 		return fx === name ? `Played ${fx} 🍀` : `Played ${fx} instead — you've asked for reduced motion. 🍀`;
 	};
 	printConsoleBanner([...director.names, 'gentleGlow']);
-
-	pressTarget.addEventListener('pointerdown', (e) => {
-		if (director.running) return;
-		e.preventDefault();
-		// without capture, dragging off before releasing strands the button down
-		try { pressTarget.setPointerCapture(e.pointerId); } catch { /* stale pointer */ }
-		charmsUI.hideToast(); // a new press clears the old celebration instantly
-		pointerHeld = true;
-		holdStart = performance.now();
-		machine.pressDown();
-		audio.play('button');
-		haptics.vibrate(25);
-	});
-	const release = () => {
-		if (!pointerHeld) return;
-		pointerHeld = false;
-		machine.pressUp();
-		completePress((performance.now() - holdStart) / 1000);
-	};
-	pressTarget.addEventListener('pointerup', release);
-	pressTarget.addEventListener('pointercancel', () => {
-		if (!pointerHeld) return;
-		pointerHeld = false;
-		machine.pressUp();
-	});
-	// keyboard activation — mirrors the pointer path, hold included. The press
-	// ends when the key comes up, so the eight-second Steady Hand charm is
-	// reachable without a mouse; it used to be pinned at 0.1s and unwinnable.
-	let keyHeld = false;
-	pressTarget.addEventListener('keydown', async (e) => {
-		if ((e.key === 'Enter' || e.key === ' ') && !director.running && !e.repeat && !keyHeld) {
-			e.preventDefault();
-			charmsUI.hideToast();
-			keyHeld = true;
-			holdStart = performance.now();
-			await machine.pressDown();
-			audio.play('button');
-			haptics.vibrate(25);
-		}
-	});
-	pressTarget.addEventListener('keyup', (e) => {
-		if (!keyHeld || (e.key !== 'Enter' && e.key !== ' ')) return;
-		e.preventDefault();
-		keyHeld = false;
-		machine.pressUp();
-		completePress((performance.now() - holdStart) / 1000);
-	});
-	// focus lost mid-hold: let the button back up without crediting a press
-	pressTarget.addEventListener('blur', () => {
-		if (!keyHeld) return;
-		keyHeld = false;
-		machine.pressUp();
-	});
 
 	// ---- mute
 	const muteBtn = document.getElementById('mute-button')!;
@@ -357,6 +373,7 @@ async function boot(): Promise<void> {
 	muteBtn.addEventListener('click', () => {
 		store.setSound(!store.data.soundOn);
 		audio.setMuted(!store.data.soundOn);
+		if (store.data.soundOn) audio.warm(); // sound is wanted now — go and get it
 		setMuteUI();
 		track('sound_toggled', { on: store.data.soundOn });
 	});
@@ -399,4 +416,122 @@ async function boot(): Promise<void> {
 	});
 }
 
-boot();
+/** The machine could not be built — no WebGL, a refused context, anything at
+ *  all. The old behaviour was to leave "Charging the Luck Machine…" pinned over
+ *  the whole viewport for ever, hiding the writing, the charms, the lottery
+ *  picker and the dossier along with the machine. So: own up in character, get
+ *  the overlay out of the way, and keep the button pressable. A press still
+ *  counts, still earns charms, and still says something nice. Luck was never
+ *  made of polygons; the 2016 machine is one link away for anyone who wants
+ *  the full contraption. */
+function bootFallback(err: unknown): void {
+	const reason = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+	try {
+		track('boot_failed', { reason: reason.slice(0, 200) });
+	} catch { /* analytics never gets to block the rescue */ }
+
+	// 1. the overlay goes immediately — it is fixed over everything
+	document.getElementById('loading')?.remove();
+	document.getElementById('hero')?.classList.add('machine-down');
+	kit.celebrate = plainCelebrate; // no particles to burst, whatever boot managed
+
+	// 2. salvage whatever boot didn't reach
+	if (!kit.store) {
+		try {
+			kit.store = new LuckStore();
+		} catch { /* storage blocked too; presses simply won't be remembered */ }
+	}
+	if (kit.store && !kit.charmsUI) {
+		try {
+			kit.charmsUI = new CharmsUI(kit.store);
+			kit.charmsUI.renderAll();
+		} catch {
+			kit.charmsUI = undefined;
+		}
+	}
+	// the message screen is plain DOM, so it survives a dead renderer
+	if (!kit.screen && document.getElementById('screen-text') && document.getElementById('screen-panel')) {
+		try {
+			kit.screen = new ScreenPanel();
+		} catch { /* then the note below does the talking */ }
+	}
+	const { store, charmsUI, screen } = kit;
+
+	// 3. the apology, in the machine's own voice
+	const hero = document.getElementById('hero');
+	const note = document.createElement('div');
+	note.id = 'boot-fallback';
+	const apology = document.createElement('p');
+	apology.textContent =
+		'The 3D machine would not start on this device — no WebGL, or it took one look at us and kept the shutters down. ' +
+		'The button still works. Luck was never made of polygons.';
+	const quip = document.createElement('p');
+	quip.className = 'fallback-quip';
+	quip.setAttribute('role', 'status');
+	const link = document.createElement('a');
+	link.href = '/v2/';
+	link.rel = 'nofollow';
+	link.textContent = 'Or press the classic 2016 machine →';
+	const linkLine = document.createElement('p');
+	linkLine.appendChild(link);
+	note.append(apology, quip, linkLine);
+	hero?.appendChild(note);
+
+	// 4. the button, as a plain button. A fresh node drops any listeners boot
+	//    managed to attach before it fell over.
+	const old = document.getElementById('press-target');
+	if (!old) return;
+	const pressTarget = old.cloneNode(true) as HTMLElement;
+	const label = document.createElement('span');
+	label.className = 'fallback-label';
+	label.setAttribute('aria-hidden', 'true');
+	label.textContent = 'MAKE ME LUCKY';
+	pressTarget.appendChild(label);
+	old.replaceWith(pressTarget);
+
+	// 5. the mute button. Boot wires it only after the scene exists, so here it
+	//    is a live control with no handler — wire it to the stored preference
+	//    (a fresh node, in case boot got that far before falling over). Sound
+	//    itself stays off: there is no machine to score.
+	const oldMute = document.getElementById('mute-button');
+	if (oldMute && store) {
+		const muteBtn = oldMute.cloneNode(true) as HTMLElement;
+		oldMute.replaceWith(muteBtn);
+		const setMuteUI = () => {
+			muteBtn.classList.toggle('muted', !store.data.soundOn);
+			muteBtn.setAttribute('aria-pressed', String(!store.data.soundOn));
+		};
+		setMuteUI();
+		muteBtn.addEventListener('click', () => {
+			store.setSound(!store.data.soundOn);
+			setMuteUI();
+			track('sound_toggled', { on: store.data.soundOn, fallback: true });
+		});
+	} else {
+		oldMute?.setAttribute('disabled', '');
+	}
+
+	const say = (presses: number, awarded: boolean): void => {
+		if (screen) screen.youAreNowLucky(presses, awarded);
+		else quip.textContent = `You are now lucky. That is ${presses.toLocaleString()} presses of good fortune.`;
+	};
+
+	new PressController({
+		target: pressTarget,
+		onDown: () => charmsUI?.hideToast(),
+		onUp: () => { /* no 3D button to let back up */ },
+		onComplete: (holdSeconds) => {
+			if (!store) {
+				if (screen) screen.youAreNowLucky(1, false);
+				else quip.textContent = 'You are now lucky. (Nothing can be saved on this device, but the luck still counts.)';
+				return;
+			}
+			const awarded = [...store.registerPress(), ...store.registerHold(holdSeconds)];
+			plainCelebrate(awarded);
+			track('button_pressed', { count: store.data.luckyness, fallback: true });
+			say(store.data.luckyness, awarded.length > 0);
+		}
+	});
+}
+
+boot().catch(bootFallback);

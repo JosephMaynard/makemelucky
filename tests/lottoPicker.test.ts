@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { initLottoPicker } from '../src/luck/lottoPicker';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { initLottoPicker, GAMES, pickUnique, oddsString, numerology, digitalRoot } from '../src/luck/lottoPicker';
 import { track } from '../src/services/analytics';
 
 // Stubbed so we can assert on calls without PostHog ever needing to be ready.
@@ -31,6 +31,13 @@ beforeEach(() => {
 	localStorage.clear();
 	document.body.innerHTML = HTML;
 	vi.mocked(track).mockClear();
+});
+
+// Several tests below spy on shared globals (clipboard, storage, matchMedia,
+// rAF, IntersectionObserver). Restore them after every test so one test's spy
+// can't wrap/shadow another's and skew call counts.
+afterEach(() => {
+	vi.restoreAllMocks();
 });
 
 describe('initLottoPicker wiring', () => {
@@ -190,5 +197,217 @@ describe('share button', () => {
 		select.value = 'lotto';
 		select.dispatchEvent(new Event('change'));
 		expect(document.querySelector('.lng-share')).toBeNull();
+	});
+});
+
+// Finding 6: German Lotto's Superzahl, La Primitiva's Reintegro, and SA
+// Lotto's real 6/58 pool were all misrepresented. These are boundary tests on
+// the pure data/maths (pickUnique/oddsString/GAMES), not full UI spins, so
+// "reachable"/"unreachable" is proven by construction rather than sampled.
+describe('lottery pool corrections (finding 6)', () => {
+	it('German Lotto Superzahl and La Primitiva Reintegro are 0-9, not 1-10', () => {
+		for (const key of ['germanyLotto', 'laPrimitiva'] as const) {
+			const { bonusRange, bonusMin } = GAMES[key].config;
+			expect(bonusRange).toBe(10);
+			expect(bonusMin).toBe(0);
+			// drawing the whole pool (count === range) proves both ends are reachable
+			const wholePool = pickUnique(bonusRange, bonusRange, () => 0, bonusMin);
+			expect(wholePool[0]).toBe(0); // zero is reachable
+			expect(wholePool[wholePool.length - 1]).toBe(9);
+			expect(wholePool).not.toContain(10); // 10 is unreachable
+		}
+		expect(GAMES.germanyLotto.bonusLabel).toBe('Superzahl');
+		expect(GAMES.laPrimitiva.bonusLabel).toBe('Reintegro');
+	});
+
+	it('South African Lotto draws 6 from 1-58, with 58 reachable', () => {
+		const cfg = GAMES.southAfricaLotto.config;
+		expect(cfg.range).toBe(58);
+		expect(cfg.count).toBe(6);
+		const wholePool = pickUnique(cfg.range, cfg.range, () => 0);
+		expect(wholePool[0]).toBe(1);
+		expect(wholePool[wholePool.length - 1]).toBe(58); // 58 reachable
+	});
+
+	it("SA Lotto's displayed jackpot odds use the 58-number pool", () => {
+		expect(oddsString(GAMES.southAfricaLotto.config)).toBe('1 in 40,475,358'); // C(58,6)
+	});
+
+	it('a custom game stays 1-based', async () => {
+		initLottoPicker();
+		const select = document.getElementById('lng-game') as HTMLSelectElement;
+		select.value = 'custom';
+		select.dispatchEvent(new Event('change'));
+		const spin = document.getElementById('lng-spin') as HTMLButtonElement;
+		spin.click();
+		await vi.waitFor(
+			() => expect(document.querySelectorAll('#lng-result .lng-ball').length).toBeGreaterThan(0),
+			{ timeout: 4000, interval: 50 }
+		);
+		const nums = [...document.querySelectorAll('#lng-result .lng-ball-row .lng-ball .lng-num')].map((n) =>
+			Number(n.textContent)
+		);
+		for (const n of nums) expect(n).toBeGreaterThanOrEqual(1); // never 0 — custom has no bonusMin of its own
+	});
+
+	it('does not touch EuroMillions (its Sept 2026 format-change comment is unverified)', () => {
+		expect(GAMES.euromillions.config).toEqual({ range: 50, count: 5, bonusRange: 12, bonusCount: 2 });
+		expect(GAMES.euromillions.bonusLabel).toBeUndefined();
+	});
+
+	it('the decorative numerology engine handles a zero value cleanly (no NaN, no infinite loop)', () => {
+		expect(digitalRoot(0)).toBe(9);
+		const num = numerology(0, 0.37);
+		expect(Number.isFinite(num.resonance)).toBe(true);
+		expect(num.resonance).toBeGreaterThanOrEqual(40);
+		expect(num.resonance).toBeLessThanOrEqual(99);
+		expect(num.vibe).toBeDefined();
+	});
+
+	it('labels the German Lotto bonus ball "Superzahl" instead of the generic bonus label', async () => {
+		initLottoPicker();
+		const select = document.getElementById('lng-game') as HTMLSelectElement;
+		select.value = 'germanyLotto';
+		select.dispatchEvent(new Event('change'));
+		const spin = document.getElementById('lng-spin') as HTMLButtonElement;
+		spin.click();
+		await vi.waitFor(() => expect(document.querySelectorAll('#lng-result .lng-ball').length).toBe(7), {
+			timeout: 4000,
+			interval: 50
+		});
+		const balls = [...document.querySelectorAll('#lng-result .lng-ball-row .lng-ball')];
+		expect(balls[0].getAttribute('aria-label')).toMatch(/^Main number \d+$/);
+		expect(balls[balls.length - 1].getAttribute('aria-label')).toMatch(/^Superzahl \d+$/);
+	});
+
+	it('uses the Superzahl label, not "bonus", in the share text', async () => {
+		vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+		initLottoPicker();
+		const select = document.getElementById('lng-game') as HTMLSelectElement;
+		select.value = 'germanyLotto';
+		select.dispatchEvent(new Event('change'));
+		const spin = document.getElementById('lng-spin') as HTMLButtonElement;
+		spin.click();
+		let shareBtn: HTMLButtonElement | null = null;
+		await vi.waitFor(
+			() => {
+				shareBtn = document.querySelector('.lng-share');
+				expect(shareBtn).toBeTruthy();
+			},
+			{ timeout: 4000, interval: 50 }
+		);
+		shareBtn!.click();
+		await vi.waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(1));
+		const text = vi.mocked(navigator.clipboard.writeText).mock.calls[0][0] as string;
+		expect(text).toMatch(/ \+ Superzahl \d+ \(German Lotto 6aus49,/);
+	});
+});
+
+// Finding 5: after a draw the seven ball canvases (plus the field canvas) kept
+// painting at ~60fps forever, even 1,000px off-screen or with the tab hidden,
+// and a live prefers-reduced-motion change never reached the running loop.
+describe('off-screen / reduced-motion loop gating (finding 5)', () => {
+	it('observes the lottery section for visibility-based loop gating', () => {
+		const observeSpy = vi.spyOn(IntersectionObserver.prototype, 'observe');
+		initLottoPicker();
+		expect(observeSpy).toHaveBeenCalledWith(document.getElementById('luck-numbers'));
+		observeSpy.mockRestore();
+	});
+
+	it('never schedules an animation frame while the tab is hidden', async () => {
+		Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+		const rafSpy = vi.spyOn(window, 'requestAnimationFrame');
+		try {
+			initLottoPicker();
+			const spin = document.getElementById('lng-spin') as HTMLButtonElement;
+			spin.click();
+			await vi.waitFor(() => expect(document.querySelectorAll('#lng-result .lng-ball').length).toBe(7), {
+				timeout: 4000,
+				interval: 50
+			});
+			expect(rafSpy).not.toHaveBeenCalled(); // zero painting while hidden
+		} finally {
+			rafSpy.mockRestore();
+			delete (document as unknown as { hidden?: boolean }).hidden; // restore the live prototype getter
+		}
+	});
+
+	it('renders one static frame, never a loop, when the OS already prefers reduced motion', async () => {
+		const matchMediaSpy = vi.spyOn(window, 'matchMedia').mockImplementation(
+			(query: string) =>
+				({
+					matches: query.includes('prefers-reduced-motion'),
+					media: query,
+					addEventListener: vi.fn(),
+					removeEventListener: vi.fn(),
+					addListener: vi.fn(),
+					removeListener: vi.fn(),
+					dispatchEvent: vi.fn(),
+					onchange: null
+				}) as unknown as MediaQueryList
+		);
+		const rafSpy = vi.spyOn(window, 'requestAnimationFrame');
+		try {
+			initLottoPicker();
+			const spin = document.getElementById('lng-spin') as HTMLButtonElement;
+			spin.click();
+			await vi.waitFor(() => expect(document.querySelectorAll('#lng-result .lng-ball').length).toBe(7), {
+				timeout: 4000,
+				interval: 50
+			});
+			expect(rafSpy).not.toHaveBeenCalled(); // static render, no loop ever started
+		} finally {
+			rafSpy.mockRestore();
+			matchMediaSpy.mockRestore();
+		}
+	});
+
+	it('stops the loop the instant the OS flips to reduced motion mid-session', async () => {
+		const realMatchMedia = window.matchMedia.bind(window);
+		let capturedMql: MediaQueryList | null = null;
+		const matchMediaSpy = vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => {
+			const mql = realMatchMedia(query);
+			if (query.includes('prefers-reduced-motion')) capturedMql = mql;
+			return mql;
+		});
+		try {
+			initLottoPicker();
+			const spin = document.getElementById('lng-spin') as HTMLButtonElement;
+			spin.click();
+			await vi.waitFor(() => expect(document.querySelectorAll('#lng-result .lng-ball').length).toBe(7), {
+				timeout: 4000,
+				interval: 50
+			});
+			expect(capturedMql).toBeTruthy();
+
+			const rafSpy = vi.spyOn(window, 'requestAnimationFrame');
+			capturedMql!.dispatchEvent(new MediaQueryListEvent('change', { matches: true, media: capturedMql!.media }));
+			const callsRightAfterFlip = rafSpy.mock.calls.length;
+			await new Promise((r) => setTimeout(r, 100));
+			expect(rafSpy.mock.calls.length).toBe(callsRightAfterFlip); // no further frames once reduced motion kicks in
+			rafSpy.mockRestore();
+		} finally {
+			matchMediaSpy.mockRestore();
+		}
+	});
+});
+
+// Maintenance bullet: lottery preference saves didn't catch storage errors,
+// unlike other persistence paths in the app.
+describe('preference save resilience (maintenance)', () => {
+	it('does not throw when localStorage is blocked (private mode / full quota)', () => {
+		const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+			throw new DOMException('blocked', 'QuotaExceededError');
+		});
+		try {
+			initLottoPicker();
+			const select = document.getElementById('lng-game') as HTMLSelectElement;
+			expect(() => {
+				select.value = 'lotto';
+				select.dispatchEvent(new Event('change'));
+			}).not.toThrow();
+		} finally {
+			setItemSpy.mockRestore();
+		}
 	});
 });

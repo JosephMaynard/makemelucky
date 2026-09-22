@@ -1725,12 +1725,63 @@ function testLocalStorage(){
     }
 }
 
+//The archive keeps its own key. The modern site owns 'luckStore' and nothing
+//in this file may ever write to it.
+function readClassicStore(){
+	var store = null;
+	try {
+		var raw = window.localStorage.getItem('luckStoreClassic');
+		store = raw ? JSON.parse(raw) : seedClassicStore();
+	} catch(e){
+		store = null;
+	}
+	if(!store || typeof store != 'object') return null;
+	if(Object.prototype.toString.call(store.charms) != '[object Array]') store.charms = [];
+	if(!store.specialCharms) store.specialCharms = {};
+	return store;
+}
+
+//First visit to the archive: take a READ-ONLY copy of whatever the modern site
+//has saved, so a returning visitor doesn't start from zero. Never writes back.
+function seedClassicStore(){
+	try {
+		var raw = window.localStorage.getItem('luckStore');
+		if(!raw) return null;
+		var modern = JSON.parse(raw);
+		if(!modern || typeof modern != 'object') return null;
+		//Already a V2-shaped record: the archive understands it as it stands.
+		if(!(Number(modern.version) >= 3)) return modern;
+		//V3 record, rebuilt in the V2 shape. Charms are deliberately dropped:
+		//the archive draws each one from sprite co-ordinates (x/y) that V3
+		//charms don't carry, and it re-awards press charms as they come round.
+		return {
+			luckyness: Number(modern.luckyness) || 0,
+			visits: Number(modern.visits) || 1,
+			longestPress: Number(modern.longestPress) || 0,
+			daysInRow: Number(modern.streak) || 1,
+			version: luckyVariables.ver,
+			charms: [],
+			specialCharms: {},
+			soundOn: modern.soundOn !== false,
+			vibrationOn: modern.vibrationOn !== false,
+			showModal: true,
+			//The modern lastVisit comes across too, so the archive's own day-streak
+			//rule can carry on from it instead of resetting to 1 on arrival.
+			lastVisit: modern.lastVisit || new Date().toISOString(),
+			firstUse: modern.firstUse || new Date().toISOString()
+		};
+	} catch(e){
+		return null;
+	}
+}
+
 if(luckyVariables.localStorageAvailable){
-	if(window.localStorage.getItem('luckStore')){
-		luckyVariables.luckStore = JSON.parse(localStorage.getItem('luckStore'));
-		//Delete local storage on old versions
+	var classicStore = readClassicStore();
+	if(classicStore){
+		luckyVariables.luckStore = classicStore;
+		//Reset the archive's own store on old versions
 		if(luckyVariables.luckStore.version < 0.35 ){
-			localStorage.clear();
+			localStorage.removeItem('luckStoreClassic');
 			createLuckStore();
 		} else {	
 			luckyVariables.firstUse = new Date(Date.parse(luckyVariables.luckStore.firstUse));
@@ -1794,7 +1845,7 @@ function createLuckStore(){
 function storeTheLuck(){
 	if(luckyVariables.localStorageAvailable){
 		var dataToStore = JSON.stringify(luckyVariables.luckStore);
-		localStorage.setItem('luckStore', dataToStore);
+		localStorage.setItem('luckStoreClassic', dataToStore);
 	}
 };var screenText = {
 	adverbs: [

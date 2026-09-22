@@ -59,6 +59,42 @@ describe('CharmsUI ordering', () => {
 	});
 });
 
+describe('CharmsUI idempotency', () => {
+	it('addCharm does not duplicate a card renderAll already drew', () => {
+		// exactly the boot sequence: the visit/streak charms are rendered from
+		// the store, then celebrated (and re-added) once the scene is up
+		const visit = charm('visit', 'Welcome back');
+		const ui = new CharmsUI(fakeStore([charm('a', 'First'), visit]));
+		ui.renderAll();
+		ui.addCharm(visit);
+
+		const titles = [...document.querySelectorAll('#lucky-charms-container .charm-title')].map((n) => n.textContent);
+		expect(titles).toEqual(['Welcome back', 'First']);
+	});
+
+	it('ignores repeated addCharm calls for the same id', () => {
+		const ui = new CharmsUI(fakeStore([]));
+		ui.addCharm(charm('streak', 'Streak'));
+		ui.addCharm(charm('streak', 'Streak'));
+		ui.addCharm(charm('streak', 'Streak'));
+		expect(document.querySelectorAll('#lucky-charms-container .charm')).toHaveLength(1);
+	});
+
+	it('tags each card with its charm id', () => {
+		const ui = new CharmsUI(fakeStore([charm('luckySeven', 'Lucky 7!')]));
+		ui.renderAll();
+		const el = document.querySelector('#lucky-charms-container .charm') as HTMLElement;
+		expect(el.dataset.charmId).toBe('luckySeven');
+	});
+
+	it('still adds distinct charms', () => {
+		const ui = new CharmsUI(fakeStore([]));
+		ui.addCharm(charm('a', 'First'));
+		ui.addCharm(charm('b', 'Second'));
+		expect(document.querySelectorAll('#lucky-charms-container .charm')).toHaveLength(2);
+	});
+});
+
 describe('CharmsUI DOM structure + XSS hardening', () => {
 	it('renders charm markup via real nodes, not innerHTML injection', () => {
 		const evil = charm('x', '<img src=x onerror="window.__pwned=true">', '<b>bold desc</b>');

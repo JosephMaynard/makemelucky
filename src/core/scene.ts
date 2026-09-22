@@ -3,7 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { createEnvironmentScene, type EnvironmentName } from '../gfx/environment';
+import { createEnvironmentScene, disposeEnvironmentScene, type EnvironmentName } from '../gfx/environment';
 import { tween, tweensActive, updateTweens } from './anim';
 
 // Effects hold "full" frame rate — but full means this, not the display's
@@ -144,7 +144,10 @@ export class LuckyScene {
 	_fpsSamples: number[];
 	_lastQualityCheck: number;
 	_pmrem: THREE.PMREMGenerator;
-	_envCache: Partial<Record<EnvironmentName, THREE.Texture>>;
+	/** Owns the baked PMREM render targets (not just their `.texture`), so a
+	 *  cache invalidation can actually free the GPU memory rather than only
+	 *  dropping a reference to it. */
+	_envCache: Partial<Record<EnvironmentName, THREE.WebGLRenderTarget>>;
 	environmentName: EnvironmentName;
 	updatables: Set<(dt: number, t: number) => void>;
 	clock: THREE.Clock;
@@ -246,6 +249,13 @@ export class LuckyScene {
 		canvas.addEventListener('webglcontextlost', (e) => e.preventDefault());
 		canvas.addEventListener('webglcontextrestored', () => {
 			this.clock.getDelta(); // swallow the huge dead-time delta
+			// Every cached PMREM render target still points at GPU contents that
+			// the lost context destroyed — reusing them resumes drawing with a
+			// dark, reflectionless finish. Drop them all and rebake the palette
+			// actually in use now; the others rebake lazily next time an effect
+			// crossfades to them.
+			this._invalidateEnvironmentCache();
+			this.scene.environment = this.envTexture(this.environmentName);
 			this.resize();
 		});
 
@@ -449,12 +459,28 @@ export class LuckyScene {
 
 	/** Lazily bake (and cache) a PMREM environment for the named palette. */
 	envTexture(name: EnvironmentName): THREE.Texture {
-		let tex = this._envCache[name];
-		if (!tex) {
-			tex = this._pmrem.fromScene(createEnvironmentScene(name), 0.03).texture;
-			this._envCache[name] = tex;
+		let target = this._envCache[name];
+		if (!target) {
+			// a plain THREE.Scene of MeshBasicMaterial panels, thrown away once
+			// PMREMGenerator has baked it into `target` — it is never rendered
+			// again, so its 13 panel geometries/materials must be disposed
+			// explicitly rather than just letting the JS reference drop
+			const source = createEnvironmentScene(name);
+			target = this._pmrem.fromScene(source, 0.03);
+			disposeEnvironmentScene(source);
+			this._envCache[name] = target;
 		}
-		return tex;
+		return target.texture;
+	}
+
+	/** Dispose every cached PMREM render target. Used when the WebGL context
+	 *  is restored: their GPU-rendered contents are gone, so keeping them
+	 *  around would resume drawing with a dark, reflectionless environment. */
+	_invalidateEnvironmentCache(): void {
+		for (const name of Object.keys(this._envCache) as EnvironmentName[]) {
+			this._envCache[name]?.dispose();
+			delete this._envCache[name];
+		}
 	}
 
 	/** Swap the reflection environment with an intensity dip so it reads as a

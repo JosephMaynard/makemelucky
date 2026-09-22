@@ -212,8 +212,12 @@ export class Director {
 			// a scored effect must not start until its music can: half of these
 			// are choreographed to the second, and Howler would otherwise queue
 			// the track and start it whenever the download finished
-			if (effect.sound) await this.ctx.audio.ready(effect.sound);
-			this.ctx.audio.play(effect.sound ?? '');
+			// If it still isn't ready after the wait (slow network, failed
+			// download) the show goes on WITHOUT it: playing anyway would queue
+			// the music to start whenever the file landed, mid-finale.
+			const scored = effect.sound ? await this.ctx.audio.ready(effect.sound) : false;
+			if (scored) this.ctx.audio.play(effect.sound!);
+			else if (effect.sound) console.warn(`Effect ${name}: soundtrack not ready in time, playing silent`);
 			this.ctx.machine.mechSpeed = 5; // the machinery works hard during a luck event
 			await effect.play(this.ctx);
 		} catch (err) {

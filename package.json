@@ -18,7 +18,7 @@
 	},
 	"devDependencies": {
 		"@types/howler": "^2.2.13",
-		"@types/three": "^0.185.1",
+		"@types/three": "^0.180.0",
 		"happy-dom": "^20.10.6",
 		"puppeteer-core": "^25.3.0",
 		"typescript": "^7.0.2",

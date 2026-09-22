@@ -9,11 +9,13 @@ searching for luck on the internet — without trying to exploit them.
 ## What's in here
 
 - **V3** (repo root) — Three.js scene: the classic green-quilted-leather Luck
-  Machine rebuilt as procedural 3D. Six luck effects play in shuffled order
-  (never the same twice in a row): Power Surge, Spin-Up, Rune Circle, Portal
-  Drop, Cloud Tunnel and Star Burst. Installable offline PWA, cookieless
-  PostHog analytics, Lucky Charms stored in localStorage (migrates the V2
-  `luckStore`, so old presses still count).
+  Machine rebuilt as procedural 3D. 36 luck effects play in shuffled order
+  (never the same twice in a row) — Power Surge, Spin-Up, Rune Circle, Portal
+  Drop, Cloud Tunnel, Star Burst and 30 more (see `src/effects/director.ts`).
+  Installable offline PWA, cookieless PostHog analytics, Lucky Charms stored
+  in localStorage (migrates the V2 `luckStore`, so old presses still count).
+  Below the fold: a Luck Number Generator (`src/luck/lottoPicker.ts`) and a
+  Birthday Dossier (`src/luck/dossier.ts`), both on-device.
 - **public/v1** — the 2015 original (a button and a particle effect), preserved.
 - **public/v2** — the 2016 Cinema 4D + jQuery/Velocity machine, preserved
   (ads and Google Analytics stripped from the archive).
@@ -28,10 +30,11 @@ pnpm dev        # local dev server
 pnpm build      # production build → dist/ (includes /v1 and /v2)
 ```
 
-All machine art is generated at runtime on canvas (`src/gfx/textures.js`) —
+All machine art is generated at runtime on canvas (`src/gfx/textures.ts`) —
 Celtic knotwork, quilted leather, glyph rings, particle sprites — so there are
-no big image downloads and it stays sharp at any resolution. The only binary
-assets are the licensed sound sprite, icons and fonts.
+no big image downloads and it stays sharp at any resolution. The binary
+assets are a licensed sound sprite plus a church bell, a per-effect soundtrack
+for the bigger set-pieces (`public/soundfx/`), icons and fonts.
 
 ### Analytics
 

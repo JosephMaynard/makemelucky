@@ -95,7 +95,7 @@ function stubCtx(): EffectContext {
 			backdrop: { visible: true, material: { userData: {} } }
 		},
 		particles: { clear: vi.fn() },
-		audio: { play: vi.fn(), preload: vi.fn(), ready: vi.fn(async () => {}), stopAllLoops: vi.fn(), stopAllTracks: vi.fn() },
+		audio: { play: vi.fn(), preload: vi.fn(), ready: vi.fn(async () => true), stopAllLoops: vi.fn(), stopAllTracks: vi.fn() },
 		lightning: { clear: vi.fn() }
 	} as unknown as EffectContext;
 }
@@ -205,6 +205,25 @@ describe('Director crash recovery', () => {
 		expect(ctx.particles.clear).toHaveBeenCalledTimes(1);
 		expect(ctx.audio.stopAllTracks).toHaveBeenCalledTimes(1);
 		consoleError.mockRestore();
+	});
+
+	it('plays the soundtrack only when audio.ready() says it is genuinely ready', async () => {
+		const director = new Director(ctx);
+		director.forced = 'powerSurge';
+		await director.play();
+		expect(ctx.audio.ready).toHaveBeenCalledWith('powerStreams');
+		expect(ctx.audio.play).toHaveBeenCalledWith('powerStreams');
+	});
+
+	it('a soundtrack that times out is skipped rather than queued to start late', async () => {
+		(ctx.audio.ready as Mock).mockImplementation(async () => false);
+		const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const director = new Director(ctx);
+		director.forced = 'powerSurge';
+		const name = await director.play();
+		expect(name).toBe('powerSurge'); // the show goes on, silently
+		expect(ctx.audio.play).not.toHaveBeenCalled();
+		consoleWarn.mockRestore();
 	});
 
 	it('restores the lights, vignette and camera roll it found', async () => {

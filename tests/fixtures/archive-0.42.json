@@ -1,0 +1,59 @@
+{
+	"luckyness": 9,
+	"visits": 3,
+	"longestPress": 3.6,
+	"daysInRow": 2,
+	"version": 0.42,
+	"charms": [
+		{
+			"title": "Beginner's luck!",
+			"description": "Press the Make Me Lucky button for the first time.",
+			"x": "0",
+			"y": "0",
+			"date": "2016-05-05T12:04:31.117Z"
+		},
+		{
+			"title": "The Magic Number!",
+			"description": "Press the Make Me Lucky button 3 times.",
+			"x": "7",
+			"y": "0",
+			"date": "2016-05-05T12:05:02.884Z"
+		},
+		{
+			"title": "Share the Luck!",
+			"description": "Like Make Me Lucky on Facebook.",
+			"x": "0",
+			"y": "100",
+			"date": "2016-05-05T12:07:44.019Z"
+		},
+		{
+			"title": "Lucky 7!",
+			"description": "Press the Make Me Lucky button 7 times.",
+			"x": "14",
+			"y": "0",
+			"date": "2016-05-06T19:22:08.004Z"
+		},
+		{
+			"title": "Sudden Fortune and Prosperity!",
+			"description": "Press the Make Me Lucky button 8 times.",
+			"x": "21",
+			"y": "0",
+			"date": "2016-05-06T19:22:19.551Z"
+		},
+		{
+			"title": "Lucky Long Time!",
+			"description": "Press the Make Me Lucky button 9 times.",
+			"x": "28",
+			"y": "0",
+			"date": "2016-05-06T19:22:31.006Z"
+		}
+	],
+	"specialCharms": {
+		"facebook": true
+	},
+	"soundOn": true,
+	"vibrationOn": true,
+	"showModal": true,
+	"lastVisit": "2016-05-07T08:11:02.559Z",
+	"firstUse": "2016-05-05T12:04:22.881Z"
+}

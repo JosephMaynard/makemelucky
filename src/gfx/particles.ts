@@ -211,6 +211,12 @@ class Burst {
 	update(dt: number) {
 		const o = this.opts;
 		let alive = 0;
+		// o.drag is authored as a "per frame at 60Hz" multiplier; applying it
+		// once per callback (as before) meant 30/60/90Hz produced different
+		// trajectories, since it was really "per call", not "per unit time".
+		// Raising it to dt*60 makes it decay the same amount per second
+		// regardless of frame rate.
+		const dragThisFrame = Math.pow(o.drag, dt * 60);
 
 		if (this.emitting) {
 			this._emitAcc += dt * this.emitRate;
@@ -241,9 +247,9 @@ class Burst {
 				this.velocities[i * 3 + 1] += a[1] * dt;
 				this.velocities[i * 3 + 2] += a[2] * dt;
 			}
-			this.velocities[i * 3] *= o.drag;
-			this.velocities[i * 3 + 1] *= o.drag;
-			this.velocities[i * 3 + 2] *= o.drag;
+			this.velocities[i * 3] *= dragThisFrame;
+			this.velocities[i * 3 + 1] *= dragThisFrame;
+			this.velocities[i * 3 + 2] *= dragThisFrame;
 			this.positions[i * 3] += this.velocities[i * 3] * dt;
 			this.positions[i * 3 + 1] += this.velocities[i * 3 + 1] * dt;
 			this.positions[i * 3 + 2] += this.velocities[i * 3 + 2] * dt;
@@ -276,14 +282,21 @@ class Burst {
 export class Particles {
 	scene: THREE.Scene;
 	bursts: Set<Burst>;
+	/** Current global particle scale (pixel height at uScale=1), applied to
+	 *  every burst — existing ones immediately via setScale(), new ones at
+	 *  construction so a burst created after a setScale() call doesn't start
+	 *  out at the shader's built-in default. */
+	scale: number;
 
 	constructor(scene: THREE.Scene) {
 		this.scene = scene;
 		this.bursts = new Set();
+		this.scale = 700;
 	}
 
 	burst(opts: BurstOptions): Burst {
 		const b = new Burst(this.scene, opts);
+		b.material.uniforms.uScale.value = this.scale;
 		this.bursts.add(b);
 		return b;
 	}
@@ -301,7 +314,8 @@ export class Particles {
 	}
 
 	setScale(pixelHeight: number) {
-		for (const b of this.bursts) b.material.uniforms.uScale.value = pixelHeight * 0.8;
+		this.scale = pixelHeight * 0.8;
+		for (const b of this.bursts) b.material.uniforms.uScale.value = this.scale;
 	}
 
 	/** Kill every live burst and emitter immediately. For the director's crash

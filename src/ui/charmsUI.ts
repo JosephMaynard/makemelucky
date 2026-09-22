@@ -50,9 +50,26 @@ export class CharmsUI {
 		this.updateProgress();
 	}
 
+	/** The card for this charm, if the grid already holds one. Charm ids are
+	 *  unique, and several paths can announce the same award: renderAll() draws
+	 *  the visit/streak charms at boot, then their ceremony (delayed, so it
+	 *  lands after the scene appears) asks to add them again. */
+	_cardFor(id: string): HTMLElement | null {
+		if (!id) return null;
+		// a walk, not a selector: charm ids come from stored data and would need
+		// escaping to be safe inside one
+		for (const child of this.container.children) {
+			if ((child as HTMLElement).dataset?.charmId === id) return child as HTMLElement;
+		}
+		return null;
+	}
+
 	_append(charm: Charm): void {
+		if (this._cardFor(charm.id)) return; // already on the wall
+
 		const el = document.createElement('div');
 		el.className = 'charm';
+		el.dataset.charmId = charm.id;
 
 		const icon = document.createElement('div');
 		icon.className = 'charm-icon';

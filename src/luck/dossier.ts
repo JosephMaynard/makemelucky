@@ -10,6 +10,7 @@
 //     A test enforces this. The cosmos operates strictly offline.
 
 import { track } from '../services/analytics';
+import { dayIndex, dayKey, msUntilMidnight } from './days';
 
 const LOCAL_KEY = 'dossier-prefs';
 
@@ -42,12 +43,18 @@ const STAR_SIGNS: readonly StarSign[] = [
 ];
 
 function starSignFor(month: number, day: number): StarSign {
-	// walk backwards through start dates; first one we're on/after wins
-	for (let i = STAR_SIGNS.length - 1; i >= 0; i--) {
+	// Capricorn is the one sign that wraps the year boundary (Dec 22 – Jan 19),
+	// so a plain backwards scan of calendar-ordered starts sees a December date
+	// and matches Sagittarius (the last entry it can still find "on or after")
+	// before it ever reaches Capricorn at index 0. Handle the wrap explicitly,
+	// then scan the rest — which run in calendar order, Jan → Nov — normally.
+	const key = month * 100 + day; // e.g. 3 March → 303, comparable across months
+	if (key >= 1222 || key < 120) return STAR_SIGNS[0]; // Dec 22–31 or Jan 1–19
+	for (let i = STAR_SIGNS.length - 1; i >= 1; i--) {
 		const [m, d] = STAR_SIGNS[i].from;
-		if (month > m || (month === m && day >= d)) return STAR_SIGNS[i];
+		if (key >= m * 100 + d) return STAR_SIGNS[i];
 	}
-	return STAR_SIGNS[0]; // Jan 1–19 → Capricorn (wrapped)
+	return STAR_SIGNS[1]; // unreachable: Jan 20 (Aquarius) is the lowest non-wrap start
 }
 
 // Chinese New Year, Gregorian dates, 1920–2030. The zodiac year begins HERE,
@@ -301,12 +308,38 @@ interface SavedPrefs {
 
 export function initDossier(opts: { onFirstDossier?: () => void } = {}): void {
 	const root = document.getElementById('luck-dossier');
+	const form = document.getElementById('dossier-form') as HTMLFormElement | null;
 	const dobInput = document.getElementById('dossier-dob') as HTMLInputElement | null;
 	const nameInput = document.getElementById('dossier-name') as HTMLInputElement | null;
 	const goBtn = document.getElementById('dossier-go') as HTMLButtonElement | null;
 	const burnBtn = document.getElementById('dossier-burn') as HTMLButtonElement | null;
 	const out = document.getElementById('dossier-out');
-	if (!root || !dobInput || !nameInput || !goBtn || !burnBtn || !out) return;
+	const statusEl = document.getElementById('dossier-status');
+	if (!root || !form || !dobInput || !nameInput || !goBtn || !burnBtn || !out) return;
+
+	const setStatus = (msg: string): void => {
+		if (statusEl) statusEl.textContent = msg;
+	};
+
+	// The forecast is keyed to the visitor's OWN local calendar day (see
+	// days.ts) — a returning tab left open overnight, or one woken from the
+	// background after midnight, should not go on showing yesterday's fortune.
+	let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+	let lastRenderedDayKey = '';
+
+	const clearRefreshTimer = (): void => {
+		if (refreshTimer !== null) {
+			clearTimeout(refreshTimer);
+			refreshTimer = null;
+		}
+	};
+
+	const scheduleMidnightRefresh = (): void => {
+		clearRefreshTimer();
+		refreshTimer = setTimeout(() => {
+			if (dobInput.value && out.querySelector('.dossier-card')) render();
+		}, msUntilMidnight());
+	};
 
 	// sensible bounds: the table starts in 1920; the future has no birthdays yet
 	dobInput.min = '1920-01-01';
@@ -353,7 +386,7 @@ export function initDossier(opts: { onFirstDossier?: () => void } = {}): void {
 		const zodiac = chineseZodiacFor(date);
 		const lp = lifePath(date);
 		const nn = name ? nameNumber(name) : 0;
-		const scope = dailyHoroscope(personalSeed(dob, name), Math.floor(Date.now() / 86400000));
+		const scope = dailyHoroscope(personalSeed(dob, name), dayIndex());
 
 		out!.textContent = '';
 		const card = document.createElement('div');
@@ -398,18 +431,19 @@ export function initDossier(opts: { onFirstDossier?: () => void } = {}): void {
 
 		out!.appendChild(card);
 		burnBtn!.hidden = false;
+		lastRenderedDayKey = dayKey();
+		scheduleMidnightRefresh();
 		return true;
 	}
 
-	goBtn.addEventListener('click', () => {
+	form.addEventListener('submit', (e) => {
+		e.preventDefault();
 		if (!render()) {
 			out!.textContent = '';
-			const p = document.createElement('p');
-			p.className = 'dossier-small';
-			p.textContent = 'The cosmos needs a real birthday to work with. It checked twice.';
-			out!.appendChild(p);
+			setStatus('The cosmos needs a real birthday to work with. It checked twice.');
 			return;
 		}
+		setStatus('Dossier compiled. The full report is below.');
 		try {
 			localStorage.setItem(LOCAL_KEY, JSON.stringify({ dob: dobInput.value, name: nameInput.value.trim().slice(0, 80) }));
 		} catch { /* storage full — the dossier lives for this visit only */ }
@@ -425,16 +459,29 @@ export function initDossier(opts: { onFirstDossier?: () => void } = {}): void {
 	});
 
 	burnBtn.addEventListener('click', () => {
-		localStorage.removeItem(LOCAL_KEY);
+		try {
+			localStorage.removeItem(LOCAL_KEY);
+		} catch {
+			// storage refused the deletion — say so plainly rather than pretending
+			// the record is gone when it might not be.
+			setStatus('The cosmos tried to strike the record, but storage refused. Try again, or clear this site’s data in your browser.');
+			return;
+		}
+		clearRefreshTimer();
 		dobInput.value = '';
 		nameInput.value = '';
 		out!.textContent = '';
-		const p = document.createElement('p');
-		p.className = 'dossier-small';
-		p.textContent = 'Record struck. This device has already forgotten you. (The cosmos never knew.)';
-		out!.appendChild(p);
+		setStatus('Record struck. This device has already forgotten you. (The cosmos never knew.)');
 		burnBtn.hidden = true;
 		track('dossier_burned'); // again: event only, no payload
+	});
+
+	// woken from the background (or just left open) after local midnight —
+	// bring an already-compiled dossier forward to today's forecast
+	document.addEventListener('visibilitychange', () => {
+		if (document.visibilityState !== 'visible') return;
+		if (!out!.querySelector('.dossier-card')) return;
+		if (dayKey() !== lastRenderedDayKey) render();
 	});
 
 	// a returning visitor's dossier reappears without ceremony (or analytics)

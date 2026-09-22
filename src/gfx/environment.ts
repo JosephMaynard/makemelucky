@@ -145,3 +145,17 @@ export function createEnvironmentScene(name: EnvironmentName = 'lounge') {
 
 	return scene;
 }
+
+/** Free the GPU-side geometry/material resources of a scene built by
+ *  `createEnvironmentScene()`. Call this once a PMREMGenerator has baked the
+ *  scene into a render target — the panels are never drawn again, and Three.js
+ *  requires explicit disposal; dropping the scene reference alone leaks the
+ *  13 panel geometries/materials on every palette baked. */
+export function disposeEnvironmentScene(scene: THREE.Scene): void {
+	scene.traverse((obj) => {
+		if (!(obj instanceof THREE.Mesh)) return;
+		obj.geometry.dispose();
+		if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
+		else obj.material.dispose();
+	});
+}

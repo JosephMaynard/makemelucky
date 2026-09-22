@@ -302,6 +302,96 @@ body {
 	outline-offset: 6px;
 }
 
+/* --- The machine could not start (bootFallback in main.ts) ---
+   No 3D button to sit over, so the invisible hit area becomes the button:
+   a plain red one, still pressable, still counting. The hero stops being a
+   fixed-height stage with everything pinned by absolute position: the button
+   and the explanation flow in a column with room reserved for each, so on a
+   short phone the note sits BELOW the button instead of over it, and a very
+   short viewport scrolls rather than overlapping. The message screen (top)
+   and the HUD (bottom corners) keep their absolute positions; the column's
+   padding clears them. */
+
+.machine-down {
+	height: auto;
+	min-height: 100vh;
+	min-height: 100svh;
+	overflow: visible;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	/* screen panel: top offset + its height (width × 200/560 + bezel) + breathing room */
+	padding-top: calc(max(4vh, env(safe-area-inset-top, 0px) + 2vh) + min(72vw, 430px) * 0.36 + 40px);
+	/* HUD buttons: 52px tall, 18px up from the bottom */
+	padding-bottom: calc(max(18px, env(safe-area-inset-bottom, 0px) + 10px) + 52px + 20px);
+	padding-left: 16px;
+	padding-right: 16px;
+}
+.machine-down #lucky-canvas {
+	display: none;
+}
+.machine-down #press-target {
+	/* in flow now: the normal rule's left/top offsets must not apply */
+	position: relative;
+	left: auto;
+	top: auto;
+	transform: none;
+	flex: 0 0 auto;
+	width: min(44vmin, 260px);
+	height: min(44vmin, 260px);
+	display: grid;
+	place-items: center;
+	background: radial-gradient(circle at 38% 30%, #ff8b7a, #c81d25 58%, #7d1016 100%);
+	border: 4px solid rgba(201, 169, 89, 0.7);
+	box-shadow:
+		0 14px 34px var(--shadow),
+		inset 0 -10px 26px rgba(0, 0, 0, 0.35);
+	z-index: 6;
+}
+.machine-down #press-target:active {
+	transform: scale(0.96);
+}
+.fallback-label {
+	max-width: 80%;
+	font-family: 'Roboto Slab', Georgia, serif;
+	font-weight: 700;
+	font-size: clamp(14px, 3.4vmin, 22px);
+	letter-spacing: 0.08em;
+	line-height: 1.2;
+	text-align: center;
+	color: #fff3cf;
+	text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+#boot-fallback {
+	position: relative;
+	z-index: 5;
+	flex: 0 0 auto;
+	margin-top: 22px;
+	width: min(88vw, 520px);
+	text-align: center;
+	color: var(--gold);
+	font-size: 14.5px;
+	line-height: 1.5;
+}
+#boot-fallback p {
+	margin: 0 0 8px;
+}
+#boot-fallback a {
+	color: var(--gold-bright);
+}
+@media (max-height: 600px) {
+	.machine-down #press-target {
+		width: min(38vmin, 200px);
+		height: min(38vmin, 200px);
+	}
+	#boot-fallback {
+		font-size: 13px;
+		margin-top: 14px;
+	}
+}
+
 /* --- HUD --- */
 
 #hud button,
@@ -786,6 +876,16 @@ p + p {
 	outline: 3px solid var(--gold-bright);
 	outline-offset: 2px;
 }
+.dossier-status {
+	min-height: 1.4em;
+	margin: 0 0 10px;
+	color: var(--gold-bright);
+	font-size: 13.5px;
+	font-style: italic;
+}
+.dossier-status:empty {
+	margin: 0;
+}
 .dossier-card {
 	border: 1.5px solid rgba(201, 169, 89, 0.55);
 	border-radius: 16px;
@@ -967,5 +1067,33 @@ p + p {
 	}
 	#screen-panel {
 		transition: opacity 0.4s ease;
+	}
+	/* the sparkle is pure flourish — the live region already announces new
+	   screen text, so drop it entirely rather than just shortening it */
+	#screen-sparkle.go {
+		animation: none;
+		opacity: 0;
+	}
+	/* the pop/fade is decorative bounce+scale; the text itself must still
+	   change, so let the class swap take effect with no transform/opacity
+	   ramp instead of skipping the animation and leaving stale styling */
+	#screen-text.text-in,
+	#screen-text.text-out {
+		animation: none;
+	}
+	#screen-text.text-out {
+		opacity: 0;
+	}
+	/* the charm toast is functional — it's the only notice a charm was
+	   earned — so keep its visible dwell time but drop the slide/scale
+	   flourish for a plain, instant fade */
+	#charm-toast.show {
+		animation: toast-static 4s linear both;
+	}
+	@keyframes toast-static {
+		0% { opacity: 0; }
+		8% { opacity: 1; }
+		85% { opacity: 1; }
+		100% { opacity: 0; }
 	}
 }

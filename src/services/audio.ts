@@ -149,22 +149,30 @@ export class AudioService {
 	/** Resolves once the named sound can start without delay: decoded and
 	 *  ready. Bounded, so a slow connection holds an effect back by at most
 	 *  `timeoutMs` instead of playing it out of time; muted visitors and
-	 *  unknown names never wait at all. */
-	ready(name: string, timeoutMs = 2500): Promise<void> {
-		if (!name || this.muted) return Promise.resolve();
+	 *  unknown names never wait at all.
+	 *
+	 *  Resolves `true` when the sound is genuinely playable and `false` on a
+	 *  load error or timeout. The caller MUST NOT call play() on `false`:
+	 *  Howler would queue the play and start the music whenever the download
+	 *  finally lands — long after the choreography it was scored to. */
+	ready(name: string, timeoutMs = 2500): Promise<boolean> {
+		if (!name || this.muted) return Promise.resolve(true);
 		const howl = SPRITE[name] ? this.howl : TRACKS[name] ? this._track(name) : null;
-		if (!howl || howl.state() === 'loaded') return Promise.resolve();
+		if (!howl) return Promise.resolve(true);
+		if (howl.state() === 'loaded') return Promise.resolve(true);
 		if (howl.state() === 'unloaded') howl.load();
 		return new Promise((resolve) => {
-			const done = () => {
+			const done = (ok: boolean) => () => {
 				clearTimeout(timer);
-				howl.off('load', done);
-				howl.off('loaderror', done);
-				resolve();
+				howl.off('load', onLoad);
+				howl.off('loaderror', onError);
+				resolve(ok);
 			};
-			const timer = setTimeout(done, timeoutMs);
-			howl.once('load', done);
-			howl.once('loaderror', done);
+			const onLoad = done(true);
+			const onError = done(false);
+			const timer = setTimeout(done(false), timeoutMs);
+			howl.once('load', onLoad);
+			howl.once('loaderror', onError);
 		});
 	}
 
@@ -177,7 +185,14 @@ export class AudioService {
 
 	stopTrack(name: string, fadeMs = 600): void {
 		const track = this.tracks[name];
-		if (!track || !track.playing()) return;
+		if (!track) return;
+		// a track that is still downloading has its play() QUEUED inside Howler;
+		// stop() queues the cancel behind it, so the music never starts late
+		// after the effect that asked for it has already been torn down
+		if (!track.playing()) {
+			if (track.state() !== 'loaded') track.stop();
+			return;
+		}
 		track.fade(track.volume(), 0, fadeMs);
 		track.once('fade', () => track.stop());
 	}
