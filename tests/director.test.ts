@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Mock } from 'vitest';
-import { Director, CALM_EFFECTS } from '../src/effects/director';
+import { Director, CALM_EFFECTS, TRACKED } from '../src/effects/director';
 import { QUIPS } from '../src/ui/quips';
 import type { EffectContext } from '../src/types';
 
@@ -44,6 +44,22 @@ describe('Director', () => {
 		const sorted = [...director.names].sort();
 		for (let c = 0; c < 5; c++) {
 			expect([...plays.slice(c * n, (c + 1) * n)].sort()).toEqual(sorted);
+		}
+	});
+});
+
+describe('TRACKED (the director\'s map of standalone soundtracks)', () => {
+	it('matches every effect module\'s sound export', async () => {
+		const glob = import.meta.glob('../src/effects/*.ts');
+		const skip = new Set(['director', 'helpers', 'gentleGlow', 'powerSurge']); // the last two are mocked above
+		const spriteCues = ['cloudsTunnel', 'spinningRim', 'luckySymbol', 'rimLight', 'powerStreams', 'buttonFall', 'button', 'charmAward', 'lucky'];
+		for (const [path, load] of Object.entries(glob)) {
+			const name = path.split('/').pop()!.replace('.ts', '');
+			if (skip.has(name)) continue;
+			const mod = (await load()) as { sound?: string };
+			if (mod.sound === undefined) continue; // a helper module (luckyWord), not an effect
+			if (TRACKED[name]) expect(mod.sound, name).toBe(TRACKED[name]);
+			else expect(spriteCues, `${name} is scored to '${mod.sound}', which is neither a sprite cue nor listed in TRACKED`).toContain(mod.sound);
 		}
 	});
 });
@@ -95,7 +111,7 @@ function stubCtx(): EffectContext {
 			backdrop: { visible: true, material: { userData: {} } }
 		},
 		particles: { clear: vi.fn() },
-		audio: { play: vi.fn(), preload: vi.fn(), ready: vi.fn(async () => true), stopAllLoops: vi.fn(), stopAllTracks: vi.fn() },
+		audio: { play: vi.fn(), preload: vi.fn(), ready: vi.fn(async () => true), isReady: vi.fn(() => true), stopAllLoops: vi.fn(), stopAllTracks: vi.fn() },
 		lightning: { clear: vi.fn() }
 	} as unknown as EffectContext;
 }
@@ -211,7 +227,7 @@ describe('Director crash recovery', () => {
 		const director = new Director(ctx);
 		director.forced = 'powerSurge';
 		await director.play();
-		expect(ctx.audio.ready).toHaveBeenCalledWith('powerStreams');
+		expect(ctx.audio.ready).toHaveBeenCalledWith('powerStreams', 2500);
 		expect(ctx.audio.play).toHaveBeenCalledWith('powerStreams');
 	});
 
@@ -224,6 +240,39 @@ describe('Director crash recovery', () => {
 		expect(name).toBe('powerSurge'); // the show goes on, silently
 		expect(ctx.audio.play).not.toHaveBeenCalled();
 		consoleWarn.mockRestore();
+	});
+
+	it('an effect whose soundtrack has not downloaded is deferred for one whose sound is ready', async () => {
+		(ctx.audio.isReady as Mock).mockImplementation((sound: string) => sound !== 'powerStreams');
+		const director = new Director(ctx);
+		director.bag = ['powerSurge', 'gentleGlow', 'powerSurge'];
+		director.index = 0;
+		const name = await director.play();
+		expect(name).toBe('gentleGlow');
+		expect(ctx.audio.play).toHaveBeenCalledWith('lucky');
+		expect(ctx.audio.play).not.toHaveBeenCalledWith('powerStreams');
+		// the deferred effect keeps a place in the bag and its music is fetched for later
+		expect(director.bag.slice(0, 2)).toEqual(['gentleGlow', 'powerSurge']);
+		expect(director.index).toBe(1);
+		expect(ctx.audio.preload).toHaveBeenCalledWith('powerStreams');
+		expect(director.last).toBe('gentleGlow');
+	});
+
+	it('with nothing ready in reach it waits longer for the drawn effect rather than swapping', async () => {
+		(ctx.audio.isReady as Mock).mockImplementation(() => false);
+		const director = new Director(ctx);
+		director.bag = ['powerSurge', 'gentleGlow'];
+		director.index = 0;
+		const name = await director.play();
+		expect(name).toBe('powerSurge');
+		expect(ctx.audio.ready).toHaveBeenCalledWith('powerStreams', 10000);
+	});
+
+	it('a forced effect is never swapped away', async () => {
+		(ctx.audio.isReady as Mock).mockImplementation(() => false);
+		const director = new Director(ctx);
+		director.forced = 'powerSurge';
+		expect(await director.play()).toBe('powerSurge');
 	});
 
 	it('restores the lights, vignette and camera roll it found', async () => {

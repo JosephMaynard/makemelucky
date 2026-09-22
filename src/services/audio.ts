@@ -146,6 +146,17 @@ export class AudioService {
 		else if (TRACKS[name]) this._track(name);
 	}
 
+	/** Can the named sound start RIGHT NOW? Muted visitors and unknown names
+	 *  count as ready (nothing to wait for); a sprite cue or track that is
+	 *  still downloading, or failed to, does not. Synchronous, so the director
+	 *  can consult it while choosing which effect to draw. */
+	isReady(name: string): boolean {
+		if (!name || this.muted) return true;
+		const howl = SPRITE[name] ? this.howl : TRACKS[name] ? this.tracks[name] : undefined;
+		if (SPRITE[name] || TRACKS[name]) return howl?.state() === 'loaded';
+		return true;
+	}
+
 	/** Resolves once the named sound can start without delay: decoded and
 	 *  ready. Bounded, so a slow connection holds an effect back by at most
 	 *  `timeoutMs` instead of playing it out of time; muted visitors and

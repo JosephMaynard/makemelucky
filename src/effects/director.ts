@@ -48,6 +48,25 @@ const EFFECTS: Record<string, () => Promise<EffectModule>> = {
 	bhangraBaraat: () => import('./bhangraBaraat')
 };
 
+// Effects scored to a standalone track rather than the licensed sprite. Kept
+// here so the director can tell whether an effect's music is ready WITHOUT
+// fetching its code chunk first (a chunk is small, but on the slow first-visit
+// connection where this matters, three of them are not). Every other effect
+// is cued from the sprite, and one sprite cue stands for all of them.
+// tests/director.test.ts checks this against each module's `sound` export.
+export const TRACKED: Record<string, string> = {
+	discoFever: 'luckyNowDisco',
+	fireworks: 'luckyFireworks',
+	jollyRoger: 'pirateShanty',
+	kpopLuck: 'kpopLuck',
+	manekiNeko: 'luckyCatWave',
+	fairyKingdom: 'fairyKingdom',
+	luckyTacos: 'luckyTacos',
+	badLuckGauntlet: 'stillLuckyTonight',
+	bhangraBaraat: 'bollywoodLuck'
+};
+const soundOf = (name: string): string => TRACKED[name] ?? 'lucky';
+
 // What a prefers-reduced-motion visitor is allowed to see. The bar: nothing
 // that moves the camera or the machine, no props sweeping across the whole
 // frame, no tunnels or dives — just lovely things happening around a stationary
@@ -195,27 +214,62 @@ export class Director {
 		scene.environmentName = 'lounge';
 	}
 
+	/** The drawn effect's soundtrack isn't ready: look a few slots ahead in the
+	 *  bag for one whose sound is, and swap the two so the deferred effect keeps
+	 *  its place for a later press. The scan is short — each candidate is a
+	 *  code chunk, precached by the service worker but a fetch on a first
+	 *  visit — and null means play the original after all. */
+	async _swapForReady(drawn: string): Promise<{ name: string; effect: EffectModule } | null> {
+		const slot = this.index - 1; // _next() already advanced past the drawn slot
+		if (slot < 0 || this.bag[slot] !== drawn) return null;
+		const limit = Math.min(this.bag.length, this.index + 3);
+		for (let j = this.index; j < limit; j++) {
+			const candidate = this.bag[j];
+			if (candidate === this.last || !this.ctx.audio.isReady(soundOf(candidate))) continue;
+			try {
+				const effect = await this._load(candidate);
+				this.bag[slot] = candidate;
+				this.bag[j] = drawn;
+				if (import.meta.env.DEV) console.log(`Deferring ${drawn} (soundtrack still loading); playing ${candidate}`);
+				return { name: candidate, effect };
+			} catch { /* a chunk that won't load is no better than a silent one */ }
+		}
+		return null;
+	}
+
 	async play(): Promise<string | null> {
 		if (this.running) return null;
 		this.running = true;
-		const name = this.ctx.scene.reducedMotion
+		let name = this.ctx.scene.reducedMotion
 			? this.forced && CALM.includes(this.forced as (typeof CALM)[number])
 				? this.forced
 				: this._nextCalm()
 			: this.forced && (EFFECTS[this.forced] || this.forced === 'gentleGlow')
 				? this.forced
 				: this._next();
-		this.last = name;
 		const snap = this._snapshot();
 		try {
-			const effect = await this._load(name);
-			// a scored effect must not start until its music can: half of these
-			// are choreographed to the second, and Howler would otherwise queue
-			// the track and start it whenever the download finished
-			// If it still isn't ready after the wait (slow network, failed
-			// download) the show goes on WITHOUT it: playing anyway would queue
-			// the music to start whenever the file landed, mid-finale.
-			const scored = effect.sound ? await this.ctx.audio.ready(effect.sound) : false;
+			let effect = await this._load(name);
+			// A scored effect must not start until its music can: half of these
+			// are choreographed to the second. If this one's soundtrack hasn't
+			// landed yet (first visit, slow network), draw a different effect
+			// whose sound IS ready and keep this one in the bag for a later
+			// press — its download carries on in the background meanwhile. A
+			// silent bhangra is not a performance anyone wants.
+			if (effect.sound && !this.forced && !this.ctx.scene.reducedMotion && !this.ctx.audio.isReady(effect.sound)) {
+				const swapped = await this._swapForReady(name);
+				if (swapped) {
+					this.ctx.audio.preload(effect.sound); // the deferred one, for its turn
+					name = swapped.name;
+					effect = swapped.effect;
+				}
+			}
+			this.last = name;
+			// Whatever was drawn, wait for its sound. Only when nothing in
+			// reach was ready does this wait get long; if the music still
+			// hasn't arrived by then the show goes on WITHOUT it — playing
+			// anyway would queue the track to start mid-finale.
+			const scored = effect.sound ? await this.ctx.audio.ready(effect.sound, this.ctx.audio.isReady(effect.sound) ? 2500 : 10000) : false;
 			if (scored) this.ctx.audio.play(effect.sound!);
 			else if (effect.sound) console.warn(`Effect ${name}: soundtrack not ready in time, playing silent`);
 			this.ctx.machine.mechSpeed = 5; // the machinery works hard during a luck event
