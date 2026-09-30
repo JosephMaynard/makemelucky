@@ -201,6 +201,23 @@ async function boot(): Promise<void> {
 	// ---- button wiring
 	const pressTarget = document.getElementById('press-target')!;
 
+	// Portrait phones get a bigger button (Machine.fitAspect), and the
+	// invisible hit area is pinned over the drawn one. A fixed CSS spot
+	// drifted off it wherever the camera fits the machine to the screen's
+	// width, leaving the top of the button dead on phones.
+	const fitButton = () => {
+		machine.fitAspect(scene.camera.aspect);
+		const { centre, radius } = machine.buttonRestRim();
+		const c = scene.projectAtRest(centre);
+		const edge = scene.projectAtRest(centre.clone().setX(radius));
+		const diameter = (edge.x - c.x) * 2 * 1.2; // a little grace past the rim
+		pressTarget.style.setProperty('--btn-x', `${c.x.toFixed(1)}px`);
+		pressTarget.style.setProperty('--btn-y', `${c.y.toFixed(1)}px`);
+		pressTarget.style.setProperty('--btn-d', `${diameter.toFixed(1)}px`);
+	};
+	window.addEventListener('resize', fitButton); // after the scene's own resize
+	fitButton();
+
 	// The one true charm celebration: sound, toast, grid entry, analytics,
 	// sparkle, progress. Every award path routes through here.
 	function celebrateCharms(awarded: Charm[]): void {

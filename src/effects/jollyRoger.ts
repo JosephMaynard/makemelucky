@@ -46,7 +46,10 @@ const OCEAN_FRAG = /* glsl */ `
 	varying vec2 vUv;
 	void main() {
 		float t = uTime + uPhase;
-		vec3 c = mix(uDeep, uShallow, pow(vUv.y, 1.6));
+		// clamped: with MSAA an edge pixel is shaded at its centre even when
+		// that lies just outside the band, so vUv.y dips below 0 there, pow()
+		// returns NaN, and bloom smears the NaN into black blocks
+		vec3 c = mix(uDeep, uShallow, pow(clamp(vUv.y, 0.0, 1.0), 1.6));
 		// slow colour swell so the surface isn't a flat gradient
 		c *= 0.92 + 0.08 * sin(vUv.x * 9.0 + t * 0.7) * sin(vUv.x * 3.7 - t * 0.4);
 		// broken foam: crest patches that drift and dissolve, not a solid stripe

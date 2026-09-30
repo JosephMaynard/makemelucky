@@ -20,6 +20,12 @@ const EFFECT_FPS_CAP = 60;
 // quality governor drops this to 0 on a struggling GPU before it touches bloom.
 const MSAA_SAMPLES = 4;
 
+// The camera's resting pose: pulled back along +z, looking just above the
+// machine's centre (which sits at y = -0.32). Parallax, shake and effects move
+// it from here.
+const REST_DISTANCE = 5.35;
+const LOOK_TARGET = new THREE.Vector3(0, -0.15, 0);
+
 // The grade — gentle vignette + animated film grain — folded INTO the output
 // pass: tone mapping, sRGB encoding and the grade in ONE full-screen pass
 // instead of two. Every full-screen pass re-touches every pixel on the
@@ -121,6 +127,7 @@ export class LuckyScene {
 	camera: THREE.PerspectiveCamera;
 	shaker: THREE.Group;
 	rig: THREE.Group;
+	_restProbe?: THREE.PerspectiveCamera;
 	keyLight: THREE.DirectionalLight;
 	fillLight: THREE.DirectionalLight;
 	fxLight: THREE.PointLight;
@@ -200,7 +207,7 @@ export class LuckyScene {
 		this.rig = new THREE.Group();
 		this.shaker.add(this.camera);
 		this.rig.add(this.shaker);
-		this.rig.position.set(0, 0, 5.35);
+		this.rig.position.set(0, 0, REST_DISTANCE);
 		this.scene.add(this.rig);
 
 		// Environment reflections — procedural Art Deco lounge, no HDRI needed.
@@ -332,8 +339,8 @@ export class LuckyScene {
 		this.camera.aspect = w / h;
 		// fit the machine's width on any screen: solve the vertical FOV from a
 		// fixed horizontal half-width (machine radius + margin) at camera depth
-		const halfWidth = 1.5; // world units the frame must span horizontally
-		const dist = 5.35;
+		const halfWidth = 1.45; // world units the frame must span horizontally (the rim reaches 1.4)
+		const dist = REST_DISTANCE;
 		const vFov = THREE.MathUtils.radToDeg(2 * Math.atan(halfWidth / dist / this.camera.aspect));
 		this.camera.fov = THREE.MathUtils.clamp(vFov, 40, 68);
 		this.camera.updateProjectionMatrix();
@@ -341,6 +348,20 @@ export class LuckyScene {
 		this.renderer.setSize(w, h, false);
 		this.composer.setPixelRatio(this.qualityDPR);
 		this.composer.setSize(w, h);
+	}
+
+	/** Where a world point lands on the canvas, in CSS pixels, with the camera
+	 *  at rest (no parallax, shake or effect moves). For pinning DOM to the scene. */
+	projectAtRest(point: THREE.Vector3): THREE.Vector2 {
+		const probe = (this._restProbe ??= new THREE.PerspectiveCamera());
+		probe.copy(this.camera, false);
+		probe.position.set(0, 0, REST_DISTANCE);
+		probe.lookAt(LOOK_TARGET);
+		probe.updateMatrixWorld();
+		const v = point.clone().project(probe);
+		const w = this.canvas.clientWidth || innerWidth;
+		const h = this.canvas.clientHeight || innerHeight;
+		return new THREE.Vector2(((v.x + 1) / 2) * w, ((1 - v.y) / 2) * h);
 	}
 
 	addUpdatable(fn: (dt: number, t: number) => void): () => void {
@@ -412,7 +433,7 @@ export class LuckyScene {
 		this.parallax.lerp(this.parallaxTarget, 1 - Math.pow(0.001, dt));
 		this.rig.position.x = this.parallax.x * 0.22 * pStrength;
 		this.rig.position.y = -this.parallax.y * 0.16 * pStrength;
-		this.camera.lookAt(0, -0.15, 0);
+		this.camera.lookAt(LOOK_TARGET);
 		if (this.cameraRoll) this.camera.rotateZ(this.cameraRoll);
 
 		// camera shake

@@ -7,6 +7,16 @@ import type { SpriteSet } from '../gfx/textures';
 
 const QUADRANT_ANGLES = [Math.PI * 0.25, Math.PI * 0.75, Math.PI * 1.25, Math.PI * 1.75];
 
+// fitAspect(): at or below PORTRAIT_ASPECT (a phone held upright) the button
+// is PORTRAIT_BUTTON_SCALE× larger; from LANDSCAPE_ASPECT up (the aspect where
+// the camera stops fitting to width) it is untouched, with a smooth ramp between
+const PORTRAIT_ASPECT = 0.6;
+const LANDSCAPE_ASPECT = 0.78;
+const PORTRAIT_BUTTON_SCALE = 1.14;
+const INNER_GLOW_SCALE = 1.45;
+const MACHINE_Y = -0.32; // the machine sits a little below the camera's aim
+const BUTTON_RADIUS = 0.625; // the gold base, the button's widest point
+
 /* ---------- gears that actually mesh ----------
    Real gearing rules, simplified: gears can only mesh if they share a tooth
    `module` (m). Pitch radius = m·T/2, centre distance = sum of pitch radii,
@@ -124,39 +134,91 @@ function roundedShape(pts: THREE.Vector2[], radius: number): THREE.Shape {
 	return s;
 }
 
-/** Three-pronged clamp plate outline: one long prong gripping inward (-y),
- *  two short braced prongs angled back and outward. Waisted between prongs so
- *  it reads as a designed casting, not a star cut from sheet. */
-function clampPlatePoints(scale = 1): THREE.Vector2[] {
-	const prongs = [
-		{ a: -Math.PI / 2, len: 0.42, wBase: 0.2, wTip: 0.115 }, // main, toward the button
-		{ a: Math.PI * 0.26, len: 0.24, wBase: 0.15, wTip: 0.095 },
-		{ a: Math.PI * 0.74, len: 0.24, wBase: 0.15, wTip: 0.095 }
-	];
+/** The clamp's three lobes, V2-style: a long gripping lobe aimed at the
+ *  button (-y) and two blunt braces swept back at 120°. Each is a tapered
+ *  paddle with a flat, chamfered end, so the outline reads as a cut casting. */
+const CLAMP_LOBES = [
+	{ a: -Math.PI / 2, len: 0.37, wBase: 0.27, wTip: 0.17 },
+	{ a: Math.PI / 6, len: 0.245, wBase: 0.25, wTip: 0.18 },
+	{ a: (Math.PI * 5) / 6, len: 0.245, wBase: 0.25, wTip: 0.18 }
+];
+
+// the frame's chamfer flares this far past the outline at its widest...
+const CLAMP_EDGE = 0.016;
+// ...and the dark seat behind it a touch less, so the bright edge is the
+// clamp's true silhouette (a dark seat past it vanished against the dark
+// gear window and read as a gap)
+const CLAMP_SEAT_GROW = 0.012;
+// how far the gripping lobe reaches from the pivot
+const CLAMP_REACH = CLAMP_LOBES[0].len + CLAMP_EDGE;
+// daylight left between the gripping tip and the button's rim
+const CLAMP_TIP_GAP = 0.002;
+// clamp pivots sit this far out, as a fraction of the machine's radius
+const CLAMP_PIVOT = 0.825;
+
+/** Outline of the whole casting, grown outward by `grow` (for the dark seat). */
+function clampOutline(grow = 0): THREE.Vector2[] {
 	const pts: THREE.Vector2[] = [];
-	for (let i = 0; i < prongs.length; i++) {
-		const p = prongs[i];
-		const dir = new THREE.Vector2(Math.cos(p.a), Math.sin(p.a));
+	for (const [i, l] of CLAMP_LOBES.entries()) {
+		// a concave notch between this lobe and the previous one, so the
+		// lobes read as swept out of the hub rather than bolted to it
+		const prev = CLAMP_LOBES[(i + CLAMP_LOBES.length - 1) % CLAMP_LOBES.length];
+		let mid = (l.a + prev.a) / 2;
+		if (Math.abs(l.a - prev.a) > Math.PI) mid += Math.PI;
+		pts.push(new THREE.Vector2(Math.cos(mid), Math.sin(mid)).multiplyScalar(0.128 + grow));
+		const dir = new THREE.Vector2(Math.cos(l.a), Math.sin(l.a));
 		const perp = new THREE.Vector2(-dir.y, dir.x);
+		const at = (along: number, across: number) =>
+			new THREE.Vector2().addScaledVector(dir, along).addScaledVector(perp, across);
+		const tip = l.len + grow;
+		const hb = l.wBase / 2 + grow;
+		const ht = l.wTip / 2 + grow;
+		const cut = 0.035; // chamfered end corners
 		pts.push(
-			new THREE.Vector2().addScaledVector(dir, 0.1).addScaledVector(perp, p.wBase / 2),
-			new THREE.Vector2().addScaledVector(dir, p.len).addScaledVector(perp, p.wTip / 2),
-			new THREE.Vector2().addScaledVector(dir, p.len).addScaledVector(perp, -p.wTip / 2),
-			new THREE.Vector2().addScaledVector(dir, 0.1).addScaledVector(perp, -p.wBase / 2)
+			at(0.1, -hb),
+			at(tip - cut, -ht),
+			at(tip, -ht + cut),
+			at(tip, ht - cut),
+			at(tip - cut, ht),
+			at(0.1, hb)
 		);
 	}
-	return pts.map((v) => v.multiplyScalar(scale));
+	return pts;
 }
 
-function clampPlateGeometry(scale = 1, depth = 0.045): THREE.ExtrudeGeometry {
-	return new THREE.ExtrudeGeometry(roundedShape(clampPlatePoints(scale), 0.05), {
-		depth,
-		bevelEnabled: true,
-		bevelThickness: 0.02,
-		bevelSize: 0.02,
-		bevelSegments: 3, // soft machined edge, not a chamfered sticker
-		curveSegments: 6
-	});
+const CLAMP_SILHOUETTE = clampOutline(CLAMP_EDGE);
+
+/** How far from the machine's centre a clamp reaches, pivoted `dist` out
+ *  and scaled by `k`. Local +y points outward and x across, so the chamfered
+ *  outline is all it takes to find the silhouette's outermost point. */
+function clampOuterReach(dist: number, k: number): number {
+	let reach = 0;
+	for (const p of CLAMP_SILHOUETTE) reach = Math.max(reach, Math.hypot(k * p.x, dist + k * p.y));
+	return reach;
+}
+
+/** The recessed panel window cut into one lobe, inset by `inset` from the
+ *  outer edge and starting clear of the central bezel. */
+function clampPanel(l: (typeof CLAMP_LOBES)[number], inset: number): THREE.Vector2[] {
+	const dir = new THREE.Vector2(Math.cos(l.a), Math.sin(l.a));
+	const perp = new THREE.Vector2(-dir.y, dir.x);
+	const at = (along: number, across: number) =>
+		new THREE.Vector2().addScaledVector(dir, along).addScaledVector(perp, across);
+	const r0 = 0.094 + inset;
+	const r1 = l.len - 0.026 - inset;
+	// the lobe's half-width at a given distance, then pulled in by the frame
+	const hw = (r: number) => THREE.MathUtils.lerp(l.wBase / 2, l.wTip / 2, (r - 0.1) / (l.len - 0.1)) - 0.018 - inset;
+	const cut = 0.022;
+	return [
+		at(r0, hw(r0) - 0.03),
+		at(r0 + 0.03, hw(r0 + 0.03)),
+		at(r1 - cut, hw(r1)),
+		at(r1, hw(r1) - cut),
+		at(r1, -hw(r1) + cut),
+		at(r1 - cut, -hw(r1)),
+		at(r0 + 0.03, -hw(r0 + 0.03)),
+		at(r0, -hw(r0) + 0.03)
+	];
 }
 
 /** Turned-metal profile (a lathe) — collars, fillets and steps like the parts
@@ -170,132 +232,121 @@ function lathe(profile: [number, number][], mat: THREE.Material, segments = 28):
 	return m;
 }
 
-/** Tri-prong clamp, rebuilt as jewellery: rounded castings with soft bevels,
- *  lathe-turned hardware, a working piston down the gripping arm and pearls to
- *  match the face. Its own polished materials — the shared face metals are too
- *  rough for parts this close to the camera. */
+/** Tri-lobed clamp after the V2 original: a gunmetal frame with hard
+ *  chamfered chrome edges, a gold panel sunk into each lobe with faceted
+ *  bevels that flash as the light moves, and a cut gem in a turned bezel at
+ *  the pivot. The facets are the point. Flat colour and soft blobs read as
+ *  plastic at this size; planes at different angles catch the environment
+ *  one at a time and read as metal. The dark frame is what separates it from
+ *  the pale silver face (silver on silver vanished, and gold or pale panels
+ *  read as holes through to the face). Its own polished materials, as the
+ *  shared face metals are too rough for parts this close to the camera. */
 function buildClamp(_gold: THREE.Material, _silver: THREE.Material, darkMetal: THREE.Material): THREE.Group {
 	const g = new THREE.Group();
 
+	// ExtrudeGeometry puts the flat caps in group 0 and the walls and bevels
+	// in group 1, so every casting gets a quieter satin face and bright
+	// polished chamfers: the edge lines that make V2's clamp sparkle.
+	const chrome = new THREE.MeshPhysicalMaterial({
+		color: 0xe8edf0, metalness: 1, roughness: 0.06, envMapIntensity: 3, clearcoat: 0.5, clearcoatRoughness: 0.08
+	});
+	const steel = new THREE.MeshStandardMaterial({ color: 0x5c656e, metalness: 1, roughness: 0.28, envMapIntensity: 1.6 });
 	const gold = new THREE.MeshPhysicalMaterial({
-		color: 0xd8ae4e, metalness: 1, roughness: 0.22, envMapIntensity: 1.7, clearcoat: 0.35, clearcoatRoughness: 0.25
+		color: 0xf0c872, metalness: 1, roughness: 0.14, envMapIntensity: 2.4, clearcoat: 0.4, clearcoatRoughness: 0.15
 	});
-	const goldDeep = new THREE.MeshStandardMaterial({ color: 0x8a6a28, metalness: 1, roughness: 0.42, envMapIntensity: 1.2 });
-	const silver = new THREE.MeshPhysicalMaterial({
-		color: 0xcfd6dc, metalness: 1, roughness: 0.16, envMapIntensity: 1.9, clearcoat: 0.3, clearcoatRoughness: 0.2
-	});
-	const pearl = new THREE.MeshPhysicalMaterial({
-		color: 0xcfe2f8, metalness: 0, roughness: 0.06, clearcoat: 1, envMapIntensity: 2.4,
-		emissive: 0x36495e, emissiveIntensity: 0.4
+	const goldSatin = new THREE.MeshStandardMaterial({ color: 0xc9a04e, metalness: 1, roughness: 0.34, envMapIntensity: 1.8 });
+	const gem = new THREE.MeshPhysicalMaterial({
+		color: 0x4f7fcc, metalness: 0.35, roughness: 0.05, clearcoat: 1, envMapIntensity: 2.6,
+		emissive: 0x1d3458, emissiveIntensity: 0.5, flatShading: true
 	});
 
-	// ---- body: dark seat, then the gold casting with soft rounded bevels
-	const seat = new THREE.Mesh(clampPlateGeometry(1.045, 0.02), darkMetal);
-	seat.position.z = -0.016;
-	const plate = new THREE.Mesh(clampPlateGeometry(1, 0.045), gold);
-	// a slimmer raised deck on top makes the casting read as two machined layers
-	const deck = new THREE.Mesh(clampPlateGeometry(0.82, 0.02), goldDeep);
-	deck.position.z = 0.052;
-	g.add(seat, plate, deck);
-
-	// ---- the gripping arm: recessed channel, piston rod, guide collars
-	const channelShape = roundedShape([
-		new THREE.Vector2(-0.042, -0.1),
-		new THREE.Vector2(0.042, -0.1),
-		new THREE.Vector2(0.026, -0.365),
-		new THREE.Vector2(-0.026, -0.365)
-	], 0.024);
-	const channel = new THREE.Mesh(
-		new THREE.ExtrudeGeometry(channelShape, { depth: 0.012, bevelEnabled: false, curveSegments: 6 }),
+	// ---- dark seat: a thin shadow line that separates the casting from the face
+	const seat = new THREE.Mesh(
+		new THREE.ExtrudeGeometry(roundedShape(clampOutline(CLAMP_SEAT_GROW), 0.02), { depth: 0.02, bevelEnabled: false, curveSegments: 4 }),
 		darkMetal
 	);
-	channel.position.z = 0.062;
-	g.add(channel);
+	seat.position.z = -0.03;
+	g.add(seat);
 
-	const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.0135, 0.0135, 0.27, 14), silver);
-	rod.position.set(0, -0.235, 0.077);
-	g.add(rod);
-	for (const y of [-0.16, -0.27]) {
-		const guide = lathe([[0.016, -0.011], [0.03, -0.008], [0.033, 0], [0.03, 0.008], [0.016, 0.011]], gold, 20);
-		guide.position.set(0, y, 0.077);
-		g.add(guide);
-	}
-
-	// ---- gripper foot: turned ferrule + rounded pad, stopping shy of the cap
-	const ferrule = lathe(
-		[[0.014, -0.03], [0.05, -0.026], [0.056, -0.012], [0.044, -0.004], [0.052, 0.006], [0.038, 0.02], [0.0, 0.026]],
-		silver
+	// ---- the frame, with a window cut in each lobe. A chamfer on every edge,
+	// the window walls included, is what gives V2 its bright lines.
+	const frameShape = roundedShape(clampOutline(), 0.012);
+	for (const l of CLAMP_LOBES) frameShape.holes.push(roundedShape(clampPanel(l, 0), 0.01));
+	const frame = new THREE.Mesh(
+		new THREE.ExtrudeGeometry(frameShape, {
+			depth: 0.02,
+			bevelEnabled: true,
+			bevelThickness: 0.024,
+			bevelSize: CLAMP_EDGE,
+			bevelSegments: 2, // two facets per edge: one of them always finds the softbox
+			curveSegments: 3
+		}),
+		[steel, chrome]
 	);
-	ferrule.position.set(0, -0.375, 0.06);
-	g.add(ferrule);
-	const pad = new THREE.Mesh(new THREE.CapsuleGeometry(0.02, 0.05, 6, 14), goldDeep);
-	pad.rotation.z = Math.PI / 2;
-	pad.position.set(0, -0.408, 0.045);
-	g.add(pad);
+	g.add(frame);
 
-	// ---- brace prongs: turned collars holding pearls, echoing the face ring
-	for (const side of [-1, 1]) {
-		const a = Math.PI * (0.5 + side * 0.24);
-		const ex = Math.cos(a) * 0.19;
-		const ey = Math.sin(a) * 0.19;
-		const collar = lathe(
-			[[0.016, -0.02], [0.052, -0.016], [0.058, -0.002], [0.046, 0.008], [0.034, 0.014], [0.0, 0.018]],
-			silver
+	// ---- gold panels: low truncated pyramids, so each has five facets. The
+	// bevel is offset inward, so the panel's widest point is its outline and
+	// it can sit snug against the window wall with no dark moat.
+	for (const l of CLAMP_LOBES) {
+		const panel = new THREE.Mesh(
+			new THREE.ExtrudeGeometry(roundedShape(clampPanel(l, 0.019), 0.008), {
+				depth: 0.004,
+				bevelEnabled: true,
+				bevelThickness: 0.016,
+				bevelSize: 0.02,
+				bevelOffset: -0.02,
+				bevelSegments: 1,
+				curveSegments: 2
+			}),
+			[goldSatin, gold]
 		);
-		collar.position.set(ex, ey, 0.062);
-		g.add(collar);
-		const gem = new THREE.Mesh(new THREE.SphereGeometry(0.032, 18, 14), pearl);
-		gem.position.set(ex, ey, 0.092);
-		g.add(gem);
+		panel.position.z = 0.006;
+		g.add(panel);
 	}
 
-	// ---- rivet line down each edge of the main arm — machined, purposeful
-	for (const side of [-1, 1]) {
-		for (let i = 0; i < 3; i++) {
-			const y = -0.14 - i * 0.085;
-			const w = 0.075 - i * 0.012;
-			const rivet = new THREE.Mesh(new THREE.SphereGeometry(0.0115, 10, 8), silver);
-			rivet.scale.z = 0.55;
-			rivet.position.set(side * w, y, 0.068);
-			g.add(rivet);
-		}
-	}
-
-	// ---- central boss: a turned gold stack, all one metal — no trim bands
-	const boss = lathe(
-		[
-			[0.125, 0], [0.125, 0.014], [0.108, 0.022], // base flange
-			[0.095, 0.03], [0.095, 0.052], // drum
-			[0.075, 0.06], [0.062, 0.062], // shoulder
-			[0.05, 0.07], [0.048, 0.082], [0.0, 0.09] // cap swell
-		],
-		gold
+	// ---- the main lobe carries a raised chrome spine, the long bright facet
+	// that made the V2 clamp read as pointing somewhere
+	const main = CLAMP_LOBES[0];
+	const spine = new THREE.Mesh(
+		new THREE.ExtrudeGeometry(
+			roundedShape([
+				new THREE.Vector2(-0.012, -0.14),
+				new THREE.Vector2(0.012, -0.14),
+				new THREE.Vector2(0.008, -main.len + 0.09),
+				new THREE.Vector2(0, -main.len + 0.075),
+				new THREE.Vector2(-0.008, -main.len + 0.09)
+			], 0.004),
+			{ depth: 0.004, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 1, curveSegments: 2 }
+		),
+		chrome
 	);
-	boss.position.z = 0.045;
-	g.add(boss);
-	// no screws up here — the crown of the boss is a pearl in a gold collar
-	const collarRing = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.011, 10, 28), gold);
-	collarRing.position.z = 0.128;
-	const crown = new THREE.Mesh(new THREE.SphereGeometry(0.034, 20, 16), pearl);
-	crown.position.z = 0.135;
-	g.add(collarRing, crown);
+	spine.position.z = 0.04;
+	g.add(spine);
 
-	// He-Man crossguard: two mirrored ribs sweeping around the boss. Ends are
-	// capped in the same gold — quiet curves, no bead clutter.
-	const ribR = 0.1;
-	const ribArc = 2.7;
-	for (const side of [1, -1]) {
-		const start = side === 1 ? -1.31 : Math.PI - (-1.31 + ribArc);
-		const rib = new THREE.Mesh(new THREE.TorusGeometry(ribR, 0.011, 10, 26, ribArc), gold);
-		rib.rotation.z = start;
-		rib.position.z = 0.08;
-		g.add(rib);
-		for (const t of [start, start + ribArc]) {
-			const cap = new THREE.Mesh(new THREE.SphereGeometry(0.011, 10, 8), gold);
-			cap.position.set(Math.cos(t) * ribR, Math.sin(t) * ribR, 0.08);
-			g.add(cap);
-		}
-	}
+	// ---- the pivot: a turned chrome bezel, a gold collar, and a cut gem
+	const bezel = lathe(
+		[
+			[0.088, 0], [0.088, 0.011], [0.081, 0.022], // base flange
+			[0.07, 0.027], [0.065, 0.034], // step down to the collar
+			[0.058, 0.034], [0.054, 0.027], [0.045, 0.025] // inner lip the gem sits on
+		],
+		chrome,
+		32
+	);
+	bezel.position.z = 0.046;
+	g.add(bezel);
+	const collar = new THREE.Mesh(new THREE.TorusGeometry(0.061, 0.008, 8, 32), gold);
+	collar.position.z = 0.08;
+	g.add(collar);
+	// a brilliant cut with a flat table: few segments + flat shading = facets
+	const stone = lathe(
+		[[0.0, -0.018], [0.049, 0.011], [0.051, 0.016], [0.04, 0.032], [0.025, 0.039], [0.0, 0.039]],
+		gem,
+		10
+	);
+	stone.position.z = 0.056;
+	g.add(stone);
 
 	return g;
 }
@@ -326,6 +377,7 @@ export class Machine {
 	mechSpeed: number;
 	cogs: THREE.Mesh[];
 	balance: THREE.Group;
+	buttonMount: THREE.Group;
 	buttonGroup: THREE.Group;
 	buttonCap: THREE.Mesh;
 	innerGlow: THREE.Sprite;
@@ -334,11 +386,13 @@ export class Machine {
 	_pressDepth: number;
 	_sheenTex: THREE.CanvasTexture;
 	_clampMode?: 'slide' | 'twist';
+	_clampScale: number;
+	_clampOuterLimit: number;
 	_irisDistance?: number;
 
 	constructor(scene: THREE.Scene, textures: TextureBundle, sprites: SpriteSet) {
 		this.group = new THREE.Group();
-		this.group.position.set(0, -0.32, 0);
+		this.group.position.set(0, MACHINE_Y, 0);
 		scene.add(this.group);
 
 		const R = 1.3; // machine radius in world units
@@ -426,6 +480,12 @@ export class Machine {
 		this.portal.visible = false;
 		this.group.add(this.portal);
 
+		// Clamps are sized so the gripping tip just meets the button's rim
+		// without cutting into it. Effects never touch a clamp's scale.
+		this._clampScale = (R * CLAMP_PIVOT - BUTTON_RADIUS - CLAMP_TIP_GAP) / CLAMP_REACH;
+		// ...and never reach past the outer edge of the face's polished lip
+		this._clampOuterLimit = R * 0.995 + 0.052;
+
 		// ---------- iris quadrants (face ring + arcs of lip/rail) + static decorations
 		this.quadrants = [];
 		this.decos = [];
@@ -492,7 +552,9 @@ export class Machine {
 			deco.userData.dir = quadrant.userData.dir;
 			const clampGroup = buildClamp(gold, silver, darkMetal);
 			const ang = QUADRANT_ANGLES[q];
-			clampGroup.position.set(Math.cos(ang) * R * 0.825, Math.sin(ang) * R * 0.825, 0.16);
+			// fitAspect() moves and sizes it; this is the landscape layout
+			clampGroup.position.set(Math.cos(ang) * R * CLAMP_PIVOT, Math.sin(ang) * R * CLAMP_PIVOT, 0.16);
+			clampGroup.scale.setScalar(this._clampScale);
 			clampGroup.rotation.z = ang - Math.PI / 2; // arm points inward
 			deco.add(clampGroup);
 			deco.userData.clamp = clampGroup;
@@ -666,10 +728,14 @@ export class Machine {
 		this.mechGroup.add(this.balance);
 
 		// ---------- the red button (bigger — it's the hero)
+		// Effects own buttonGroup's transform (and reparent it), so the
+		// portrait enlargement lives on a mount above it; see fitAspect().
+		this.buttonMount = new THREE.Group();
+		this.centre.add(this.buttonMount);
 		this.buttonGroup = new THREE.Group();
-		this.centre.add(this.buttonGroup);
+		this.buttonMount.add(this.buttonGroup);
 
-		const base = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.625, 0.1, 56), gold);
+		const base = new THREE.Mesh(new THREE.CylinderGeometry(0.6, BUTTON_RADIUS, 0.1, 56), gold);
 		base.rotation.x = Math.PI / 2;
 		base.position.z = 0.09;
 		this.buttonGroup.add(base);
@@ -748,7 +814,7 @@ export class Machine {
 			this.group.add(sp);
 			return sp;
 		};
-		this.innerGlow = mkGlow(sprites.softDot, 1.45, 0.2);
+		this.innerGlow = mkGlow(sprites.softDot, INNER_GLOW_SCALE, 0.2);
 		this.outerGlow = mkGlow(sprites.softDot, 5.0, 0.3);
 		this.glints = [];
 		for (let i = 0; i < 5; i++) {
@@ -804,6 +870,55 @@ export class Machine {
 			}
 			this.skyDisc.material.map!.offset.x += dt * 0.008;
 		}
+	}
+
+	/* ---------- layout ---------- */
+
+	/** Portrait phones fit the machine to the screen's width, which leaves the
+	 *  button small with a lot of empty height around it. Grow the button (not
+	 *  the machine) as the screen narrows: it spreads over the gear window,
+	 *  which is too fine to read at phone size anyway, and the clamps back off
+	 *  just enough to keep clear of its rim. Landscape stays exactly as it was. */
+	fitAspect(aspect: number): void {
+		const wide = THREE.MathUtils.smoothstep(aspect, PORTRAIT_ASPECT, LANDSCAPE_ASPECT);
+		const s = THREE.MathUtils.lerp(PORTRAIT_BUTTON_SCALE, 1, wide);
+		this.buttonMount.scale.setScalar(s);
+		this.innerGlow.scale.setScalar(INNER_GLOW_SCALE * s);
+		// The clamps back off so their tips still just meet the grown rim.
+		// Backing off at full size would shove them over the outer lip, so
+		// they also give up a little size until their far edge fits inside it.
+		const tip = BUTTON_RADIUS * s + CLAMP_TIP_GAP;
+		const fits = (k: number) => clampOuterReach(tip + k * CLAMP_REACH, k) <= this._clampOuterLimit;
+		let k = this._clampScale;
+		if (!fits(k)) {
+			let lo = 0.5;
+			let hi = k;
+			for (let i = 0; i < 20; i++) {
+				const mid = (lo + hi) / 2;
+				if (fits(mid)) lo = mid;
+				else hi = mid;
+			}
+			k = lo;
+		}
+		const dist = tip + k * CLAMP_REACH;
+		for (const d of this.decos) {
+			const clamp: THREE.Group = d.userData.clamp;
+			const home: THREE.Vector3 = d.userData.clampHome;
+			const dir: THREE.Vector2 = d.userData.dir;
+			const next = new THREE.Vector3(dir.x * dist, dir.y * dist, home.z);
+			clamp.scale.setScalar(k);
+			// shift by the change, not to the new home: an effect may have the
+			// clamp open (or aimed) right now, and a rotate-to-portrait should
+			// carry it along rather than snap it shut
+			clamp.position.add(next.clone().sub(home));
+			home.copy(next);
+		}
+	}
+
+	/** The button's rim at rest, in world space. */
+	buttonRestRim(): { centre: THREE.Vector3; radius: number } {
+		const s = this.buttonMount.scale.x;
+		return { centre: new THREE.Vector3(0, MACHINE_Y, 0.15 * s), radius: BUTTON_RADIUS * s };
 	}
 
 	/* ---------- interactions ---------- */

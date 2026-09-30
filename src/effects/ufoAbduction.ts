@@ -105,6 +105,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	const button = machine.buttonGroup;
 	const home = button.parent!;
 	scene.scene.attach(button); // keep world transform, then animate freely
+	const s0 = button.scale.x; // portrait phones mount the button larger
 	const startY = button.position.y;
 	const startZ = button.position.z;
 	const dust = particles.emitter({
@@ -131,7 +132,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 		// the beam and keeps it well clear of both the cone and the hull
 		button.rotation.y = Math.max(0, (v - 0.22) / 0.78) * Math.PI * 4;
 		button.rotation.x = Math.sin(v * Math.PI * 2) * 0.2;
-		button.scale.setScalar(1 - v * 0.45);
+		button.scale.setScalar(s0 * (1 - v * 0.45));
 	});
 
 	// scanning pause… the button shivers nervously in the beam while a scan
@@ -190,7 +191,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 		button.rotation.y = Math.PI * 4 * Math.max(0, 1 - v * 1.4);
 		button.rotation.x = 0;
 		button.position.z = startZ + 0.55 * (1 - Math.max(0, (v - 0.72) / 0.28));
-		button.scale.setScalar(0.55 + v * 0.45);
+		button.scale.setScalar(s0 * (0.55 + v * 0.45));
 	});
 	home.attach(button);
 	button.position.set(0, 0, 0);

@@ -285,11 +285,13 @@ body {
 
 #press-target {
 	position: absolute;
-	left: 50%;
-	top: 58%;
+	/* main.ts pins these over the drawn button; the fallbacks cover the
+	   moment before it runs */
+	left: var(--btn-x, 50%);
+	top: var(--btn-y, 58%);
 	transform: translate(-50%, -50%);
-	width: min(52vmin, 400px);
-	height: min(52vmin, 400px);
+	width: var(--btn-d, min(52vmin, 400px));
+	height: var(--btn-d, min(52vmin, 400px));
 	border-radius: 50%;
 	background: transparent;
 	border: none;
