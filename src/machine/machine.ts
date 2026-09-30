@@ -1,6 +1,7 @@
 // The Luck Machine — procedural 3D recreation of the classic V2 contraption.
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { tween, rand } from '../core/anim';
 import type { TextureBundle } from '../types';
 import type { SpriteSet } from '../gfx/textures';
@@ -14,6 +15,15 @@ const PORTRAIT_ASPECT = 0.6;
 const LANDSCAPE_ASPECT = 0.78;
 const PORTRAIT_BUTTON_SCALE = 1.14;
 const INNER_GLOW_SCALE = 1.45;
+// The face's blue band runs from FACE_INNER to the rail at FACE_SEAM (radius
+// fractions). On portrait its inner edge draws back to FACE_INNER_PORTRAIT so
+// the bigger button still leaves a sliver of the gear train showing; the
+// painted band is squeezed to fit (after cropping its innermost pinstripe,
+// FACE_PAINT_PORTRAIT, so the triquetras and studs squash less).
+const FACE_INNER = 0.555;
+const FACE_SEAM = 0.785;
+const FACE_INNER_PORTRAIT = 0.615;
+const FACE_PAINT_PORTRAIT = 0.57;
 const MACHINE_Y = -0.32; // the machine sits a little below the camera's aim
 const BUTTON_RADIUS = 0.625; // the gold base, the button's widest point
 
@@ -496,9 +506,28 @@ export class Machine {
 			const quadrant = new THREE.Group();
 			const thetaStart = QUADRANT_ANGLES[q] - Math.PI * 0.25;
 
-			const ringGeo = new THREE.RingGeometry(R * 0.555, R, 64, 3, thetaStart, Math.PI / 2);
-			planarUV(ringGeo, R);
+			// blue band + outer ornament as two rings merged into one mesh, so
+			// there's a vertex ring at the rail for fitAspect() to hinge on
+			const bandGeo = new THREE.RingGeometry(R * FACE_INNER, R * FACE_SEAM, 64, 2, thetaStart, Math.PI / 2);
+			const outerGeo = new THREE.RingGeometry(R * FACE_SEAM, R, 64, 2, thetaStart, Math.PI / 2);
+			planarUV(bandGeo, R);
+			planarUV(outerGeo, R);
+			const ringGeo = mergeGeometries([bandGeo, outerGeo])!;
+			{
+				// each band vertex's angle and fraction across the band
+				const pos = bandGeo.attributes.position;
+				const band = { count: pos.count, t: new Float32Array(pos.count), a: new Float32Array(pos.count), R };
+				for (let i = 0; i < pos.count; i++) {
+					const r = Math.hypot(pos.getX(i), pos.getY(i));
+					band.t[i] = (r / R - FACE_INNER) / (FACE_SEAM - FACE_INNER);
+					band.a[i] = Math.atan2(pos.getY(i), pos.getX(i));
+				}
+				quadrant.userData.band = band;
+			}
+			bandGeo.dispose();
+			outerGeo.dispose();
 			const ring = new THREE.Mesh(ringGeo, faceMat);
+			quadrant.userData.ring = ring;
 			ring.position.z = 0.06;
 			quadrant.add(ring);
 
@@ -515,10 +544,11 @@ export class Machine {
 			quadrant.add(rail);
 
 			// silver frame arc on the inner edge (rim of the mechanism window)
-			const frame = new THREE.Mesh(new THREE.TorusGeometry(R * 0.557, 0.02, 10, 36, Math.PI / 2), silver);
+			const frame = new THREE.Mesh(new THREE.TorusGeometry(R * (FACE_INNER + 0.002), 0.02, 10, 36, Math.PI / 2), silver);
 			frame.rotation.z = thetaStart;
 			frame.position.z = 0.07;
 			quadrant.add(frame);
+			quadrant.userData.frame = frame;
 
 			this.faceSpin.add(quadrant);
 			quadrant.userData.dir = new THREE.Vector2(
@@ -884,6 +914,30 @@ export class Machine {
 		const s = THREE.MathUtils.lerp(PORTRAIT_BUTTON_SCALE, 1, wide);
 		this.buttonMount.scale.setScalar(s);
 		this.innerGlow.scale.setScalar(INNER_GLOW_SCALE * s);
+		// the blue band's inner edge draws back so the gear train still peeks
+		// out around the bigger button; its artwork squeezes to fit
+		const inner = THREE.MathUtils.lerp(FACE_INNER_PORTRAIT, FACE_INNER, wide);
+		const paint = THREE.MathUtils.lerp(FACE_PAINT_PORTRAIT, FACE_INNER, wide);
+		for (const q of this.quadrants) {
+			const { band, ring, frame } = q.userData;
+			const geo: THREE.BufferGeometry = ring.geometry;
+			const pos = geo.attributes.position;
+			const uv = geo.attributes.uv;
+			for (let i = 0; i < band.count; i++) {
+				const cos = Math.cos(band.a[i]);
+				const sin = Math.sin(band.a[i]);
+				const r = band.R * THREE.MathUtils.lerp(inner, FACE_SEAM, band.t[i]);
+				const painted = THREE.MathUtils.lerp(paint, FACE_SEAM, band.t[i]) / 2; // planar UV: r / 2R
+				pos.setXY(i, cos * r, sin * r);
+				uv.setXY(i, cos * painted + 0.5, sin * painted + 0.5);
+			}
+			pos.needsUpdate = true;
+			uv.needsUpdate = true;
+			geo.computeBoundingSphere();
+			// the silver frame arc rides the edge (x/y only: the tube keeps its depth)
+			const k = (inner + 0.002) / (FACE_INNER + 0.002);
+			frame.scale.set(k, k, 1);
+		}
 		// The clamps back off so their tips still just meet the grown rim.
 		// Backing off at full size would shove them over the outer lip, so
 		// they also give up a little size until their far edge fits inside it.
