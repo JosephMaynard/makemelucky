@@ -5,9 +5,10 @@
 // the real thing. Then the slip dissolves into sparkles and the two halves tip
 // off the button and drop out of shot.
 //
-// The cookie is a modelled asset (public/models/fortune-cookie.glb): two meshes,
-// HalfL and HalfR, both with their origin at the cookie's centre, so cracking it
-// is just moving the halves apart. The GLB is fetched once and kept; warm()
+// The cookie is a modelled asset (public/models/fortune-cookie.glb): an unsplit
+// Whole, plus HalfL and HalfR, all sharing the cookie's centre as their origin.
+// Whole plays everything up to the crack so no seam ever shows; at the crack it
+// is swapped for the halves, which are then simply moved apart. The GLB is fetched once and kept; warm()
 // starts that fetch as soon as this effect is next in the bag. If it can't be
 // fetched at all, a stand-in pair of half-rings plays the part rather than the
 // press doing nothing.
@@ -22,7 +23,8 @@ export const sound = 'luckySymbol';
 export const duration = 8500;
 
 const MODEL_URL = '/models/fortune-cookie.glb';
-const BISCUIT = 0xd9a559;
+const BISCUIT = 0xf0d8a6; // pale cream: the baked GLB colour read as mustard in the lounge
+const TOAST = new THREE.Color(0xb8782e); // the golden-brown the rims bake to
 const CRUMBS = [0x8a5a1f, 0xa8722c, 0xc48e45, 0x6e4516];
 
 // Shipped copy: no em or en dashes. Wiseman, not woo: luck as a habit.
@@ -183,13 +185,26 @@ export async function play(ctx: EffectContext): Promise<void> {
 	const cookie = standIn ? source : source.clone(true);
 	const biscuit = new THREE.MeshStandardMaterial({
 		color: BISCUIT,
-		roughness: 0.55,
+		roughness: 0.42,
 		metalness: 0,
+		envMapIntensity: 0.9,
 		side: THREE.DoubleSide,
 		// transparent from the start so the fade-out at the end needs no recompile
 		transparent: true,
 		opacity: 1
 	});
+	// Toasted rims: the albedo darkens toward golden brown where the surface
+	// turns away from the camera, so the silhouette and folds read baked.
+	const toast = TOAST.clone(); // working (linear) space, as the shader wants it
+	biscuit.onBeforeCompile = (shader) => {
+		shader.fragmentShader = shader.fragmentShader.replace(
+			'#include <normal_fragment_maps>',
+			`#include <normal_fragment_maps>
+			float rimT = 1.0 - abs(dot(normalize(normal), normalize(vViewPosition)));
+			diffuseColor.rgb = mix(diffuseColor.rgb, vec3(${toast.r.toFixed(4)}, ${toast.g.toFixed(4)}, ${toast.b.toFixed(4)}), smoothstep(0.3, 0.92, rimT) * 0.8);`
+		);
+	};
+	biscuit.customProgramCacheKey = () => 'fortuneCookieBiscuit';
 	cookie.traverse((o) => {
 		const mesh = o as THREE.Mesh;
 		if (!mesh.isMesh) return;
@@ -206,34 +221,37 @@ export async function play(ctx: EffectContext): Promise<void> {
 	});
 	const halfL = cookie.getObjectByName('HalfL') ?? cookie;
 	const halfR = cookie.getObjectByName('HalfR') ?? cookie;
+	// the unsplit cookie until the crack; the halves wait hidden behind it
+	const whole = cookie.getObjectByName('Whole');
+	if (whole) halfL.visible = halfR.visible = false;
 
-	// sized off the button so it's ~1.6x its width, but on a phone (where the
+	// sized off the button so it's ~1.5x its width, but on a phone (where the
 	// button is enlarged) never so wide the cracked halves leave the frame
 	const rim = machine.buttonRestRim();
 	cookie.updateMatrixWorld(true);
-	const box = new THREE.Box3().setFromObject(cookie);
+	const box = new THREE.Box3().setFromObject(whole ?? cookie);
 	const size = box.getSize(new THREE.Vector3());
-	const S = Math.min(1.6 * rim.radius * 2, frameHalfW(0.9) * 2 * 0.66) / Math.max(0.01, size.x);
-	// The model rests spine-down with its horns up. Face-on it reads as a
-	// banana; a three-quarter turn with the horns tipped toward the camera
-	// shows the fold and the pinched lips, the view on every takeaway menu.
-	const REST_TILT = 0.32;
-	const REST_TURN = 0.62;
+	const S = Math.min(1.5 * rim.radius * 2, frameHalfW(0.9) * 2 * 0.66) / Math.max(0.01, size.x);
+	// The model is spine-down with its horns up. The classic illustrated
+	// fortune cookie is the other way up: round belly to the camera, horns
+	// down with the V notch at the bottom. Three applies X after Z here, so
+	// the small peek into the notch is a NEGATIVE tilt (checked by render).
+	const REST_FLIP = Math.PI;
+	const REST_TILT = -0.3;
 
 	const wrapper = new THREE.Group(); // owns position/scale; the cookie inside owns the spin
 	wrapper.add(cookie);
 	cookie.position.set(-(box.min.x + box.max.x) / 2, -(box.min.y + box.max.y) / 2, -(box.min.z + box.max.z) / 2);
 	const spinner = new THREE.Group();
-	spinner.rotation.order = 'YXZ'; // turn, then tip: the tilt stays toward the camera
 	spinner.add(wrapper);
 	spinner.scale.setScalar(S);
 	// rest depth measured in the rest pose, so the cookie sits on the dome, not in it
-	spinner.rotation.set(REST_TILT, REST_TURN, 0);
+	spinner.rotation.set(REST_TILT, 0, REST_FLIP);
 	spinner.updateMatrixWorld(true);
 	const restBox = new THREE.Box3().setFromObject(spinner);
 	const capTop = rim.centre.z + 0.14 * (rim.radius / 0.625); // the dome's crown
 	const rest = new THREE.Vector3(rim.centre.x, rim.centre.y + 0.04, capTop - restBox.min.z * 0.8 + 0.04);
-	const startPos = new THREE.Vector3(frameHalfW(rest.z) + 1.2, 2.5, rest.z + 0.3);
+	const startPos = new THREE.Vector3(frameHalfW(rest.z) + 1.3, 2.6, rest.z - 0.25);
 	spinner.position.copy(startPos);
 	scene.scene.add(spinner);
 
@@ -256,12 +274,12 @@ export async function play(ctx: EffectContext): Promise<void> {
 	await tween(1200, 'inQuad', (v) => {
 		spinner.position.lerpVectors(startPos, rest, v);
 		spinner.position.y += Math.sin(Math.PI * v) * 0.55;
-		spinner.rotation.z = (1 - v) * Math.PI * 3;
+		spinner.rotation.z = REST_FLIP + (1 - v) * Math.PI * 3;
 		spinner.rotation.x = REST_TILT + (1 - v) * 1.4;
-		spinner.rotation.y = REST_TURN + (1 - v) * 0.8;
+		spinner.rotation.y = (1 - v) * 0.8;
 	});
 	spinner.position.copy(rest);
-	spinner.rotation.set(REST_TILT, REST_TURN, 0);
+	spinner.rotation.set(REST_TILT, 0, REST_FLIP);
 	trail.stop();
 
 	// ---- THUMP: it lands on the cap, the button takes the weight
@@ -292,19 +310,22 @@ export async function play(ctx: EffectContext): Promise<void> {
 	// ---- a beat, then a nervous wobble
 	await delay(380);
 	audio.sfx('tick', { gain: 0.4, pitch: 0.9 });
-	// ...turning more face-on as it does, so the halves part across the frame
-	const CRACK_TURN = 0.3;
 	await tween(320, 'linear', (_v, t) => {
-		spinner.rotation.z = Math.sin(t * Math.PI * 6) * 0.06 * (1 - t);
-		spinner.rotation.y = REST_TURN + (CRACK_TURN - REST_TURN) * (1 - (1 - t) * (1 - t));
+		spinner.rotation.z = REST_FLIP + Math.sin(t * Math.PI * 6) * 0.06 * (1 - t);
 	});
-	spinner.rotation.z = 0;
+	spinner.rotation.z = REST_FLIP;
 
 	// ---- CRACK: the halves jolt apart and turn their insides to the camera
 	audio.sfx('clack', { gain: 0.7, pitch: 1.25 });
 	audio.sfx('pop', { gain: 0.55, pitch: 0.9 });
 	haptics.vibrate([20, 20, 40]);
 	scene.shake(0.18);
+	// the seam appears only now: the whole cookie hands over to its halves,
+	// which sit in exactly the same place until they jolt
+	if (whole) {
+		whole.visible = false;
+		halfL.visible = halfR.visible = true;
+	}
 	const apart = 0.35 / S; // world units, in the cookie's own space
 	tween(300, 'outBack', (v) => {
 		halfL.position.x = -apart * v;
@@ -459,12 +480,16 @@ export async function play(ctx: EffectContext): Promise<void> {
 	const rFrom = halfR.position.clone();
 	// far enough to clear the bottom of the frame, which is a long way down on a phone
 	const drop = (rest.y + 0.15 + frameHalfH(rest.z) + 0.5) / S;
+	// "down" in the cookie's own (flipped, tilted) frame; the halves live there
+	const down = new THREE.Vector3(0, -1, 0).applyQuaternion(spinner.quaternion.clone().invert());
 	tween(600, 'outQuad', (v) => machine.setInnerGlow(0.35 * (1 - v)));
 	await tween(850, 'inQuad', (v) => {
-		halfL.position.set(lFrom.x - v * 0.5 / S, lFrom.y - v * drop, lFrom.z + v * 0.2 / S);
-		halfR.position.set(rFrom.x + v * 0.5 / S, rFrom.y - v * drop, rFrom.z + v * 0.2 / S);
-		halfL.rotation.z = 0.32 + v * 1.6;
-		halfR.rotation.z = -0.32 - v * 1.6;
+		halfL.position.set(lFrom.x - (v * 0.5) / S, lFrom.y, lFrom.z).addScaledVector(down, v * drop);
+		halfR.position.set(rFrom.x + (v * 0.5) / S, rFrom.y, rFrom.z).addScaledVector(down, v * drop);
+		// the flip puts HalfL on the RIGHT, so each half tips outward and
+		// down over its own outer edge by turning against its crack angle
+		halfL.rotation.z = 0.32 - v * 1.3;
+		halfR.rotation.z = -0.32 + v * 1.3;
 		biscuit.opacity = 1 - Math.max(0, v - 0.45) / 0.55;
 	});
 	await slipFade;
