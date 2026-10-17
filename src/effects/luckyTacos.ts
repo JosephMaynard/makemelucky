@@ -189,12 +189,17 @@ export async function play(ctx: EffectContext): Promise<void> {
 	sombrero.rotation.x = -0.2; // a jaunty tilt; further back and it's all brim underside
 	machine.buttonGroup.add(sombrero); // wears the squash, spins the pirouette
 
-	// maracas start OFF-SCREEN below the frame — no loitering in shot
+	// maracas start OFF-SCREEN below the frame — no loitering in shot.
+	// On a phone the frame is narrower than the pair of hands, so they move
+	// in to the edge of the frame and shake INWARD across the chest instead
+	// of outward, which kept the eggs off-screen on portrait (2026-10-17).
 	const maracaL = buildMaraca(0xe23d3d);
 	const maracaR = buildMaraca(0x2fae5e);
 	const maracaHomeY = btnPos.y - 0.2;
-	maracaL.position.set(btnPos.x - 1.05, -3.2, 1.1);
-	maracaR.position.set(btnPos.x + 1.05, -3.2, 1.1);
+	const maracaReach = Math.min(1.05, frameHalfW(1.1) - 0.26);
+	const maracaLean = maracaReach < 1.05 ? -1 : 1; // -1: eggs swing in over the button
+	maracaL.position.set(btnPos.x - maracaReach, -3.2, 1.1);
+	maracaR.position.set(btnPos.x + maracaReach, -3.2, 1.1);
 	scene.scene.add(maracaL, maracaR);
 
 	// the sunstone: 4 sauce bottles + 16 chips in two counter-rotating rings,
@@ -297,8 +302,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 		// throw from entrance to exit — a quiet maraca is a sad maraca.
 		if (maracasHeld) {
 			const flick = land * (0.62 + shakePunch);
-			maracaL.rotation.z = 0.3 + flick;
-			maracaR.rotation.z = -0.3 - flick;
+			maracaL.rotation.z = maracaLean * (0.3 + flick);
+			maracaR.rotation.z = -maracaLean * (0.3 + flick);
 			if (maracaL.position.y > -2) {
 				maracaL.position.y = maracaHomeY + hop * 0.06 * groove;
 				maracaR.position.y = maracaHomeY + hop * 0.06 * groove;

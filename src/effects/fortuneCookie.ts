@@ -16,7 +16,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { tween, delay, rand, pick } from '../core/anim';
-import { dimLights, flashPulse, disposeObject } from './helpers';
+import { dimLights, flashPulse, disposeObject, shockwave } from './helpers';
 import type { EffectContext } from '../types';
 
 export const sound = 'luckySymbol';
@@ -337,30 +337,66 @@ export async function play(ctx: EffectContext): Promise<void> {
 	});
 	const seam = rest.clone();
 	seam.z += 0.15;
+	// a proper SNAP: a gold shockwave off the seam, a flash on the lamp, a
+	// shower of crumbs that rains down past the button, a fan of gold stars
+	// and a short-lived dust cloud that hangs where the cookie broke
+	shockwave(scene.scene, seam, { color: 0xffd27a, maxScale: 0.8, duration: 420, z: seam.z + 0.1 });
+	const lampBase = scene.fxLight.intensity;
+	tween(500, 'outQuad', (v) => (scene.fxLight.intensity = lampBase + (1 - v) * 3.5));
 	particles.burst({
 		texture: sprites.softDot,
-		count: 46,
+		count: 160,
 		origin: seam,
-		originSpread: 0.12,
-		direction: new THREE.Vector3(0, 1, 0.35),
-		cone: 1.1,
-		speed: [0.8, 2.4],
-		gravity: new THREE.Vector3(0, -4.5, 0),
-		life: [0.5, 1.1],
-		size: [0.018, 0.045],
+		originSpread: 0.22,
+		direction: new THREE.Vector3(0, 1, 0.45),
+		cone: 1.5,
+		speed: [1.0, 3.8],
+		gravity: new THREE.Vector3(0, -5.5, 0),
+		life: [0.7, 1.6],
+		size: [0.025, 0.075],
 		colors: CRUMBS,
-		spin: [-6, 6]
+		spin: [-8, 8]
+	});
+	particles.burst({
+		texture: sprites.star4,
+		count: 44,
+		origin: seam.clone(),
+		originSpread: 0.1,
+		direction: new THREE.Vector3(0, 0.4, 1),
+		cone: 1.3,
+		speed: [1.2, 3.2],
+		gravity: new THREE.Vector3(0, -1.8, 0),
+		drag: 0.96,
+		life: [0.5, 1.1],
+		size: [0.05, 0.12],
+		colors: [0xffe9ad, 0xffcf66, 0xffffff],
+		spin: [-4, 4]
 	});
 	particles.burst({
 		texture: sprites.spark,
-		count: 18,
+		count: 70,
 		origin: seam.clone(),
-		originSpread: 0.08,
-		speed: [0.6, 1.6],
-		life: [0.25, 0.55],
-		size: [0.02, 0.05],
+		originSpread: 0.12,
+		speed: [1.5, 4.0],
+		drag: 0.9,
+		life: [0.25, 0.6],
+		size: [0.02, 0.06],
 		colors: [0xffe9ad, 0xffffff]
 	});
+	const dust = particles.emitter({
+		texture: sprites.softDot,
+		count: 90,
+		emitRate: 110,
+		origin: seam.clone(),
+		originSpread: 0.3,
+		speed: [0.05, 0.35],
+		gravity: new THREE.Vector3(0, -0.4, 0),
+		drag: 0.95,
+		life: [0.9, 1.8],
+		size: [0.08, 0.2],
+		colors: [0xd9b47a, 0xb98a54, 0xf0d8a6]
+	});
+	delay(650).then(() => dust.stop());
 	machine.setInnerGlow(0.35, 0xffc070);
 
 	// the halves breathe a little while the slip is read
