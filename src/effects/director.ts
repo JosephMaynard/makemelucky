@@ -31,6 +31,7 @@ const EFFECTS: Record<string, () => Promise<EffectModule>> = {
 	pinball: () => import('./pinball'),
 	cardCyclone: () => import('./cardCyclone'),
 	horseshoeToss: () => import('./horseshoeToss'),
+	fortuneCookie: () => import('./fortuneCookie'),
 	makeItRain: () => import('./makeItRain'),
 	jollyRoger: () => import('./jollyRoger'),
 	kpopLuck: () => import('./kpopLuck'),

@@ -22,6 +22,7 @@ export const QUIPS: Record<string, readonly [string, string]> = {
 	pinball: ['NOM NOM', 'MULTIBALL'],
 	cardCyclone: ['READ ’EM', 'AND WEEP'],
 	horseshoeToss: ['RINGER!', ''],
+	fortuneCookie: ['THE COOKIE', 'HAS SPOKEN'],
 	makeItRain: ['FORECAST:', 'MONEY'],
 	jollyRoger: ['SHIVER ME', 'FORTUNES!'],
 	kpopLuck: ['LUCK IS ON', 'YOUR SIDE'],
