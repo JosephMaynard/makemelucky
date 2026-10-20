@@ -3,11 +3,26 @@
 // end — before being spat back out at the machine.
 
 import * as THREE from 'three';
+import { precompileWith } from './helpers';
 import { tween, delay, rand } from '../core/anim';
 import type { EffectContext } from '../types';
 
 export const sound = 'cloudsTunnel';
 export const duration = 11500;
+
+/** The tunnel's fog. Fog is part of every program's key, so the room is compiled under it in warm(). */
+const tunnelFog = () => new THREE.Fog(0xbcd8ee, 7, 52);
+
+// Setting scene.fog recompiles every shader in the room: a 600 ms freeze on
+// a 4x-throttled CPU two seconds into the dive (profiled 2026-10-21), and
+// the tap that lands in it is a poor INP. Compile the room under the fog in
+// the background instead, while the visitor is still reading the last quip.
+let warmed = false;
+export function warm(ctx: EffectContext): void {
+	if (warmed) return;
+	warmed = true;
+	void precompileWith(ctx.scene, [], tunnelFog()).catch(() => { warmed = false; });
+}
 
 let tunnel: ReturnType<typeof buildTunnel> | null = null;
 
@@ -125,7 +140,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 	tunnel.group.visible = true;
 	const bg0 = scene.scene.background;
 	scene.scene.background = new THREE.Color(0x9cc3ea);
-	scene.scene.fog = new THREE.Fog(0xbcd8ee, 7, 52);
+	scene.scene.fog = tunnelFog();
 	haptics.vibrate(80);
 
 	// the button comes along for the ride — freed from the machine, it barrel-

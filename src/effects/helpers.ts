@@ -101,3 +101,45 @@ export function disposeObject(root: THREE.Object3D): void {
 		}
 	});
 }
+
+/**
+ * Compile, off the press path, every shader the room will need once `guests`
+ * (lights and props) join it. Program keys include the count of each light
+ * type, so an effect that brings even one light recompiles the WHOLE machine
+ * on its first frame: 1.5 to 1.7 s of linking on a 4x-throttled CPU (discoFever
+ * and jollyRoger, profiled 2026-10-21), and the tap that lands in that frame is
+ * what PostHog reports as a poor INP. Call it from warm(ctx) with objects built
+ * exactly as play() builds them, then hand those same objects to play(): a
+ * compiled program lives on its material, and disposing a throwaway material
+ * would throw the program away with it.
+ */
+export async function precompileWith(scene: LuckyScene, guests: THREE.Object3D[], fog: THREE.Fog | THREE.FogExp2 | null = null): Promise<void> {
+	const { renderer, camera } = scene;
+	const room = scene.scene;
+	const target = new THREE.WebGLRenderTarget(1, 1);
+	const prevTarget = renderer.getRenderTarget();
+	const prevFog = room.fog;
+	const lend = () => {
+		for (const g of guests) room.add(g);
+		if (fog) room.fog = fog;
+	};
+	const reclaim = () => {
+		for (const g of guests) room.remove(g);
+		room.fog = prevFog;
+		renderer.setRenderTarget(prevTarget);
+	};
+	try {
+		// compiled as the frames will draw it: into the composer's linear buffer,
+		// not the tone-mapped screen, or every variant is one nothing ever uses
+		renderer.setRenderTarget(target);
+		lend();
+		// the synchronous half gathers lights and starts every compile; the
+		// guests can leave before the links finish in the background
+		const linked = renderer.compileAsync(room, camera);
+		reclaim();
+		await linked;
+	} finally {
+		reclaim();
+		target.dispose();
+	}
+}

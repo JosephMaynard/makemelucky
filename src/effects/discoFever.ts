@@ -3,18 +3,16 @@
 
 import * as THREE from 'three';
 import { tween, delay } from '../core/anim';
-import { dimLights, disposeObject } from './helpers';
+import { dimLights, disposeObject, precompileWith } from './helpers';
 import type { EffectContext } from '../types';
 
 export const sound = 'luckyNowDisco';
 export const duration = 10400;
 
-export async function play(ctx: EffectContext): Promise<void> {
-	const { scene, machine, particles, sprites, haptics, audio } = ctx;
+const SPOT_COLORS = [0xff3da0, 0x38d0ff, 0xffd23d, 0x51e05c];
 
-	const restore = dimLights(scene, 0.12, 900);
-
-	// the mirror ball, on its little rod
+/** Everything play() adds to the room that changes what the room compiles. */
+function buildSet() {
 	const ballGroup = new THREE.Group();
 	const ball = new THREE.Mesh(
 		new THREE.IcosahedronGeometry(0.42, 2), // finer facets = proper mirror tiles
@@ -33,19 +31,37 @@ export async function play(ctx: EffectContext): Promise<void> {
 	rod.position.y = 1.6;
 	ballGroup.add(ball, rod);
 	ballGroup.position.set(0, 4.6, 0.7); // parked above the frame
-	scene.scene.add(ballGroup);
-
 	// four coloured party spots orbiting the room
-	const spotColors = [0xff3da0, 0x38d0ff, 0xffd23d, 0x51e05c];
-	const spots = spotColors.map((c) => {
-		const l = new THREE.PointLight(c, 0, 14, 2);
-		scene.scene.add(l);
-		return l;
-	});
+	const spots = SPOT_COLORS.map((c) => new THREE.PointLight(c, 0, 14, 2));
 	// a white spot trained on the ball itself so the mirror tiles read bright
 	const ballSpot = new THREE.PointLight(0xffffff, 0, 5, 1.6);
 	ballSpot.position.set(0.7, 1.7, 2.3);
-	scene.scene.add(ballSpot);
+	return { ballGroup, ball, spots, ballSpot };
+}
+
+// Five point lights join the room, which changes the light count that keys
+// every shader in it: without this the whole machine recompiled on the
+// effect's first frame, a 1.7 s freeze on a 4x-throttled CPU (profiled
+// 2026-10-21). warm() builds the set, compiles the room with it in the
+// background, and keeps it for play() so the compiled programs stay alive.
+let staged: ReturnType<typeof buildSet> | null = null;
+export function warm(ctx: EffectContext): void {
+	if (staged) return;
+	staged = buildSet();
+	void precompileWith(ctx.scene, [staged.ballGroup, ...staged.spots, staged.ballSpot]).catch(() => { /* compiled on demand instead */ });
+}
+
+export async function play(ctx: EffectContext): Promise<void> {
+	const { scene, machine, particles, sprites, haptics, audio } = ctx;
+
+	const restore = dimLights(scene, 0.12, 900);
+
+	// the mirror ball on its rod, the party spots and the ball's own white
+	// spot: taken from warm() when it ran, otherwise built now
+	const set = staged ?? buildSet();
+	staged = null;
+	const { ballGroup, ball, spots, ballSpot } = set;
+	scene.scene.add(ballGroup, ...spots, ballSpot);
 	tween(1400, 'inOutQuad', (v) => (ballSpot.intensity = v * 4));
 
 	// glints twinkling off the mirror tiles
@@ -93,7 +109,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 			spots[i].position.set(Math.cos(a) * 2.3, Math.sin(a * 1.3) * 1.5 + 0.2, 1.4);
 			spots[i].intensity = 2.6 + pulse * 2.2;
 		}
-		machine.setInnerGlow(0.25 + pulse * 0.3, spotColors[(beat % 4 + 4) % 4]);
+		machine.setInnerGlow(0.25 + pulse * 0.3, SPOT_COLORS[(beat % 4 + 4) % 4]);
 		// mirror-tile glints flare as the ball turns
 		glints.forEach((s, i) => {
 			const tw = Math.max(0, Math.sin(t * (5.2 + i * 1.7) + i * 2.4));

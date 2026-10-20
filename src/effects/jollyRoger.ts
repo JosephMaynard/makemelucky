@@ -11,7 +11,7 @@
 
 import * as THREE from 'three';
 import { tween, delay, rand } from '../core/anim';
-import { dimLights, flashPulse, shockwave, disposeObject } from './helpers';
+import { dimLights, flashPulse, shockwave, disposeObject, precompileWith } from './helpers';
 import type { EffectContext } from '../types';
 
 export const sound = 'pirateShanty';
@@ -91,6 +91,28 @@ function oceanBand(
 		depthWrite: false
 	});
 	return new THREE.Mesh(geo, mat);
+}
+
+/** Cold moon key so the ship and skull are modelled, not flat cutouts. */
+function buildMoonLight() {
+	const moonLight = new THREE.DirectionalLight(0xa8c8e8, 0);
+	moonLight.position.set(-2.5, 3, 2);
+	return moonLight;
+}
+
+// The moon is a directional light, and one directional light is a different
+// light count from none: every shader in the room recompiled on the first
+// frame, 1.6 s on a 4x-throttled CPU (profiled 2026-10-21). warm() compiles
+// the room with the moon in it, plus one ocean band so the water's own
+// shader is linked too. The band is kept for good: a program lives only as
+// long as a material that uses it.
+let stagedMoon: THREE.DirectionalLight | null = null;
+let oceanWarm: THREE.Mesh | null = null;
+export function warm(ctx: EffectContext): void {
+	if (stagedMoon) return;
+	stagedMoon = buildMoonLight();
+	oceanWarm ??= oceanBand(9, 1.5, 0x061420, 0x1a4a56, 0.97, 0, 0);
+	void precompileWith(ctx.scene, [stagedMoon, oceanWarm]).catch(() => { /* compiled on demand instead */ });
 }
 
 /** Black flag, white skull — waves at the maintop. */
@@ -407,8 +429,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 	scene.fxLight.position.set(-1.4, 1.7, 1.6);
 	tween(700, 'inOutQuad', (v) => (scene.fxLight.intensity = v * 1.8));
 	// cold moon key so the ship and skull are modelled, not flat cutouts
-	const moonLight = new THREE.DirectionalLight(0xa8c8e8, 0);
-	moonLight.position.set(-2.5, 3, 2);
+	const moonLight = stagedMoon ?? buildMoonLight();
+	stagedMoon = null;
 	scene.scene.add(moonLight);
 	tween(900, 'inOutQuad', (v) => (moonLight.intensity = v * 1.6));
 	// pale moon glow behind ragged sky
