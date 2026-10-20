@@ -397,6 +397,59 @@ export async function play(ctx: EffectContext): Promise<void> {
 		colors: [0xd9b47a, 0xb98a54, 0xf0d8a6]
 	});
 	delay(650).then(() => dust.stop());
+	// ...and real BROKEN COOKIE: a handful of jagged biscuit chips, cut
+	// from the same baked material, spray out of the seam, tumble under
+	// gravity and fall away past the button. Flat extruded polygons, so they
+	// catch the light edge-on the way a snapped wafer does.
+	const shardMat = biscuit.clone();
+	shardMat.onBeforeCompile = biscuit.onBeforeCompile;
+	shardMat.customProgramCacheKey = biscuit.customProgramCacheKey;
+	const shards = new THREE.Group();
+	shards.position.copy(seam);
+	scene.scene.add(shards);
+	const cookieW = S * size.x;
+	const shardList: { mesh: THREE.Mesh; vel: THREE.Vector3; ang: THREE.Vector3 }[] = [];
+	for (let i = 0; i < 18; i++) {
+		const r = rand(0.03, 0.075) * cookieW;
+		const shape = new THREE.Shape();
+		const n = 5 + Math.floor(Math.random() * 3);
+		for (let k = 0; k < n; k++) {
+			const a = (k / n) * Math.PI * 2;
+			const rr = r * rand(0.55, 1);
+			if (k === 0) shape.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+			else shape.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+		}
+		shape.closePath();
+		const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.012 * cookieW, bevelEnabled: false });
+		const mesh = new THREE.Mesh(geo, shardMat);
+		mesh.position.set(rand(-0.12, 0.12) * cookieW, rand(-0.25, 0.25) * cookieW, rand(0, 0.06));
+		mesh.rotation.set(rand(0, Math.PI), rand(0, Math.PI), rand(0, Math.PI));
+		shards.add(mesh);
+		const vel = new THREE.Vector3(rand(-1, 1) * 1.1, rand(0.3, 1.4), rand(0.35, 1)).normalize().multiplyScalar(rand(1.0, 2.8));
+		shardList.push({ mesh, vel, ang: new THREE.Vector3(rand(-9, 9), rand(-9, 9), rand(-9, 9)) });
+	}
+	let shardT = 0;
+	let shardsLive = true;
+	const killShards = () => {
+		if (!shardsLive) return;
+		shardsLive = false;
+		stopShards();
+		scene.scene.remove(shards);
+		for (const sh of shardList) sh.mesh.geometry.dispose();
+		shardMat.dispose();
+	};
+	const stopShards = scene.addUpdatable((dt) => {
+		shardT += dt;
+		for (const sh of shardList) {
+			sh.vel.y -= 5.5 * dt;
+			sh.mesh.position.addScaledVector(sh.vel, dt);
+			sh.mesh.rotation.x += sh.ang.x * dt;
+			sh.mesh.rotation.y += sh.ang.y * dt;
+			sh.mesh.rotation.z += sh.ang.z * dt;
+		}
+		shardMat.opacity = Math.max(0, Math.min(1, 1 - (shardT - 1.1) / 0.5));
+		if (shardT > 1.6) killShards();
+	});
 	machine.setInnerGlow(0.35, 0xffc070);
 
 	// the halves breathe a little while the slip is read
@@ -532,6 +585,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 
 	// ---- teardown: the button was never touched, the room comes back
 	scene.scene.remove(spinner, slip);
+	killShards(); // normally long gone, but never leave chips behind
 	biscuit.dispose(); // the GLB's own geometry and textures stay cached for next time
 	if (standIn) disposeObject(cookie);
 	slipGeo.dispose();
