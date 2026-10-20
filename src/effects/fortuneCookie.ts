@@ -42,6 +42,73 @@ const FORTUNES = [
 	'You pressed the button. Off to a flying start.'
 ];
 
+// ── Biscuit surface ──────────────────────────────────────────────────────────
+// A smooth cream mesh reads as plastic. Two small tiling canvases fix that:
+// a mottled albedo (baked gold mottle and darker specks over the cream) and
+// a bump map of the same grain, so the surface catches light like a wafer.
+// 256px, built once on first use, seamless because the noise lattice wraps.
+let surface: { map: THREE.CanvasTexture; bump: THREE.CanvasTexture } | null = null;
+function biscuitSurface() {
+	if (surface) return surface;
+	const N = 256;
+	const L = 32; // lattice cells per edge at the base octave
+	const lat = new Float32Array(L * L);
+	let seed = 7;
+	const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+	for (let i = 0; i < lat.length; i++) lat[i] = rnd();
+	const smooth = (t: number) => t * t * (3 - 2 * t);
+	const value = (x: number, y: number, cells: number) => {
+		const fx = (x / N) * cells;
+		const fy = (y / N) * cells;
+		const x0 = Math.floor(fx), y0 = Math.floor(fy);
+		const tx = smooth(fx - x0), ty = smooth(fy - y0);
+		const at = (i: number, j: number) => lat[(((j % L) + L) % L) * L + (((i % L) + L) % L)];
+		const a = at(x0, y0), b = at(x0 + 1, y0), c = at(x0, y0 + 1), d = at(x0 + 1, y0 + 1);
+		return (a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty;
+	};
+	// fbm over octaves whose cell counts all divide the lattice, so it tiles
+	const fbm = (x: number, y: number) => value(x, y, 4) * 0.5 + value(x, y, 8) * 0.25 + value(x, y, 16) * 0.15 + value(x, y, 32) * 0.1;
+	const height = new Float32Array(N * N);
+	for (let y = 0; y < N; y++) {
+		for (let x = 0; x < N; x++) {
+			let h = fbm(x, y);
+			// fine speckle: little pits in the wafer
+			const sp = value(x * 2, y * 2, 32);
+			if (sp > 0.86) h -= (sp - 0.86) * 2.5;
+			height[y * N + x] = h;
+		}
+	}
+	const mapC = document.createElement('canvas');
+	mapC.width = mapC.height = N;
+	const bumpC = document.createElement('canvas');
+	bumpC.width = bumpC.height = N;
+	const mi = mapC.getContext('2d')!.createImageData(N, N);
+	const bi = bumpC.getContext('2d')!.createImageData(N, N);
+	for (let i = 0; i < N * N; i++) {
+		const h = height[i];
+		// albedo: mostly near-white (the material colour does the cream), with
+		// warm golden mottle where the wafer is thicker and darker pits
+		const t = Math.max(0, Math.min(1, (h - 0.35) / 0.45));
+		const r = 255 * (0.9 + 0.1 * t);
+		const g = 255 * (0.86 + 0.14 * t);
+		const b = 255 * (0.76 + 0.22 * t);
+		mi.data[i * 4] = r; mi.data[i * 4 + 1] = g; mi.data[i * 4 + 2] = b; mi.data[i * 4 + 3] = 255;
+		const v = 255 * Math.max(0, Math.min(1, h));
+		bi.data[i * 4] = bi.data[i * 4 + 1] = bi.data[i * 4 + 2] = v; bi.data[i * 4 + 3] = 255;
+	}
+	mapC.getContext('2d')!.putImageData(mi, 0, 0);
+	bumpC.getContext('2d')!.putImageData(bi, 0, 0);
+	const map = new THREE.CanvasTexture(mapC);
+	map.colorSpace = THREE.SRGBColorSpace;
+	const bump = new THREE.CanvasTexture(bumpC);
+	for (const t of [map, bump]) {
+		t.wrapS = t.wrapT = THREE.RepeatWrapping;
+		t.anisotropy = 4;
+	}
+	surface = { map, bump };
+	return surface;
+}
+
 // ── The asset ───────────────────────────────────────────────────────────────
 let cookieLoad: Promise<THREE.Object3D> | null = null;
 
@@ -183,11 +250,15 @@ export async function play(ctx: EffectContext): Promise<void> {
 	}
 	const standIn = source.userData.standIn === true;
 	const cookie = standIn ? source : source.clone(true);
+	const grain = biscuitSurface();
 	const biscuit = new THREE.MeshStandardMaterial({
 		color: BISCUIT,
-		roughness: 0.42,
+		map: grain.map,
+		bumpMap: grain.bump,
+		bumpScale: 0.9,
+		roughness: 0.64,
 		metalness: 0,
-		envMapIntensity: 0.9,
+		envMapIntensity: 0.7,
 		side: THREE.DoubleSide,
 		// transparent from the start so the fade-out at the end needs no recompile
 		transparent: true,
@@ -326,14 +397,14 @@ export async function play(ctx: EffectContext): Promise<void> {
 		whole.visible = false;
 		halfL.visible = halfR.visible = true;
 	}
-	const apart = 0.35 / S; // world units, in the cookie's own space
+	const apart = 0.62 / S; // world units, in the cookie's own space; wider than the jagged break so the snapped faces never overlap
 	tween(300, 'outBack', (v) => {
 		halfL.position.x = -apart * v;
 		halfR.position.x = apart * v;
 		halfL.rotation.z = 0.32 * v;
 		halfR.rotation.z = -0.32 * v;
-		halfL.rotation.y = -0.4 * v;
-		halfR.rotation.y = 0.4 * v;
+		halfL.rotation.y = -0.22 * v;
+		halfR.rotation.y = 0.22 * v;
 	});
 	const seam = rest.clone();
 	seam.z += 0.15;
