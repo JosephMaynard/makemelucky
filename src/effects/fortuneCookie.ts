@@ -409,8 +409,8 @@ export async function play(ctx: EffectContext): Promise<void> {
 	scene.scene.add(shards);
 	const cookieW = S * size.x;
 	const shardList: { mesh: THREE.Mesh; vel: THREE.Vector3; ang: THREE.Vector3 }[] = [];
-	for (let i = 0; i < 18; i++) {
-		const r = rand(0.03, 0.075) * cookieW;
+	for (let i = 0; i < 26; i++) {
+		const r = rand(0.012, 0.038) * cookieW;
 		const shape = new THREE.Shape();
 		const n = 5 + Math.floor(Math.random() * 3);
 		for (let k = 0; k < n; k++) {
@@ -420,7 +420,7 @@ export async function play(ctx: EffectContext): Promise<void> {
 			else shape.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
 		}
 		shape.closePath();
-		const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.012 * cookieW, bevelEnabled: false });
+		const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.008 * cookieW, bevelEnabled: false });
 		const mesh = new THREE.Mesh(geo, shardMat);
 		mesh.position.set(rand(-0.12, 0.12) * cookieW, rand(-0.25, 0.25) * cookieW, rand(0, 0.06));
 		mesh.rotation.set(rand(0, Math.PI), rand(0, Math.PI), rand(0, Math.PI));
