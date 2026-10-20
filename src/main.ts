@@ -277,7 +277,9 @@ async function boot(): Promise<void> {
 		wakeLock.hold();
 		let fx: string | null = null;
 		try {
-			fx = await director.play();
+			// effect_started is the one that survives a visitor leaving mid-show;
+			// effect_played only lands once the performance completes
+			fx = await director.play((name) => track('effect_started', { effect: name, ...via, seq: effectSeq + 1, prev: prevEffect }));
 		} finally {
 			wakeLock.release(4000);
 		}
@@ -547,6 +549,10 @@ function bootFallback(err: unknown): void {
 			plainCelebrate(awarded);
 			track('button_pressed', { count: store.data.luckyness, fallback: true });
 			say(store.data.luckyness, awarded.length > 0);
+			// the 3D machine's press is busy for the length of a performance; with
+			// no performance here, one fallback session sent 187 presses in 90s
+			// and 7% of all presses. A short busy window keeps the counts honest.
+			return new Promise<void>((r) => setTimeout(r, 1200));
 		}
 	});
 }

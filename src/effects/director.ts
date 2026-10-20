@@ -238,7 +238,12 @@ export class Director {
 		return null;
 	}
 
-	async play(): Promise<string | null> {
+	/**
+	 * @param onStart called with the effect's final name the moment it is
+	 *   about to begin (after any swap for an unready soundtrack), so a
+	 *   start event can be logged even if the visitor leaves mid-performance.
+	 */
+	async play(onStart?: (name: string) => void): Promise<string | null> {
 		if (this.running) return null;
 		this.running = true;
 		let name = this.ctx.scene.reducedMotion
@@ -271,6 +276,11 @@ export class Director {
 			// hasn't arrived by then the show goes on WITHOUT it — playing
 			// anyway would queue the track to start mid-finale.
 			const scored = effect.sound ? await this.ctx.audio.ready(effect.sound, this.ctx.audio.isReady(effect.sound) ? 2500 : 10000) : false;
+			onStart?.(name);
+			// Let the pressed button PAINT before the set is built: a prefetched
+			// chunk resolves in microtasks, so the build could otherwise land in
+			// the press's own input task. One frame, never noticeable.
+			await paintedFrame();
 			if (scored) this.ctx.audio.play(effect.sound!);
 			else if (effect.sound) console.warn(`Effect ${name}: soundtrack not ready in time, playing silent`);
 			this.ctx.machine.mechSpeed = 5; // the machinery works hard during a luck event
@@ -289,6 +299,18 @@ export class Director {
 
 /** Run `fn` when the browser has nothing better to do (with a deadline, so a
  *  busy page can't postpone it for ever). Safari has no requestIdleCallback. */
+/** Resolves after the next frame has had a chance to paint (or soon, where nothing paints). */
+function paintedFrame(): Promise<void> {
+	return new Promise((r) => {
+		const fallback = setTimeout(r, 60);
+		if (typeof requestAnimationFrame !== 'function') return;
+		requestAnimationFrame(() => {
+			clearTimeout(fallback);
+			setTimeout(r, 0); // the frame after rAF is the one that paints
+		});
+	});
+}
+
 function whenIdle(fn: () => void): void {
 	if (typeof requestIdleCallback === 'function') requestIdleCallback(() => fn(), { timeout: 4000 });
 	else setTimeout(fn, 800);
