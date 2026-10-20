@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { createEnvironmentScene, disposeEnvironmentScene, type EnvironmentName } from '../gfx/environment';
 import { tween, tweensActive, updateTweens } from './anim';
+import { track } from '../services/analytics';
 
 // Effects hold "full" frame rate — but full means this, not the display's
 // native rate. A 120Hz phone or ProMotion laptop rendering bloom at 120fps
@@ -19,6 +20,77 @@ const EFFECT_FPS_CAP = 60;
 // after that is a full-screen quad, which has no edges to smooth. The
 // quality governor drops this to 0 on a struggling GPU before it touches bloom.
 const MSAA_SAMPLES = 4;
+
+/**
+ * The WebGL renderer, with one retry and the browser's own reason on failure.
+ *
+ * boot_failed used to say only "Error creating WebGL context.", which is
+ * three.js's message once BOTH its attempts came back null: ours, then a bare
+ * getContext('webgl2') with every attribute at its default. So none of the
+ * failures seen so far were refused for asking for the wrong attributes. The
+ * browser does say why (blocklisted GPU, hardware acceleration off, 3D APIs
+ * blocked for the site after GPU resets) in a webglcontextcreationerror
+ * event's statusMessage, which three.js only logs to the console. That reason,
+ * and whether the browser can still make a WebGL1 context (three.js needs
+ * WebGL2), go onto the thrown error so bootFallback's analytics carry them.
+ *
+ * The retry asks for the one combination still untried: the default (on
+ * dual-GPU laptops, integrated) GPU with no multisampled backbuffer, which
+ * three.js's bare fallback does not try (antialias defaults to true). It also
+ * rescues the case where that bare fallback DID get a context: the canvas
+ * keeps it, so a second renderer picks it up. MSAA_SAMPLES plays no part in
+ * any of this: it only sizes a render target inside the one context, after
+ * creation, clamped to the context's own maxSamples.
+ */
+function createRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer {
+	const reasons: string[] = [];
+	const onCreationError = (e: Event) => {
+		const msg = (e as WebGLContextEvent).statusMessage?.trim();
+		if (msg && !reasons.includes(msg)) reasons.push(msg);
+	};
+	canvas.addEventListener('webglcontextcreationerror', onCreationError);
+	try {
+		try {
+			return new THREE.WebGLRenderer({
+				canvas,
+				// Everything renders through the EffectComposer's (non-MSAA) targets,
+				// so canvas MSAA never touches visible geometry — it only multisamples
+				// the final full-screen blit, a pure per-frame resolve cost.
+				antialias: false,
+				powerPreference: 'high-performance',
+				stencil: false
+			});
+		} catch (first) {
+			let renderer: THREE.WebGLRenderer;
+			try {
+				renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'default', stencil: false });
+			} catch {
+				if (first instanceof Error) {
+					first.message = `${first.message} [${webglSupport()}]${reasons.length ? ' ' + reasons.join(' | ').slice(0, 150) : ''}`;
+				}
+				throw first;
+			}
+			track('webgl_retry_ok', { reason: reasons.join(' | ').slice(0, 200) });
+			return renderer;
+		}
+	} finally {
+		canvas.removeEventListener('webglcontextcreationerror', onCreationError);
+	}
+}
+
+/** Only on the failure path: which WebGL a throwaway canvas can still get. */
+function webglSupport(): string {
+	const webgl2 = typeof WebGL2RenderingContext === 'undefined' ? 'webgl2 missing' : 'webgl2 refused';
+	let webgl1 = 'webgl1 no';
+	try {
+		const gl = document.createElement('canvas').getContext('webgl');
+		if (gl) {
+			webgl1 = 'webgl1 ok';
+			gl.getExtension('WEBGL_lose_context')?.loseContext();
+		}
+	} catch { /* counts as no */ }
+	return `${webgl2}, ${webgl1}`;
+}
 
 // The camera's resting pose: pulled back along +z, looking just above the
 // machine's centre (which sits at y = -0.32). Parallax, shake and effects move
@@ -186,15 +258,7 @@ export class LuckyScene {
 			if (e.matches) this.trauma = 0; // drop any shake already in flight
 		});
 
-		this.renderer = new THREE.WebGLRenderer({
-			canvas,
-			// Everything renders through the EffectComposer's (non-MSAA) targets,
-			// so canvas MSAA never touches visible geometry — it only multisamples
-			// the final full-screen blit, a pure per-frame resolve cost.
-			antialias: false,
-			powerPreference: 'high-performance',
-			stencil: false
-		});
+		this.renderer = createRenderer(canvas);
 		this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
 		this.renderer.toneMappingExposure = 1.12;
 

@@ -53,6 +53,26 @@ const TRACKS: Record<string, { src: string; volume: number }> = {
 	bollywoodLuck: { src: '/soundfx/bollywood-luck.mp3', volume: 0.9 }
 };
 
+/** The licensed sprite's Howl. The first Howl is what makes Howler build its
+ *  AudioContext, and Howler then calls masterGain.gain.setValueAtTime(1,
+ *  ctx.currentTime) with no guard. iOS Safari can hand out a context whose
+ *  clock is not a finite number; WebKit then throws "The provided value is
+ *  non-finite" from inside this constructor, and boot used to go down with
+ *  it (PostHog, 5 Oct 2026: one iPhone failed three reloads in a row, seconds
+ *  after it had booted fine, and the V2 page, whose Howler 1.x never passes
+ *  currentTime at setup, played on the same phone a moment later). A broken
+ *  clock means Web Audio is no use for this page, so carry on with HTML5
+ *  Audio: Howler.mute() and every Howl after this one skip the context. */
+function spriteHowl(): Howl {
+	const options = { src: ['/soundfx/makemelucky.mp3'], sprite: SPRITE, preload: false };
+	try {
+		return new Howl(options);
+	} catch {
+		Howler.usingWebAudio = false;
+		return new Howl(options);
+	}
+}
+
 export class AudioService {
 	howl: Howl;
 	muted: boolean;
@@ -68,7 +88,7 @@ export class AudioService {
 		// preload: false — the 868KB sprite must not compete with boot for
 		// bandwidth; nothing can play before the first user gesture anyway.
 		// warm() kicks the download off once the loading screen clears.
-		this.howl = new Howl({ src: ['/soundfx/makemelucky.mp3'], sprite: SPRITE, preload: false });
+		this.howl = spriteHowl();
 		this.muted = false;
 		this.tracks = {}; // lazily-built Howls, keyed by TRACKS name
 		this._noiseBuffer = null; // shared white-noise buffer for all the crunchy SFX
@@ -226,7 +246,9 @@ export class AudioService {
 	_audioReady(): boolean {
 		if (this.muted) return false;
 		const ctx = Howler.ctx;
-		if (!ctx || !Howler.masterGain) return false;
+		// usingWebAudio goes false when spriteHowl() found the context broken:
+		// every sfx schedules on ctx.currentTime and would throw the same way
+		if (!ctx || !Howler.masterGain || !Howler.usingWebAudio) return false;
 		return true;
 	}
 
