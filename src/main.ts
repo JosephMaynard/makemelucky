@@ -26,7 +26,7 @@ import { initDossier } from './luck/dossier';
 import { AudioService } from './services/audio';
 import { Haptics } from './services/haptics';
 import { WakeLock } from './services/wakeLock';
-import { initAnalytics, track } from './services/analytics';
+import { initAnalytics, track, trackError } from './services/analytics';
 import { dayIndex } from './luck/days';
 import type { EffectContext, TextureBundle } from './types';
 
@@ -447,6 +447,7 @@ function bootFallback(err: unknown): void {
 	const reason = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
 	try {
 		track('boot_failed', { reason: reason.slice(0, 200) });
+		trackError(err, { stage: 'boot' });
 	} catch { /* analytics never gets to block the rescue */ }
 
 	// 1. the overlay goes immediately — it is fixed over everything

@@ -17,6 +17,7 @@
 		"three": "^0.180.0"
 	},
 	"devDependencies": {
+		"@posthog/rollup-plugin": "1.6.3",
 		"@types/howler": "^2.2.13",
 		"@types/three": "^0.180.0",
 		"happy-dom": "^20.10.6",
