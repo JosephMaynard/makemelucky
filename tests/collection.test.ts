@@ -141,8 +141,14 @@ describe('Director requests', () => {
 		(ctx.scene as { reducedMotion: boolean }).reducedMotion = true;
 		const director = new Director(ctx);
 		director.queued = 'powerSurge';
-		const played = await director.play();
-		expect(played).not.toBe('powerSurge');
+		// the calm pick is random; pin it to gentleGlow, the one calm module
+		// mocked here (the others would pull real three.js into happy-dom)
+		const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+		try {
+			expect(await director.play()).toBe('gentleGlow');
+		} finally {
+			random.mockRestore();
+		}
 		expect(director.queued).toBeNull();
 	});
 });
