@@ -693,6 +693,96 @@ p + p {
 	font-size: 13px;
 }
 
+/* --- The Collection --- */
+
+.collection-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+	gap: 14px;
+	margin: 22px 0 12px;
+}
+.fx-card {
+	display: grid;
+	grid-template-columns: 52px 1fr;
+	grid-template-areas:
+		'icon body'
+		'btn btn';
+	gap: 10px 14px;
+	align-items: start;
+	background: linear-gradient(165deg, rgba(38, 66, 34, 0.55), rgba(10, 20, 10, 0.7));
+	border: 1.5px solid rgba(201, 169, 89, 0.45);
+	border-radius: 14px;
+	padding: 14px 15px 13px;
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+	transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.fx-card.queued {
+	border-color: var(--gold-bright);
+	box-shadow: 0 0 22px rgba(240, 212, 136, 0.35), 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.fx-icon {
+	grid-area: icon;
+	width: 52px;
+	height: 52px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 26px;
+	line-height: 1;
+	background:
+		radial-gradient(circle at 32% 26%, #2f4d2b 0%, #16301a 60%, #0a180b 100%);
+	border: 1.5px solid rgba(201, 169, 89, 0.5);
+	box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.45), 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+.fx-body {
+	grid-area: body;
+	min-width: 0;
+}
+.fx-title {
+	margin: 2px 0 4px;
+	font-size: 16px;
+	color: var(--gold-bright);
+}
+.fx-luck {
+	font-size: 13.5px;
+	line-height: 1.45;
+	color: var(--text-dim);
+}
+.fx-meta {
+	margin-top: 6px;
+	font-size: 12px;
+	opacity: 0.75;
+	color: var(--text-dim);
+}
+.fx-replay {
+	grid-area: btn;
+	justify-self: end;
+	font-family: inherit;
+	font-weight: 700;
+	font-size: 13px;
+	color: #241a05;
+	background: linear-gradient(170deg, #f0d488, #c9a959);
+	border: 1.5px solid #8f7a42;
+	border-radius: 999px;
+	padding: 7px 16px;
+	cursor: pointer;
+	box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+	transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.fx-replay:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 5px 14px rgba(0, 0, 0, 0.5), 0 0 14px rgba(240, 212, 136, 0.35);
+}
+.fx-replay[aria-pressed='true'] {
+	background: linear-gradient(170deg, #fff3cf, #f0d488);
+	box-shadow: 0 0 16px rgba(240, 212, 136, 0.55);
+}
+.fx-replay:focus-visible {
+	outline: 3px solid var(--gold-bright);
+	outline-offset: 2px;
+}
+
 /* --- Luck Number Generator --- */
 
 .lng {

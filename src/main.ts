@@ -13,9 +13,11 @@ import {
 	createSkyTexture,
 	createCloudSprite
 } from './gfx/textures';
-import { Director } from './effects/director';
+import { Director, QUICK_OPENERS } from './effects/director';
 import { ScreenPanel } from './ui/screenPanel';
 import { CharmsUI } from './ui/charmsUI';
+import { CollectionUI } from './ui/collectionUI';
+import { COLLECTION } from './luck/collectionData';
 import { PressController } from './ui/pressController';
 import { QUIPS } from './ui/quips';
 import { printConsoleBanner, printEffectList } from './ui/console';
@@ -29,6 +31,7 @@ import { WakeLock } from './services/wakeLock';
 import { initAnalytics, track, trackError } from './services/analytics';
 import { dayIndex } from './luck/days';
 import type { EffectContext, TextureBundle } from './types';
+import type { ScreenMessage } from './ui/screenPanel';
 
 // Whatever boot managed to wire before anything went wrong. If the 3D machine
 // never starts, the fallback presses these pieces back into service; an earlier
@@ -36,6 +39,7 @@ import type { EffectContext, TextureBundle } from './types';
 const kit: {
 	store?: LuckStore;
 	charmsUI?: CharmsUI;
+	collectionUI?: CollectionUI;
 	screen?: ScreenPanel;
 	/** How a charm gets its ceremony right now. Boot upgrades this to the full
 	 *  version (sound, particles) once the scene exists; until then, and for
@@ -78,8 +82,11 @@ async function boot(): Promise<void> {
 	const screen = new ScreenPanel();
 	const charmsUI = new CharmsUI(store);
 	charmsUI.renderAll();
+	const collectionUI = new CollectionUI(store);
+	collectionUI.renderAll();
 	kit.screen = screen;
 	kit.charmsUI = charmsUI;
+	kit.collectionUI = collectionUI;
 
 	// the below-the-fold features are self-contained; wire them up now so they
 	// work even before the WebGL scene finishes booting
@@ -152,6 +159,9 @@ async function boot(): Promise<void> {
 	const ctx: EffectContext = { scene, machine, particles, lightning, sprites, glyphTextures, textures, audio, haptics };
 	kit.celebrate = celebrateCharms; // the scene is up: charms get the full ceremony from here on
 	const director = new Director(ctx);
+	// A first-timer's first press gets something short and sweet. The long
+	// epics as an opener lost a quarter of new visitors before the end.
+	if (store.data.luckyness === 0) director.openWith(QUICK_OPENERS);
 	// effects hold full frame rate for their whole run, including the delay()
 	// gaps between tweens where particles are still flying
 	scene.busyCheck = () => director.running;
@@ -171,7 +181,7 @@ async function boot(): Promise<void> {
 	if (params.get('fx')) director.forced = params.get('fx');
 	// dev-only: exporting THREE here would pin the whole namespace into the bundle
 	if (import.meta.env.DEV) {
-		window.__mml = { scene, machine, director, particles, lightning, store, ctx, wakeLock, THREE };
+		window.__mml = { scene, machine, director, particles, lightning, store, ctx, wakeLock, screen, THREE };
 	}
 
 	scene.start();
@@ -192,6 +202,7 @@ async function boot(): Promise<void> {
 	director.prefetchNext(); // and the first effect's code, soundtrack and set
 	track('page_loaded', { visits: store.data.visits, luckyness: store.data.luckyness });
 	screen.welcome(store.data.visits > 1, store.data.streak);
+	syncCollectionHint();
 
 	// visit/streak charms awarded during store construction used to appear
 	// silently in the drawer — give them their ceremony once the scene is up
@@ -289,6 +300,39 @@ async function boot(): Promise<void> {
 		return fx;
 	}
 
+	/** File a finished effect in the collection. Returns the charm it earned
+	 *  (first sighting only) and any screen postscript the moment deserves. */
+	function collect(fx: string | null): { charm: Charm | null; postscript: ScreenMessage[] } {
+		const found = fx ? store.registerCollected(fx) : null;
+		if (!found) return { charm: null, postscript: [] };
+		collectionUI.upsert(found.entry);
+		syncCollectionHint();
+		const n = store.data.collected.length;
+		const postscript: ScreenMessage[] = [];
+		// the first one is how they find out the collection exists; after that
+		// a word every fifth addition
+		if (found.isNew && n === 1) postscript.push(['NOW IN YOUR', 'COLLECTION ↓']);
+		else if (found.isNew && n % 5 === 0) postscript.push([`${n} COLLECTED`, 'REPLAY BELOW ↓']);
+		return { charm: found.charm, postscript };
+	}
+
+	function syncCollectionHint(): void {
+		screen.collectionHint = store.data.collected.length >= 2 ? ['REPLAY YOUR', 'FAVOURITES ↓'] : null;
+	}
+
+	// "Show next" on a collection card: book the effect, bring the visitor back
+	// up to the button, and say what is coming.
+	collectionUI.enableReplay((name) => {
+		if (!director.knows(name) || !COLLECTION[name]) return;
+		director.queued = name;
+		director.prefetchNext();
+		collectionUI.setQueued(name);
+		track('collection_replay', { effect: name });
+		document.getElementById('hero')?.scrollIntoView({ behavior: scene.reducedMotion ? 'auto' : 'smooth', block: 'start' });
+		screen.upNext(COLLECTION[name].title);
+		pressTarget.focus({ preventScroll: true });
+	});
+
 	// Runs inside the press controller's busy window: from the moment the press
 	// is accepted until this settles, no other press, key or console summons
 	// gets in — including during the ritual's 1.3-second announcement, when the
@@ -310,10 +354,14 @@ async function boot(): Promise<void> {
 			await new Promise((r) => setTimeout(r, 1300));
 		}
 		screen.blank();
-		const fx = await performEffect({ ritual: isRitual });
+		const replay = director.queued !== null;
+		const fx = await performEffect({ ritual: isRitual, replay });
+		const seen = collect(fx);
+		if (seen.charm) awarded.push(seen.charm);
+		collectionUI.setQueued(director.queued); // consumed by the play, so normally none
 		celebrateCharms(awarded);
 		const quip = isRitual ? todaysFortune() : fx ? QUIPS[fx] : undefined;
-		screen.youAreNowLucky(store.data.luckyness, awarded.length > 0, quip);
+		screen.youAreNowLucky(store.data.luckyness, awarded.length > 0, quip, seen.postscript);
 	}
 
 	// Pointer, keyboard and the bare click assistive technology sends all go
@@ -376,7 +424,10 @@ async function boot(): Promise<void> {
 		});
 		if (!played) return 'An effect is already running. Patience is lucky too.';
 		const fx = played.fx;
-		screen.youAreNowLucky(store.data.luckyness, false, fx ? QUIPS[fx] : undefined);
+		const seen = collect(fx); // summoned or pressed, they saw it
+		if (seen.charm) celebrateCharms([seen.charm]);
+		collectionUI.setQueued(director.queued);
+		screen.youAreNowLucky(store.data.luckyness, seen.charm !== null, fx ? QUIPS[fx] : undefined, seen.postscript);
 		// reduced motion substitutes something from the calm shortlist
 		return fx === name ? `Played ${fx} 🍀` : `Played ${fx} instead — you've asked for reduced motion. 🍀`;
 	};
@@ -467,6 +518,16 @@ function bootFallback(err: unknown): void {
 			kit.charmsUI.renderAll();
 		} catch {
 			kit.charmsUI = undefined;
+		}
+	}
+	// the collection reads fine without a renderer; with nothing to replay
+	// with, its buttons stay hidden
+	if (kit.store && !kit.collectionUI) {
+		try {
+			kit.collectionUI = new CollectionUI(kit.store);
+			kit.collectionUI.renderAll();
+		} catch {
+			kit.collectionUI = undefined;
 		}
 	}
 	// the message screen is plain DOM, so it survives a dead renderer

@@ -44,7 +44,7 @@ export function initAnalytics(): void {
 			unlisten();
 			for (const [event, props] of queued.splice(0)) ph.capture(event, props);
 			for (const [err, props] of earlyErrors.splice(0)) ph.captureException(err, props);
-			observeSectionViews(['luck-numbers', 'lucky-charms', 'luck-dossier', 'more-projects']);
+			observeSectionViews(['luck-numbers', 'lucky-charms', 'collected-luck', 'luck-dossier', 'more-projects']);
 			observePromoClicks();
 		})
 		.catch(() => {

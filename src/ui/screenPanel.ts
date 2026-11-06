@@ -39,6 +39,9 @@ export class ScreenPanel {
 	live: HTMLElement | null;
 	timer: ReturnType<typeof setInterval> | null;
 	seq: number;
+	/** Set once a visitor has a few effects collected: now and then the idle
+	 *  loop after a press points them at the collection downstairs. */
+	collectionHint: ScreenMessage | null;
 
 	constructor() {
 		this.el = document.getElementById('screen-text')!;
@@ -47,6 +50,7 @@ export class ScreenPanel {
 		this.live = document.getElementById('screen-live'); // visually-hidden live region; the visible panel itself isn't live
 		this.timer = null;
 		this.seq = 0; // cancels stale async sequences
+		this.collectionHint = null;
 	}
 
 	_render(lines: ScreenMessage | string, announce = false): void {
@@ -127,7 +131,13 @@ export class ScreenPanel {
 		this.sequence([['LUCKY', 'CHARM!']], null);
 	}
 
-	youAreNowLucky(presses: number, charmAwarded = false, quip: ScreenMessage | string | null = null): void {
+	/** The effect booked from the collection: tell them, then nag for the press. */
+	upNext(title: string): void {
+		this.sequence([['UP NEXT:', title.toUpperCase()]], [['PRESS THE', 'BUTTON'], ['MAKE ME', 'LUCKY']]);
+	}
+
+	/** @param postscript one-shot lines after the big LUCKY!, before the idle loop */
+	youAreNowLucky(presses: number, charmAwarded = false, quip: ScreenMessage | string | null = null, postscript: ScreenMessage[] = []): void {
 		const items: ScreenMessage[] = [];
 		if (quip) items.push((Array.isArray(quip) ? quip : [quip, '']) as ScreenMessage);
 		if (charmAwarded) items.push(['LUCKY', 'CHARM!']);
@@ -141,8 +151,12 @@ export class ScreenPanel {
 			items.push([adv, '']);
 		}
 		items.push(['LUCKY!', '', 'giant']);
+		items.push(...postscript);
+		const loop = [pick(MORE_LUCK), pick(PRESS_AGAIN)];
+		// not every time: a reminder, not a sales pitch
+		if (this.collectionHint && Math.random() < 0.4) loop.push(this.collectionHint);
 		// a quip leads the sequence and gets an extra second on screen —
 		// at the standard tick the good ones went unread
-		this.sequence(items, [pick(MORE_LUCK), pick(PRESS_AGAIN)], undefined, quip ? 2360 : undefined);
+		this.sequence(items, loop, undefined, quip ? 2360 : undefined);
 	}
 }

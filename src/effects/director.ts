@@ -75,6 +75,15 @@ const soundOf = (name: string): string => TRACKED[name] ?? 'lucky';
 // beats the one fallback they used to get forever.
 const CALM = ['gentleGlow', 'aurora', 'fireflies', 'runeCircle', 'rainbow', 'violetHour'] as const;
 
+// What a first-time visitor's first press draws from: short (under ten
+// seconds), self-contained, cued from the shared sprite so there is no
+// soundtrack to wait for, and the ones the numbers say people press again
+// after. A 30-second epic as the opener lost a quarter of newcomers mid-show.
+export const QUICK_OPENERS = [
+	'spinUp', 'diceStorm', 'powerSurge', 'portalDrop', 'clockworkOverdrive',
+	'pinball', 'makeItRain', 'cloverVortex', 'rainbow', 'slotArm'
+] as const;
+
 export class Director {
 	ctx: EffectContext;
 	names: string[];
@@ -83,6 +92,9 @@ export class Director {
 	last: string | null;
 	running: boolean;
 	forced: string | null;
+	/** A one-off request for the NEXT press (the collection's "Show next").
+	 *  Consumed when it plays; the bag carries on where it left off. */
+	queued: string | null;
 	_loaded: Map<string, EffectModule>;
 
 	constructor(ctx: EffectContext) {
@@ -93,7 +105,37 @@ export class Director {
 		this.last = null;
 		this.running = false;
 		this.forced = null; // debug: ?fx=name
+		this.queued = null;
 		this._loaded = new Map();
+	}
+
+	/** Start the bag with one of `names` (at random): the chosen effect is
+	 *  swapped into the slot the next press will draw, so nothing repeats and
+	 *  the rest of the cycle is untouched. Unknown names are ignored. */
+	openWith(names: readonly string[]): void {
+		const options = names.filter((n) => this.names.includes(n));
+		if (!options.length) return;
+		const want = options[Math.floor(Math.random() * options.length)];
+		this._peek(); // settles the bag so `index` is a real slot
+		const at = this.bag.indexOf(want);
+		if (at < 0 || at === this.index) return;
+		[this.bag[this.index], this.bag[at]] = [this.bag[at], this.bag[this.index]];
+	}
+
+	/** A name the collection may ask for: in the bag, or gentleGlow. */
+	knows(name: string): boolean {
+		return name === 'gentleGlow' || Boolean(EFFECTS[name]);
+	}
+
+	/** The effect the next press will play, all overrides considered. */
+	_upcoming(): string {
+		if (this.ctx.scene.reducedMotion) {
+			const ask = this.forced ?? this.queued;
+			return ask && CALM.includes(ask as (typeof CALM)[number]) ? ask : this._nextCalm();
+		}
+		if (this.forced && this.knows(this.forced)) return this.forced;
+		if (this.queued && this.knows(this.queued)) return this.queued;
+		return this._next();
 	}
 
 	/** The effect the next press will draw, without drawing it. Reshuffles the
@@ -142,7 +184,8 @@ export class Director {
 		// a reduced-motion visitor draws at random from the calm list, which
 		// can't be predicted; those effects are tiny and unscored anyway
 		if (this.ctx.scene.reducedMotion) return;
-		const upcoming = this.forced && EFFECTS[this.forced] ? this.forced : this._peek();
+		const ask = this.forced ?? this.queued;
+		const upcoming = ask && EFFECTS[ask] ? ask : this._peek();
 		if (!upcoming) return;
 		this._load(upcoming)
 			.then((mod) => {
@@ -246,13 +289,11 @@ export class Director {
 	async play(onStart?: (name: string) => void): Promise<string | null> {
 		if (this.running) return null;
 		this.running = true;
-		let name = this.ctx.scene.reducedMotion
-			? this.forced && CALM.includes(this.forced as (typeof CALM)[number])
-				? this.forced
-				: this._nextCalm()
-			: this.forced && (EFFECTS[this.forced] || this.forced === 'gentleGlow')
-				? this.forced
-				: this._next();
+		let name = this._upcoming();
+		// a request is honoured once, whatever it turned into; the next press
+		// goes back to the bag
+		const requested = this.queued !== null;
+		this.queued = null;
 		const snap = this._snapshot();
 		try {
 			let effect = await this._load(name);
@@ -262,7 +303,7 @@ export class Director {
 			// whose sound IS ready and keep this one in the bag for a later
 			// press — its download carries on in the background meanwhile. A
 			// silent bhangra is not a performance anyone wants.
-			if (effect.sound && !this.forced && !this.ctx.scene.reducedMotion && !this.ctx.audio.isReady(effect.sound)) {
+			if (effect.sound && !this.forced && !requested && !this.ctx.scene.reducedMotion && !this.ctx.audio.isReady(effect.sound)) {
 				const swapped = await this._swapForReady(name);
 				if (swapped) {
 					this.ctx.audio.preload(effect.sound); // the deferred one, for its turn

@@ -3,6 +3,7 @@
 
 import { PRESS_CHARMS, VISIT_CHARMS, STREAK_CHARMS, byId, byTitle } from './charmsData';
 import type { Charm } from './charmsData';
+import { COLLECTION, collectionCharm } from './collectionData';
 import { dayKey, shiftDay } from './days';
 
 const KEY = 'luckStore';
@@ -28,6 +29,14 @@ export interface LuckData {
 	lastVisit: string;
 	lastRitual: string; // ISO date of the last Daily Luck Ritual press
 	charms: Charm[]; // [{ id, title, description, icon, date }]
+	collected: CollectedEffect[]; // effects seen through to the end, oldest first
+}
+
+/** One entry per effect in the visitor's collection. */
+export interface CollectedEffect {
+	name: string;
+	count: number; // times seen through, including the first
+	date: string; // ISO, first time collected
 }
 
 // The V2 store (version 0.35) shape we still migrate from.
@@ -73,7 +82,8 @@ function fresh(): LuckData {
 		firstUse: new Date().toISOString(),
 		lastVisit: new Date().toISOString(),
 		lastRitual: '',
-		charms: [] // [{ id, title, description, icon, date }]
+		charms: [], // [{ id, title, description, icon, date }]
+		collected: []
 	};
 }
 
@@ -198,6 +208,33 @@ export function sanitize(record: Record<string, unknown>, version: number = VERS
 		return out;
 	};
 
+	/** The collection: known effect names only, one entry each. An absent
+	 *  field is normal (records written before the collection existed). */
+	const collectedList = (value: unknown, stampFallback: string): CollectedEffect[] => {
+		if (value === undefined) return [];
+		if (!Array.isArray(value)) {
+			repaired = true;
+			return [];
+		}
+		const out: CollectedEffect[] = [];
+		const seen = new Set<string>();
+		for (const entry of value) {
+			const name = isRecord(entry) && typeof entry.name === 'string' ? entry.name : '';
+			if (!name || seen.has(name) || !(name in COLLECTION)) {
+				repaired = true;
+				continue;
+			}
+			seen.add(name);
+			const rec = entry as Record<string, unknown>;
+			const count = typeof rec.count === 'number' && Number.isFinite(rec.count) && rec.count >= 1 ? Math.floor(rec.count) : 1;
+			const stamped =
+				typeof rec.date === 'string' && rec.date !== '' && !Number.isNaN(Date.parse(rec.date)) ? rec.date : stampFallback;
+			if (count !== rec.count || stamped !== rec.date) repaired = true;
+			out.push({ name, count, date: stamped });
+		}
+		return out;
+	};
+
 	const firstUse = date(record.firstUse, base.firstUse);
 	const data: LuckData = {
 		version,
@@ -212,7 +249,8 @@ export function sanitize(record: Record<string, unknown>, version: number = VERS
 		lastRitual: ritualDate(record.lastRitual),
 		// undated charms inherit firstUse rather than "now", so a repair does not
 		// make an eleven-year-old charm look like it was earned this morning
-		charms: charmList(record.charms, firstUse)
+		charms: charmList(record.charms, firstUse),
+		collected: collectedList(record.collected, firstUse)
 	};
 	return { data, repaired };
 }
@@ -492,6 +530,29 @@ export class LuckStore {
 		const charm = this._award(byId.get('installed')!);
 		this.save();
 		return charm ? [charm] : [];
+	}
+
+	/** An effect seen through to the end. The first sighting files it in the
+	 *  collection and earns its charm; later ones just raise the count. */
+	registerCollected(name: string): { entry: CollectedEffect; isNew: boolean; charm: Charm | null } | null {
+		if (!(name in COLLECTION)) return null;
+		let entry = this.data.collected.find((c) => c.name === name);
+		let isNew = false;
+		if (entry) {
+			entry.count += 1;
+		} else {
+			entry = { name, count: 1, date: new Date().toISOString() };
+			this.data.collected.push(entry);
+			isNew = true;
+		}
+		const def = collectionCharm(name);
+		const charm = def ? this._award(def) : null;
+		this.save();
+		return { entry, isNew, charm };
+	}
+
+	hasCollected(name: string): boolean {
+		return this.data.collected.some((c) => c.name === name);
 	}
 
 	nextPressCharm(): Charm | undefined {
